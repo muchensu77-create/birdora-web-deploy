@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>观鸟社区 - Birdora</title>
+    <link rel="stylesheet" href="./styles.css?v=20260625-headspace-refresh" />
+  </head>
+  <body data-page="community">
+    <header class="topbar">
+      <a class="brand" href="./index.html#home" aria-label="Birdora 首页">
+        <span class="brand-mark">B</span>
+        <span>Birdora</span>
+      </a>
+      <nav class="nav" aria-label="主导航">
+        <a href="./index.html#identify">识别</a>
+        <a href="./index.html#atlas">图鉴</a>
+        <a href="./community.html" aria-current="page">社区</a>
+        <a href="./index.html#device">设备</a>
+      </nav>
+      <div class="topbar-actions">
+        <a class="ghost-btn link-btn" href="./index.html#community">返回发布</a>
+        <button class="ghost-btn" type="button" data-logout>退出登录</button>
+      </div>
+    </header>
+
+    <main class="community-page">
+      <section class="community-hero">
+        <div class="section-head">
+          <p class="eyebrow">Birdora 社区</p>
+          <h1>观鸟社区</h1>
+          <p>在这里浏览推荐观鸟笔记，或查看你自己发布过的全部记录。</p>
+        </div>
+      </section>
+
+      <section class="community-browser">
+        <div class="community-switch" role="tablist" aria-label="帖子筛选">
+          <button class="community-tab is-active" type="button" data-community-tab="recommended">推荐</button>
+          <button class="community-tab" type="button" data-community-tab="mine">我的</button>
+        </div>
+        <div class="community-list feed" id="communityFeed" aria-live="polite"></div>
+      </section>
+    </main>
+
+    <footer>
+      <span>Birdora 观鸟眼镜网站原型</span>
+      <span>识别 · 图鉴 · 社区 · 设备</span>
+    </footer>
+
+    <script src="./assets/vendor/ort.min.js"></script>
+    <script src="./script.js?v=20260625-feed-body-fix"></script>
+  </body>
+</html>

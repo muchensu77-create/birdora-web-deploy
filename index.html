@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Birdora 观鸟眼镜</title>
+    <link rel="stylesheet" href="./styles.css?v=20260625-headspace-refresh" />
+  </head>
+  <body data-page="home">
+    <header class="topbar">
+      <a class="brand" href="#home" aria-label="Birdora 首页">
+        <span class="brand-mark">B</span>
+        <span>Birdora</span>
+      </a>
+      <nav class="nav" aria-label="主导航">
+        <a href="#identify">识别</a>
+        <a href="#atlas">图鉴</a>
+        <a href="#community">社区</a>
+        <a href="#device">设备</a>
+      </nav>
+      <div class="topbar-actions">
+        <button class="ghost-btn" type="button" data-scroll="#identify">上传鸟照</button>
+        <button class="ghost-btn" type="button" data-logout>退出登录</button>
+      </div>
+    </header>
+
+    <main id="home">
+      <section class="hero">
+        <div class="hero-media" role="img" aria-label="观鸟眼镜与湿地鸟类"></div>
+        <div class="hero-copy">
+          <p class="eyebrow">智能观鸟系统</p>
+          <h1><span>拍下飞羽瞬间，</span><span>立刻知道它是谁。</span></h1>
+          <p>
+            Birdora 观鸟眼镜把拍摄、定位、AI 识别、鸟类知识图鉴和分享社区连在一起，
+            让每一次外出观察都变成可记录、可学习、可交流的自然笔记。
+          </p>
+          <div class="hero-actions">
+            <button class="primary-btn" type="button" data-scroll="#identify">开始识别</button>
+            <button class="secondary-btn" type="button" data-scroll="#atlas">浏览图鉴</button>
+          </div>
+        </div>
+        <aside class="live-card" aria-label="今日观测摘要">
+          <span>今日识别</span>
+          <strong>27</strong>
+          <small>杭州·西溪湿地公园</small>
+        </aside>
+      </section>
+
+      <section class="workflow" aria-label="产品流程">
+        <article>
+          <span>01</span>
+          <h2>眼镜拍照</h2>
+          <p>设备捕捉鸟类画面，自动同步时间与位置。</p>
+        </article>
+        <article>
+          <span>02</span>
+          <h2>网站识别</h2>
+          <p>上传照片后匹配鸟种、置信度、分布和叫声。</p>
+        </article>
+        <article>
+          <span>03</span>
+          <h2>沉淀知识</h2>
+          <p>自动进入观测记录，也可以发布到社区交流。</p>
+        </article>
+      </section>
+
+      <section class="split-section" id="identify">
+        <div class="section-head">
+          <p class="eyebrow">AI 识别</p>
+          <h2>上传鸟照，生成识别卡片</h2>
+          <p>选择照片后，浏览器会加载轻量 AI 模型识别图片内容，并匹配图鉴里的常见鸟种。</p>
+        </div>
+        <div class="identify-grid">
+          <label class="upload-zone" for="birdUpload">
+            <input id="birdUpload" type="file" accept="image/*" />
+            <span class="upload-icon">+</span>
+            <strong>选择鸟类照片</strong>
+            <small>支持眼镜同步照片或手机相册上传</small>
+            <img id="previewImage" alt="" />
+          </label>
+          <article class="result-card" id="resultCard">
+            <div class="confidence-ring">
+              <span id="confidenceText">92%</span>
+            </div>
+            <div>
+              <p class="eyebrow">识别结果</p>
+              <h3 id="resultName">翠鸟</h3>
+              <p id="resultMeta">正在准备识别模型...</p>
+            </div>
+            <dl>
+              <div><dt>特征</dt><dd id="resultFeature">蓝绿色背部，橙色腹部，嘴长而尖。</dd></div>
+              <div><dt>模型判断</dt><dd id="modelDetail">首次使用需要联网加载模型，之后上传照片即可识别。</dd></div>
+              <div><dt>建议</dt><dd>记录地点、保留距离，不干扰栖息。</dd></div>
+            </dl>
+            <button class="primary-btn full" id="shareDetected" type="button">发布到社区</button>
+          </article>
+        </div>
+      </section>
+
+      <section class="atlas-section" id="atlas">
+        <div class="section-head compact">
+          <p class="eyebrow">鸟类知识图鉴</p>
+          <h2>检索鸟种、习性与观测线索</h2>
+        </div>
+        <div class="search-row">
+          <input id="birdSearch" type="search" placeholder="搜索：白头鹎、翠鸟、白鹭、家燕、麻雀..." />
+        </div>
+        <div class="bird-grid" id="birdGrid"></div>
+      </section>
+
+      <section class="community-section" id="community">
+        <div class="section-head compact">
+          <p class="eyebrow">分享社区</p>
+          <h2>发布你的观鸟笔记</h2>
+        </div>
+        <div class="community-layout">
+          <form class="post-panel" id="postForm">
+            <input id="postTitle" type="text" placeholder="记录标题，例如：清晨遇到一只翠鸟" required />
+            <textarea id="postBody" placeholder="写下地点、行为、天气或你的观察..." required></textarea>
+            <div class="post-tools">
+              <button class="secondary-btn" type="button" id="useDetected">带入识别结果</button>
+              <button class="primary-btn" type="submit">发布</button>
+            </div>
+          </form>
+          <div class="feed-preview">
+            <div class="feed" id="feed" aria-live="polite"></div>
+            <a class="primary-btn more-link" href="./community.html">更多</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="device-section" id="device">
+        <div class="device-copy">
+          <p class="eyebrow">设备管理</p>
+          <h2>Birdora Glasses 已连接</h2>
+          <p>同步拍摄记录、电量、固件与存储空间，保持眼镜和网站数据一致。</p>
+          <div class="device-stats">
+            <span><strong>86%</strong> 电量</span>
+            <span><strong>32.4GB</strong> 可用空间</span>
+            <span><strong>V2.0.5</strong> 固件</span>
+          </div>
+        </div>
+        <div class="glasses-card" aria-label="眼镜设备状态">
+          <img class="device-glasses" src="./assets/device-glasses-cutout.png" alt="Birdora Glasses 智能观鸟眼镜" />
+          <p>蓝牙在线 · 最近同步 3 分钟前</p>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <span>Birdora 观鸟眼镜网站原型</span>
+      <span>识别 · 图鉴 · 社区 · 设备</span>
+    </footer>
+
+    <script src="./assets/vendor/ort.min.js"></script>
+    <script src="./script.js?v=20260625-atlas-search-only"></script>
+  </body>
+</html>
