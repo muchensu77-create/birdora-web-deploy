@@ -23,12 +23,20 @@ const BIRD_PROFILES_PATH = "./assets/atlas/bird-profiles.json";
 const COMMON_BIRD_CANDIDATES_PATH = "./assets/atlas/common-bird-candidates.json";
 const OSEA_TOP_K = 5;
 const OSEA_CONFIDENCE_THRESHOLD = 0.05;
-const ATLAS_INITIAL_LIMIT = 60;
-const ATLAS_SEARCH_LIMIT = 90;
+const ATLAS_INITIAL_LIMIT = 12;
+const ATLAS_SEARCH_LIMIT = 24;
+const ATLAS_TABLET_INITIAL_LIMIT = 8;
+const ATLAS_MOBILE_INITIAL_LIMIT = 4;
+const ATLAS_MOBILE_SEARCH_LIMIT = 12;
+const POST_TITLE_MAX_LENGTH = 80;
+const POST_BODY_MAX_LENGTH = 600;
+const COMMENT_MAX_LENGTH = 180;
 
 const fallbackBirdProfiles = [
   {
     oseaIndex: 3334,
+    oseaName: "普通翠鸟",
+    aliases: ["普通翠鸟"],
     name: "翠鸟",
     latin: "Alcedo atthis",
     habitat: "water",
@@ -239,6 +247,7 @@ const authModeTitle = document.querySelector("#authModeTitle");
 const authModeCopy = document.querySelector("#authModeCopy");
 const authSubmitBtn = document.querySelector("#authSubmitBtn");
 const authSwitchLead = document.querySelector("#authSwitchLead");
+const userNameBadges = document.querySelectorAll("[data-user-name]");
 const deviceConnectionTitle = document.querySelector("#deviceConnectionTitle");
 const deviceConnectBtn = document.querySelector("#deviceConnectBtn");
 const deviceBatteryValue = document.querySelector("#deviceBatteryValue");
@@ -266,6 +275,9 @@ let homeCommunityRevealPlayed = false;
 let homeCommunityRevealObserver = null;
 let deviceConnectionTimer = null;
 let localAtlasMatches = new Map();
+let communityTabsBound = false;
+let recognitionRunId = 0;
+let lastRecognitionStatus = "idle";
 
 rebuildLocalAtlasMatches();
 
@@ -276,6 +288,10 @@ function normalizeBirdProfile(profile) {
 
   return {
     oseaIndex: Number.isInteger(profile?.oseaIndex) ? profile.oseaIndex : null,
+    oseaName: String(profile?.oseaName || "").trim(),
+    aliases: Array.isArray(profile?.aliases)
+      ? profile.aliases.map((alias) => String(alias).trim()).filter(Boolean)
+      : [],
     name,
     latin,
     habitat: String(profile?.habitat || "unknown").trim(),
@@ -424,6 +440,7 @@ function rememberAuthUser(user) {
   window.localStorage.setItem(STORAGE_KEYS.loggedIn, "true");
   saveStorage(STORAGE_KEYS.authUser, normalizedUser);
   currentUser = normalizedUser;
+  renderUserChrome();
   return normalizedUser;
 }
 
@@ -431,6 +448,22 @@ function clearAuthState() {
   window.localStorage.removeItem(STORAGE_KEYS.loggedIn);
   window.localStorage.removeItem(STORAGE_KEYS.authUser);
   currentUser = null;
+  renderUserChrome();
+}
+
+function renderUserChrome() {
+  const displayName = currentUser?.nickname || currentUser?.email?.split("@")[0] || "";
+
+  userNameBadges.forEach((badge) => {
+    if (!displayName) {
+      badge.textContent = "";
+      badge.hidden = true;
+      return;
+    }
+
+    badge.textContent = displayName;
+    badge.hidden = false;
+  });
 }
 
 function translateAuthMessage(message, fallback = "认证请求失败，请稍后重试。") {
@@ -546,6 +579,10 @@ function escapeHtml(value) {
 
 function truncateText(text, maxLength = 96) {
   return text.length > maxLength ? `${text.slice(0, maxLength).trim()}...` : text;
+}
+
+function normalizeUserText(value, maxLength) {
+  return String(value || "").trim().slice(0, maxLength);
 }
 
 function loadUserPosts() {
@@ -673,7 +710,7 @@ function submitComment(postId) {
   const field = currentFeed?.querySelector(`[data-comment-input="${postId}"]`);
   if (!field) return;
 
-  const text = field.value.trim();
+  const text = normalizeUserText(field.value, COMMENT_MAX_LENGTH);
   if (!text) {
     field.focus();
     return;
@@ -719,7 +756,7 @@ function bindCommentFeed(root) {
   });
 }
 
-function initCommunityTabs() {
+function syncCommunityTabs() {
   if (!communityTabs.length) return;
 
   activeCommunityTab = window.localStorage.getItem(STORAGE_KEYS.communityTab) || "recommended";
@@ -729,12 +766,21 @@ function initCommunityTabs() {
     tab.classList.toggle("is-active", active);
     tab.setAttribute("aria-selected", String(active));
   });
+}
+
+function initCommunityTabs() {
+  if (!communityTabs.length) return;
+
+  syncCommunityTabs();
+
+  if (communityTabsBound) return;
+  communityTabsBound = true;
 
   communityTabs.forEach((tab) => {
     tab.addEventListener("click", () => {
       activeCommunityTab = tab.dataset.communityTab;
       window.localStorage.setItem(STORAGE_KEYS.communityTab, activeCommunityTab);
-      initCommunityTabs();
+      syncCommunityTabs();
       renderCommunityFeed();
     });
   });
@@ -1104,6 +1150,8 @@ function createRichAtlasEntry(bird, index = null, label = null) {
     status: "图文已补充",
     searchText: buildSearchText([
       bird.name,
+      bird.oseaName,
+      ...(bird.aliases || []),
       cn,
       en,
       latin,
@@ -1189,6 +1237,24 @@ function renderAtlasSummary(total, shown, matched, query, progress = null) {
   }
 
   atlasSummary.textContent = `已索引 ${total.toLocaleString("zh-CN")} 个 OSEA 标签；默认展示已补充图文的常见鸟和部分基础标签。${progressNote}${sourceNote}`;
+}
+
+function getAtlasInitialLimit() {
+  if (window.matchMedia?.("(max-width: 560px)").matches) {
+    return ATLAS_MOBILE_INITIAL_LIMIT;
+  }
+
+  if (window.matchMedia?.("(max-width: 920px)").matches) {
+    return ATLAS_TABLET_INITIAL_LIMIT;
+  }
+
+  return ATLAS_INITIAL_LIMIT;
+}
+
+function getAtlasSearchLimit() {
+  return window.matchMedia?.("(max-width: 560px)").matches
+    ? ATLAS_MOBILE_SEARCH_LIMIT
+    : ATLAS_SEARCH_LIMIT;
 }
 
 function renderAtlasCard(entry) {
@@ -1286,6 +1352,7 @@ async function renderBirds(options = {}) {
 
   const query = birdSearch.value.trim().toLowerCase();
   birdGrid.classList.remove("is-empty");
+  birdGrid.classList.remove("is-marquee");
   birdGrid.innerHTML = `<article class="bird-card atlas-loading"><div><h3>正在加载图鉴索引</h3><p>正在读取 OSEA 鸟类标签库...</p></div></article>`;
 
   try {
@@ -1296,12 +1363,13 @@ async function renderBirds(options = {}) {
     const matched = query
       ? entries.filter((entry) => entry.searchText.includes(query))
       : entries;
+    const initialLimit = getAtlasInitialLimit();
     const visible = query
-      ? matched.slice(0, ATLAS_SEARCH_LIMIT)
+      ? matched.slice(0, getAtlasSearchLimit())
       : [
           ...entries.filter((entry) => entry.detailLevel === "rich"),
-          ...entries.filter((entry) => entry.detailLevel !== "rich").slice(0, ATLAS_INITIAL_LIMIT),
-        ].slice(0, ATLAS_INITIAL_LIMIT);
+          ...entries.filter((entry) => entry.detailLevel !== "rich").slice(0, initialLimit),
+        ].slice(0, initialLimit);
     const candidateIndexSet = new Set(commonBirdCandidates.map((candidate) => candidate.oseaIndex));
     const progress = commonBirdCandidates.length
       ? {
@@ -1320,25 +1388,41 @@ async function renderBirds(options = {}) {
 
     if (!visible.length) {
       birdGrid.classList.add("is-empty");
+      birdGrid.classList.remove("is-marquee");
       birdGrid.innerHTML =
         `<article class="bird-card"><div><h3>没有找到鸟种</h3><p>可以换一个中文名、英文名或拉丁名再试。</p></div></article>`;
       return;
     }
 
     birdGrid.classList.remove("is-empty");
-    birdGrid.innerHTML = `
-      <div class="atlas-results">
-        ${visible.map(renderAtlasCard).join("")}
-      </div>
-    `;
+    birdGrid.classList.toggle("is-marquee", !query);
+    birdGrid.innerHTML = query
+      ? `
+        <div class="atlas-results">
+          ${visible.map(renderAtlasCard).join("")}
+        </div>
+      `
+      : renderAtlasMarquee(visible);
   } catch (error) {
     birdGrid.classList.add("is-empty");
+    birdGrid.classList.remove("is-marquee");
     birdGrid.innerHTML =
       `<article class="bird-card"><div><h3>图鉴加载失败</h3><p>${escapeHtml(error.message || "请稍后重试。")}</p></div></article>`;
     if (atlasSummary) {
       atlasSummary.textContent = "图鉴索引加载失败。";
     }
   }
+}
+
+function renderAtlasMarquee(entries) {
+  const cards = entries.map(renderAtlasCard).join("");
+
+  return `
+    <div class="bird-marquee" aria-label="默认鸟类卡片滚动列表">
+      <div class="bird-track">${cards}</div>
+      <div class="bird-track" aria-hidden="true">${cards}</div>
+    </div>
+  `;
 }
 
 function initAtlasSearch() {
@@ -1408,6 +1492,17 @@ function setConfidenceRing(confidence, color = "var(--green)") {
   `;
 }
 
+function updateRecognitionActions() {
+  const canUseResult = lastRecognitionStatus === "success";
+  const shareDetectedButton = document.querySelector("#shareDetected");
+
+  [shareDetectedButton, useDetected].forEach((button) => {
+    if (!button) return;
+    button.disabled = !canUseResult;
+    button.setAttribute("aria-disabled", String(!canUseResult));
+  });
+}
+
 function setCandidateListMessage(message) {
   if (!candidateList) return;
 
@@ -1467,6 +1562,7 @@ function setResult(
   if (!confidenceText || !resultName || !resultMeta || !resultFeature || !modelDetail) return;
 
   detectedBird = bird;
+  lastRecognitionStatus = "success";
   confidenceText.textContent = `${confidence}%`;
   resultName.textContent = bird.name;
   resultMeta.textContent = `${bird.latin} · ${bird.place}`;
@@ -1474,22 +1570,27 @@ function setResult(
   modelDetail.textContent = detail;
   renderCandidateList(candidates);
   setConfidenceRing(confidence);
+  updateRecognitionActions();
 }
 
 function setPendingResult(text) {
   if (!confidenceText || !resultName || !resultMeta || !resultFeature || !modelDetail) return;
 
+  lastRecognitionStatus = "pending";
   confidenceText.textContent = "...";
   resultName.textContent = "正在识别";
   resultMeta.textContent = "AI 模型正在分析这张照片";
   resultFeature.textContent = "请稍等几秒，首次加载模型可能会更慢。";
   modelDetail.textContent = text;
   setCandidateListMessage("模型运行完成后会显示 Top 5 候选。");
+  setConfidenceRing(100, "#9ba9a2");
+  updateRecognitionActions();
 }
 
 function setUnknownResult(predictions, candidates = []) {
   if (!confidenceText || !resultName || !resultMeta || !resultFeature || !modelDetail) return;
 
+  lastRecognitionStatus = "unknown";
   confidenceText.textContent = "--";
   resultName.textContent = "未确定鸟种";
   resultMeta.textContent = "建议换一张更清晰、主体更大的鸟类照片";
@@ -1497,6 +1598,7 @@ function setUnknownResult(predictions, candidates = []) {
   modelDetail.textContent = predictions || "模型没有返回可用结果。";
   renderCandidateList(candidates);
   setConfidenceRing(100, "#9ba9a2");
+  updateRecognitionActions();
 }
 
 function setCandidateResult(result) {
@@ -1513,21 +1615,32 @@ function setCandidateResult(result) {
 function initBirdRecognition() {
   if (!upload || !preview || !uploadZone) return;
 
+  updateRecognitionActions();
+
   upload.addEventListener("change", async () => {
     const file = upload.files[0];
     if (!file) return;
-    uploadZone.classList.add("has-image");
+    const runId = ++recognitionRunId;
+    uploadZone.classList.remove("has-image");
     setPendingResult("正在加载/运行 OSEA 鸟类识别模型...");
 
+    let objectUrl = "";
     try {
-      const objectUrl = URL.createObjectURL(file);
+      objectUrl = URL.createObjectURL(file);
       await new Promise((resolve, reject) => {
         preview.onload = resolve;
         preview.onerror = reject;
         preview.src = objectUrl;
       });
 
+      URL.revokeObjectURL(objectUrl);
+      objectUrl = "";
+      if (runId !== recognitionRunId) return;
+
+      uploadZone.classList.add("has-image");
       const result = await classifyImageElement(preview);
+      if (runId !== recognitionRunId) return;
+
       if (!result.top) {
         setUnknownResult("模型没有返回可用候选。");
         return;
@@ -1543,12 +1656,21 @@ function initBirdRecognition() {
 
       setCandidateResult(result);
     } catch (error) {
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+      if (runId !== recognitionRunId) return;
+      lastRecognitionStatus = "failed";
+      uploadZone.classList.remove("has-image");
+      preview.removeAttribute("src");
       confidenceText.textContent = "!";
       resultName.textContent = "识别失败";
       resultMeta.textContent = "模型加载或图片读取失败";
       resultFeature.textContent = "请确认使用 http://localhost 或正式网址打开，而不是直接 file:// 打开。";
       modelDetail.textContent = error.message || "未知错误";
       setCandidateListMessage("识别失败，暂无候选结果。");
+      setConfidenceRing(100, "#b36b5e");
+      updateRecognitionActions();
     }
   });
 }
@@ -1558,10 +1680,17 @@ function initPublishing() {
     postForm.addEventListener("submit", (event) => {
       event.preventDefault();
 
+      const title = normalizeUserText(postTitle.value, POST_TITLE_MAX_LENGTH);
+      const body = normalizeUserText(postBody.value, POST_BODY_MAX_LENGTH);
+      if (!title || !body) {
+        (title ? postBody : postTitle).focus();
+        return;
+      }
+
       const newPost = {
         id: createPostId(),
-        title: postTitle.value.trim(),
-        body: postBody.value.trim(),
+        title,
+        body,
         bird: detectedBird.name,
         time: "刚刚",
         author: currentUser?.nickname || "我",
@@ -1578,6 +1707,11 @@ function initPublishing() {
 
   if (useDetected && postTitle && postBody) {
     useDetected.addEventListener("click", () => {
+      if (lastRecognitionStatus !== "success") {
+        upload?.focus();
+        return;
+      }
+
       postTitle.value = `今天观察到 ${detectedBird.name}`;
       postBody.value = `${detectedBird.name}，${detectedBird.feature} 观察地点可以补充为公园、湿地或校园。`;
       postBody.focus();
@@ -1586,7 +1720,13 @@ function initPublishing() {
 
   const shareDetectedButton = document.querySelector("#shareDetected");
   if (shareDetectedButton) {
+    updateRecognitionActions();
     shareDetectedButton.addEventListener("click", () => {
+      if (lastRecognitionStatus !== "success") {
+        upload?.focus();
+        return;
+      }
+
       userPosts.unshift({
         id: createPostId(),
         title: `我识别到了一只 ${detectedBird.name}`,
@@ -1599,7 +1739,7 @@ function initPublishing() {
       });
       saveUserPosts();
       renderCurrentFeed();
-      document.querySelector("#community").scrollIntoView({ behavior: "smooth" });
+      document.querySelector("#community")?.scrollIntoView({ behavior: "smooth" });
     });
   }
 }
@@ -1607,7 +1747,7 @@ function initPublishing() {
 function initScrollButtons() {
   document.querySelectorAll("[data-scroll]").forEach((button) => {
     button.addEventListener("click", () => {
-      document.querySelector(button.dataset.scroll).scrollIntoView({ behavior: "smooth" });
+      document.querySelector(button.dataset.scroll)?.scrollIntoView({ behavior: "smooth" });
     });
   });
 }

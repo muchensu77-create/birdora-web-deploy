@@ -132,6 +132,7 @@ textarea {
   gap: 10px;
   font-weight: 800;
   letter-spacing: -0.02em;
+  white-space: nowrap;
 }
 
 .brand-mark {
@@ -143,6 +144,23 @@ textarea {
   color: #fff;
   background: linear-gradient(135deg, var(--green), #289161);
   box-shadow: 0 10px 20px rgba(31, 111, 75, 0.28);
+}
+
+.brand-user {
+  max-width: 120px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.brand-user::before {
+  content: "·";
+  margin-right: 6px;
+  color: rgba(16, 35, 29, 0.42);
 }
 
 .nav {
@@ -2960,5 +2978,408 @@ button:active,
   #community .feed-preview .reveal-card {
     opacity: 1 !important;
     transform: none !important;
+  }
+}
+
+/* Responsive repair layer: keeps the existing visual system, but removes overflow and mobile clipping. */
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+body,
+button,
+input,
+textarea {
+  -webkit-text-size-adjust: 100%;
+}
+
+main {
+  overflow-x: clip;
+  overflow-y: visible;
+}
+
+body::before,
+body::after {
+  display: none;
+}
+
+.topbar,
+.brand,
+.topbar-actions,
+.hero,
+.hero-copy,
+.live-card,
+.workflow,
+.identify-grid,
+.community-layout,
+.device-section,
+.upload-zone,
+.result-card,
+.post-panel,
+.feed,
+.feed article,
+.feed-card,
+.bird-grid,
+.atlas-results,
+.atlas-detail,
+.community-page,
+.community-browser,
+.community-list,
+.community-switch,
+.doc-card,
+footer {
+  min-width: 0;
+}
+
+.hero h1,
+.section-head h1,
+.section-head h2,
+.community-hero h1,
+.device-title,
+.feed h3,
+.bird-card h3,
+.result-card h3,
+.auth-card h2,
+.auth-intro-simple h1 {
+  letter-spacing: 0;
+}
+
+.feed h3,
+.feed-meta span,
+.feed-body,
+.comment-bubble p,
+.comment-empty,
+.candidate-list strong,
+.candidate-list small,
+.candidate-list b,
+.candidate-list em,
+.atlas-detail,
+.bird-card,
+.doc-card,
+.auth-card,
+.post-panel input,
+.post-panel textarea,
+.auth-card input {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.atlas-results {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+}
+
+.bird-grid.is-marquee {
+  overflow: hidden;
+  min-height: 0;
+  padding-block: 4px 12px;
+}
+
+.bird-grid.is-marquee .bird-marquee {
+  padding-block: 2px 10px;
+}
+
+@media (min-width: 921px) {
+  #identify .identify-grid {
+    align-items: stretch;
+  }
+
+  #identify .upload-zone,
+  #identify .result-card {
+    align-self: stretch;
+    height: auto;
+    max-height: none;
+  }
+}
+
+.primary-btn:disabled,
+.secondary-btn:disabled,
+.ghost-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+  transform: none;
+  box-shadow: none;
+}
+
+#community .feed-card-preview .comment-box {
+  display: none;
+}
+
+.community-page .comment-box.is-open .comment-panel {
+  max-height: none;
+  overflow: visible;
+}
+
+@media (min-width: 768px) and (max-width: 920px) {
+  .nav {
+    display: flex;
+    gap: 4px;
+  }
+
+  .nav a {
+    padding-inline: 12px;
+  }
+
+  .topbar {
+    gap: 14px;
+  }
+
+  .topbar-actions {
+    gap: 8px;
+  }
+
+  .topbar-actions .ghost-btn {
+    padding-inline: 16px;
+  }
+}
+
+@media (min-width: 921px) and (max-width: 1080px) {
+  .hero {
+    min-height: 620px;
+  }
+
+  #community .feed-card-preview {
+    height: auto;
+    min-height: 190px;
+  }
+}
+
+@media (max-width: 920px) {
+  .hero {
+    min-height: auto;
+    align-items: end;
+  }
+
+  .upload-zone {
+    height: auto;
+    min-height: 340px;
+    max-height: none;
+  }
+
+  .result-card {
+    height: auto;
+    max-height: none;
+    overflow: visible;
+  }
+
+  #community .post-panel {
+    max-height: none;
+  }
+
+  #community .feed-card-preview {
+    height: auto;
+    min-height: 160px;
+    overflow: visible;
+  }
+
+  .community-switch {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+}
+
+@media (max-width: 560px) {
+  .topbar {
+    gap: 8px;
+    width: calc(100% - 16px);
+    padding: 10px 12px;
+  }
+
+  .brand {
+    flex: 0 1 auto;
+  }
+
+  .brand-user {
+    max-width: 70px;
+    font-size: 12px;
+  }
+
+  .brand-mark {
+    width: 34px;
+    height: 34px;
+  }
+
+  .topbar-actions {
+    flex: 0 1 auto;
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+    gap: 6px;
+  }
+
+  .topbar-actions .ghost-btn,
+  .topbar-actions .link-btn {
+    min-height: 42px;
+    padding-inline: 10px;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+
+  .hero,
+  .hero-section,
+  .hero-card {
+    margin: 12px;
+    border-radius: 32px;
+    clip-path: inset(0 round 32px);
+  }
+
+  .hero {
+    padding: 44px 18px 26px;
+  }
+
+  .hero h1 {
+    font-size: 40px;
+    line-height: 1.08;
+  }
+
+  .hero p:not(.eyebrow) {
+    margin-top: 18px;
+  }
+
+  .hero-actions {
+    gap: 10px;
+    margin-top: 24px;
+  }
+
+  .live-card {
+    padding: 18px;
+  }
+
+  .live-card strong {
+    font-size: 40px;
+  }
+
+  .workflow,
+  .split-section,
+  .atlas-section,
+  .community-section,
+  .device-section,
+  .community-page,
+  .auth-page,
+  .doc-page {
+    padding-inline: 16px;
+  }
+
+  .upload-zone {
+    min-height: 260px;
+    padding: 22px;
+  }
+
+  .upload-zone strong {
+    font-size: 20px;
+  }
+
+  .result-card,
+  #community .post-panel,
+  .auth-card-main,
+  .doc-card {
+    padding: 22px 18px;
+  }
+
+  .candidate-open {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .candidate-open > span:last-child {
+    min-width: 0;
+    text-align: left;
+  }
+
+  .candidate-list em {
+    white-space: normal;
+  }
+
+  .bird-grid.is-marquee {
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+  }
+
+  .bird-grid.is-marquee .bird-marquee {
+    animation: none;
+  }
+
+  .bird-grid.is-marquee .bird-track[aria-hidden="true"] {
+    display: none;
+  }
+
+  .bird-grid.is-marquee .bird-card {
+    width: min(280px, calc(100vw - 48px));
+    flex-basis: min(280px, calc(100vw - 48px));
+  }
+
+  #postBody {
+    height: 180px;
+  }
+
+  .post-tools {
+    align-items: stretch;
+  }
+
+  .post-tools .secondary-btn,
+  .post-tools .primary-btn,
+  #community .post-tools .secondary-btn,
+  #community .post-tools .primary-btn {
+    width: 100% !important;
+    min-height: 48px !important;
+  }
+
+  .comment-form {
+    grid-template-columns: 1fr;
+  }
+
+  .auth-page-simple {
+    min-height: 100svh;
+    place-items: start center;
+    padding: 20px 16px 28px;
+  }
+
+  .auth-shell-simple {
+    gap: 12px;
+  }
+
+  .auth-intro-simple h1 {
+    font-size: 34px;
+    line-height: 1.1;
+  }
+
+  .auth-intro-simple p:not(.eyebrow) {
+    margin-bottom: 0;
+  }
+
+  .auth-card {
+    gap: 12px;
+  }
+
+  .auth-card input,
+  .auth-submit-pill {
+    min-height: 48px;
+  }
+
+  .auth-legal {
+    gap: 8px;
+  }
+
+  footer {
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 380px) {
+  .hero h1 {
+    font-size: 36px;
+  }
+
+  .topbar-actions .ghost-btn,
+  .topbar-actions .link-btn {
+    padding-inline: 8px;
+  }
+
+  .result-card,
+  #community .post-panel,
+  .auth-card-main,
+  .doc-card {
+    padding-inline: 16px;
   }
 }
