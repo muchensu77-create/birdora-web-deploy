@@ -3,19 +3,32 @@ const page = document.body.dataset.page || "home";
 const STORAGE_KEYS = {
   loggedIn: "birdoraLoggedIn",
   authUser: "birdora-auth-user",
-  registeredUsers: "birdora-registered-users",
   userPosts: "birdora-user-posts",
   comments: "birdora-post-comments",
   communityTab: "birdora-community-tab",
+  deviceConnected: "birdora-device-connected",
 };
 
-const DEV_SKIP_AUTH = true;
-// TODO: Production mode should enable authentication
-
 const AUTH_PAGES = new Set(["home", "community"]);
+const AUTH_API_BASE_URL = resolveAuthApiBaseUrl();
+const AUTH_ROUTES = {
+  register: "/api/auth/register",
+  login: "/api/auth/login",
+  logout: "/api/auth/logout",
+  me: "/api/auth/me",
+  status: "/api/auth/status",
+};
+const OSEA_LABELS_PATH = "./assets/osea/bird_info.json";
+const BIRD_PROFILES_PATH = "./assets/atlas/bird-profiles.json";
+const COMMON_BIRD_CANDIDATES_PATH = "./assets/atlas/common-bird-candidates.json";
+const OSEA_TOP_K = 5;
+const OSEA_CONFIDENCE_THRESHOLD = 0.05;
+const ATLAS_INITIAL_LIMIT = 60;
+const ATLAS_SEARCH_LIMIT = 90;
 
-const birds = [
+const fallbackBirdProfiles = [
   {
+    oseaIndex: 3334,
     name: "翠鸟",
     latin: "Alcedo atthis",
     habitat: "water",
@@ -28,6 +41,7 @@ const birds = [
     clue: "常停在临水枝条上，发现猎物后俯冲入水。",
   },
   {
+    oseaIndex: 861,
     name: "白鹭",
     latin: "Egretta garzetta",
     habitat: "water",
@@ -40,6 +54,7 @@ const birds = [
     clue: "黑嘴黑腿，脚趾偏黄，常在浅水边缓慢觅食。",
   },
   {
+    oseaIndex: 7201,
     name: "白头鹎",
     latin: "Pycnonotus sinensis",
     habitat: "city",
@@ -52,6 +67,7 @@ const birds = [
     clue: "头顶黑、后颈有白斑，城市绿化带很常见。",
   },
   {
+    oseaIndex: 1892,
     name: "珠颈斑鸠",
     latin: "Spilopelia chinensis",
     habitat: "city",
@@ -64,6 +80,7 @@ const birds = [
     clue: "颈侧黑底白点像项链，起飞时有明显振翅声。",
   },
   {
+    oseaIndex: 6798,
     name: "灰喜鹊",
     latin: "Cyanopica cyanus",
     habitat: "forest",
@@ -76,6 +93,7 @@ const birds = [
     clue: "黑色头顶、蓝色翅尾，常成群穿梭在林缘。",
   },
   {
+    oseaIndex: 6803,
     name: "红嘴蓝鹊",
     latin: "Urocissa erythroryncha",
     habitat: "forest",
@@ -88,6 +106,7 @@ const birds = [
     clue: "红色嘴脚、长尾蓝羽非常醒目。",
   },
   {
+    oseaIndex: 1388,
     name: "黑水鸡",
     latin: "Gallinula chloropus",
     habitat: "water",
@@ -100,6 +119,7 @@ const birds = [
     clue: "红额甲和红黄相间的嘴明显。",
   },
   {
+    oseaIndex: 6452,
     name: "棕背伯劳",
     latin: "Lanius schach",
     habitat: "forest",
@@ -112,6 +132,7 @@ const birds = [
     clue: "黑色眼罩、棕背和长尾非常明显。",
   },
   {
+    oseaIndex: 7381,
     name: "家燕",
     latin: "Hirundo rustica",
     habitat: "city",
@@ -124,6 +145,7 @@ const birds = [
     clue: "低空快速穿梭，尾巴像剪刀一样分叉。",
   },
   {
+    oseaIndex: 9380,
     name: "麻雀",
     latin: "Passer montanus",
     habitat: "city",
@@ -136,6 +158,8 @@ const birds = [
     clue: "常成群在地面啄食，头顶栗褐色。",
   },
 ];
+
+let birds = fallbackBirdProfiles.map(normalizeBirdProfile);
 
 const recommendedPosts = [
   {
@@ -187,6 +211,8 @@ const recommendedPosts = [
 
 const birdGrid = document.querySelector("#birdGrid");
 const birdSearch = document.querySelector("#birdSearch");
+const atlasSummary = document.querySelector("#atlasSummary");
+const atlasDetail = document.querySelector("#atlasDetail");
 const upload = document.querySelector("#birdUpload");
 const preview = document.querySelector("#previewImage");
 const uploadZone = document.querySelector(".upload-zone");
@@ -195,6 +221,8 @@ const resultName = document.querySelector("#resultName");
 const resultMeta = document.querySelector("#resultMeta");
 const resultFeature = document.querySelector("#resultFeature");
 const modelDetail = document.querySelector("#modelDetail");
+const confidenceRing = document.querySelector(".confidence-ring");
+const candidateList = document.querySelector("#candidateList");
 const feed = document.querySelector("#feed");
 const communityFeed = document.querySelector("#communityFeed");
 const postForm = document.querySelector("#postForm");
@@ -204,29 +232,136 @@ const useDetected = document.querySelector("#useDetected");
 const communityTabs = document.querySelectorAll("[data-community-tab]");
 const logoutButtons = document.querySelectorAll("[data-logout]");
 const authForms = document.querySelectorAll("[data-auth-form]");
-const loginBtn = document.querySelector("#loginBtn");
+const authSwitchButtons = document.querySelectorAll("[data-auth-switch]");
+const authModeFields = document.querySelectorAll("[data-auth-visible]");
+const authModeEyebrow = document.querySelector("#authModeEyebrow");
+const authModeTitle = document.querySelector("#authModeTitle");
+const authModeCopy = document.querySelector("#authModeCopy");
+const authSubmitBtn = document.querySelector("#authSubmitBtn");
+const authSwitchLead = document.querySelector("#authSwitchLead");
+const deviceConnectionTitle = document.querySelector("#deviceConnectionTitle");
+const deviceConnectBtn = document.querySelector("#deviceConnectBtn");
+const deviceBatteryValue = document.querySelector("#deviceBatteryValue");
+const deviceStorageValue = document.querySelector("#deviceStorageValue");
+const deviceFirmwareValue = document.querySelector("#deviceFirmwareValue");
+const deviceSyncStatus = document.querySelector("#deviceSyncStatus");
 
 const expandedComments = new Set();
 
 let detectedBird = birds[0];
 let classifierPromise;
+let birdInfoPromise;
+let birdProfilesPromise;
+let commonBirdCandidatesPromise;
+let atlasEntriesPromise;
+let atlasSearchTimer = null;
+let selectedAtlasIndex = null;
+let birdProfilesSource = "fallback";
+let birdProfilesLoadError = "";
 let userPosts = [];
 let commentsByPostId = {};
 let activeCommunityTab = "recommended";
 let currentUser = null;
+let homeCommunityRevealPlayed = false;
+let homeCommunityRevealObserver = null;
+let deviceConnectionTimer = null;
+let localAtlasMatches = new Map();
 
-const recognitionRules = [
-  { oseaIndex: 3334, bird: "翠鸟", cn: "普通翠鸟", en: "Common Kingfisher" },
-  { oseaIndex: 861, bird: "白鹭", cn: "白鹭", en: "Little Egret" },
-  { oseaIndex: 7201, bird: "白头鹎", cn: "白头鹎", en: "Light-vented Bulbul" },
-  { oseaIndex: 1892, bird: "珠颈斑鸠", cn: "珠颈斑鸠", en: "Spotted Dove" },
-  { oseaIndex: 6798, bird: "灰喜鹊", cn: "灰喜鹊", en: "Azure-winged Magpie" },
-  { oseaIndex: 6803, bird: "红嘴蓝鹊", cn: "红嘴蓝鹊", en: "Red-billed Blue Magpie" },
-  { oseaIndex: 1388, bird: "黑水鸡", cn: "黑水鸡", en: "Common Moorhen" },
-  { oseaIndex: 6452, bird: "棕背伯劳", cn: "棕背伯劳", en: "Long-tailed Shrike" },
-  { oseaIndex: 7381, bird: "家燕", cn: "家燕", en: "Barn Swallow" },
-  { oseaIndex: 9380, bird: "麻雀", cn: "麻雀", en: "Eurasian Tree Sparrow" },
-];
+rebuildLocalAtlasMatches();
+
+function normalizeBirdProfile(profile) {
+  const name = String(profile?.name || profile?.cn || "").trim();
+  const latin = String(profile?.latin || "").trim();
+  const source = String(profile?.source || "").trim();
+
+  return {
+    oseaIndex: Number.isInteger(profile?.oseaIndex) ? profile.oseaIndex : null,
+    name,
+    latin,
+    habitat: String(profile?.habitat || "unknown").trim(),
+    place: String(profile?.place || "分布资料待补充").trim(),
+    feature: String(profile?.feature || "形态识别资料待补充。").trim(),
+    food: String(profile?.food || "待补充").trim(),
+    image: String(profile?.image || "").trim(),
+    source,
+    imageCredit: String(profile?.imageCredit || "").trim(),
+    license: String(profile?.license || "").trim(),
+    clue: String(profile?.clue || "建议结合拍摄地点、体型、羽色和行为继续判断。").trim(),
+  };
+}
+
+function rebuildLocalAtlasMatches(profiles = birds) {
+  localAtlasMatches = new Map(
+    profiles
+      .filter((profile) => Number.isInteger(profile.oseaIndex) && profile.name)
+      .map((profile) => [profile.oseaIndex, profile.name])
+  );
+}
+
+function getBirdProfiles() {
+  if (!birdProfilesPromise) {
+    birdProfilesPromise = fetch(BIRD_PROFILES_PATH)
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`富图鉴资料加载失败：${response.status}`);
+        }
+        return response.json();
+      })
+      .then((profiles) => {
+        if (!Array.isArray(profiles)) {
+          throw new Error("富图鉴资料格式不正确。");
+        }
+
+        birds = profiles.map(normalizeBirdProfile).filter((profile) => profile.name && profile.latin);
+        if (!birds.length) {
+          throw new Error("富图鉴资料为空。");
+        }
+
+        detectedBird = birds[0];
+        atlasEntriesPromise = null;
+        rebuildLocalAtlasMatches();
+        birdProfilesSource = "external";
+        birdProfilesLoadError = "";
+        return birds;
+      })
+      .catch((error) => {
+        birds = fallbackBirdProfiles.map(normalizeBirdProfile);
+        detectedBird = birds[0];
+        atlasEntriesPromise = null;
+        rebuildLocalAtlasMatches();
+        birdProfilesSource = "fallback";
+        birdProfilesLoadError = error.message || "富图鉴资料加载失败。";
+        console.warn(birdProfilesLoadError);
+        return birds;
+      });
+  }
+
+  return birdProfilesPromise;
+}
+
+function getCommonBirdCandidates() {
+  if (!commonBirdCandidatesPromise) {
+    commonBirdCandidatesPromise = fetch(COMMON_BIRD_CANDIDATES_PATH)
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`候选清单加载失败：${response.status}`);
+        }
+        return response.json();
+      })
+      .then((data) => {
+        if (!data || !Array.isArray(data.candidates)) {
+          throw new Error("候选清单格式不正确。");
+        }
+        return data.candidates;
+      })
+      .catch((error) => {
+        console.warn(error.message || "候选清单加载失败。");
+        return [];
+      });
+  }
+
+  return commonBirdCandidatesPromise;
+}
 
 function safeParseStorage(key, fallback) {
   try {
@@ -243,6 +378,123 @@ function saveStorage(key, value) {
   window.localStorage.setItem(key, JSON.stringify(value));
 }
 
+function resolveAuthApiBaseUrl() {
+  if (window.BIRDORA_API_BASE_URL) {
+    return String(window.BIRDORA_API_BASE_URL).replace(/\/$/, "");
+  }
+
+  const { hostname, port, protocol } = window.location;
+  const isLocalHost = hostname === "localhost" || hostname === "127.0.0.1";
+
+  if (protocol === "file:") {
+    return "http://localhost:4000";
+  }
+
+  if (isLocalHost && port !== "4000") {
+    return `${protocol}//${hostname}:4000`;
+  }
+
+  return "";
+}
+
+function normalizeAuthUser(user) {
+  if (!user || typeof user.email !== "string" || !user.email.trim()) {
+    return null;
+  }
+
+  const email = user.email.trim().toLowerCase();
+  const nickname =
+    typeof user.nickname === "string" && user.nickname.trim()
+      ? user.nickname.trim()
+      : email.split("@")[0];
+
+  return {
+    id: user.id,
+    email,
+    nickname,
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt,
+  };
+}
+
+function rememberAuthUser(user) {
+  const normalizedUser = normalizeAuthUser(user);
+  if (!normalizedUser) return null;
+
+  window.localStorage.setItem(STORAGE_KEYS.loggedIn, "true");
+  saveStorage(STORAGE_KEYS.authUser, normalizedUser);
+  currentUser = normalizedUser;
+  return normalizedUser;
+}
+
+function clearAuthState() {
+  window.localStorage.removeItem(STORAGE_KEYS.loggedIn);
+  window.localStorage.removeItem(STORAGE_KEYS.authUser);
+  currentUser = null;
+}
+
+function translateAuthMessage(message, fallback = "认证请求失败，请稍后重试。") {
+  const messages = {
+    "email and password are required": "请先填写邮箱和密码。",
+    "email format is invalid": "邮箱格式不正确，请检查后重试。",
+    "password must be at least 6 characters": "密码至少需要 6 位。",
+    "email is already registered": "这个邮箱已经注册过了，请直接登录。",
+    "email or password is incorrect": "邮箱或密码不正确，请检查后重试。",
+    Unauthorized: "登录状态已失效，请重新登录。",
+  };
+
+  return messages[message] || message || fallback;
+}
+
+async function authRequest(path, options = {}) {
+  const { method = "GET", body } = options;
+  const headers = {
+    Accept: "application/json",
+  };
+
+  if (body) {
+    headers["Content-Type"] = "application/json";
+  }
+
+  let response;
+  try {
+    response = await fetch(`${AUTH_API_BASE_URL}${path}`, {
+      method,
+      credentials: "include",
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  } catch {
+    throw new Error("无法连接后端认证服务，请确认后端已经启动。");
+  }
+
+  const rawBody = await response.text();
+  let data = null;
+  try {
+    data = rawBody ? JSON.parse(rawBody) : null;
+  } catch {
+    data = rawBody;
+  }
+
+  if (!response.ok) {
+    const message = data && typeof data === "object" ? data.message : null;
+    throw new Error(translateAuthMessage(message));
+  }
+
+  return data;
+}
+
+async function fetchAuthStatus() {
+  try {
+    return await authRequest(AUTH_ROUTES.status);
+  } catch {
+    return {
+      authenticated: false,
+      user: null,
+    };
+  }
+}
+
 function getAuthUser() {
   return safeParseStorage(STORAGE_KEYS.authUser, null);
 }
@@ -251,22 +503,27 @@ function isLoggedIn() {
   return window.localStorage.getItem(STORAGE_KEYS.loggedIn) === "true";
 }
 
-function getRegisteredUsers() {
-  return safeParseStorage(STORAGE_KEYS.registeredUsers, []);
-}
-
 function getValidatedAuthUser() {
   if (!isLoggedIn()) {
     return null;
   }
 
-  const authUser = getAuthUser();
-  return authUser || { email: "dev@birdora.local", nickname: "开发者" };
+  return normalizeAuthUser(getAuthUser());
 }
 
-function requireAuth() {
-  currentUser = getValidatedAuthUser() || { email: "dev@birdora.local", nickname: "开发者" };
-  // TODO: Production mode should enable authentication
+async function requireAuth() {
+  if (!AUTH_PAGES.has(page)) {
+    return true;
+  }
+
+  const status = await fetchAuthStatus();
+  if (!status.authenticated || !status.user) {
+    clearAuthState();
+    window.location.replace("./login.html");
+    return false;
+  }
+
+  rememberAuthUser(status.user);
   return true;
 }
 
@@ -374,6 +631,7 @@ function renderHomeFeed() {
   if (!feed) return;
   const previewPosts = getAllCommunityPosts().slice(0, 3);
   feed.innerHTML = previewPosts.map((post) => buildFeedCard(post, { preview: true })).join("");
+  syncHomeCommunityReveal();
 }
 
 function renderCommunityFeed() {
@@ -483,92 +741,160 @@ function initCommunityTabs() {
 }
 
 function initAuthForms() {
-  if (!authForms.length) return;
+  const form = authForms[0];
+  if (!form) return;
 
-  authForms.forEach((form) => {
-    const mode = form.dataset.authForm;
-    const message = form.querySelector("[data-auth-message]");
+  const message = form.querySelector("[data-auth-message]");
+  const emailField = form.querySelector('[name="email"]');
+  const passwordField = form.querySelector('[name="password"]');
+  const nicknameField = form.querySelector('[name="nickname"]');
+  const agreeField = form.querySelector('[name="agree"]');
+  if (!message || !emailField || !passwordField || !nicknameField || !agreeField) return;
 
-    form.addEventListener("submit", (event) => {
-      event.preventDefault();
-      message.textContent = "";
+  const modeConfig = {
+    login: {
+      eyebrow: "登录",
+      title: "继续你的观鸟记录",
+      copy: "登录 Birdora，继续保存你的观鸟笔记、评论和识别记录。",
+      submit: "登录",
+      switchLead: "还没有账号？",
+      switchAction: "去注册",
+      nextMode: "register",
+    },
+    register: {
+      eyebrow: "注册",
+      title: "创建你的 Birdora 账号",
+      copy: "创建 Birdora 账号，继续同步你的观鸟笔记、评论和识别记录。",
+      submit: "注册并进入",
+      switchLead: "已经有账号？",
+      switchAction: "去登录",
+      nextMode: "login",
+    },
+  };
 
-      if (mode === "login") {
-        window.location.href = "./index.html";
-        return;
-      }
+  const setMessage = (text = "") => {
+    message.textContent = text;
+  };
 
-      const emailField = form.querySelector('[name="email"]');
-      const passwordField = form.querySelector('[name="password"]');
-      if (!emailField || !passwordField) return;
+  const setSubmitting = (submitting) => {
+    if (authSubmitBtn) {
+      authSubmitBtn.disabled = submitting;
+      authSubmitBtn.textContent = submitting ? "请稍候..." : modeConfig[form.dataset.authMode || "login"].submit;
+    }
 
-      if (!form.reportValidity()) {
-        return;
-      }
+    authSwitchButtons.forEach((button) => {
+      button.disabled = submitting;
+    });
+  };
 
-      const email = emailField.value.trim().toLowerCase();
-      const password = passwordField.value.trim();
+  const setAuthMode = (mode) => {
+    const config = modeConfig[mode] || modeConfig.login;
+    form.dataset.authMode = mode;
 
-      if (!email || !password) {
-        message.textContent = "请先填写邮箱和密码。";
-        return;
-      }
+    if (authModeEyebrow) authModeEyebrow.textContent = config.eyebrow;
+    if (authModeTitle) authModeTitle.textContent = config.title;
+    if (authModeCopy) authModeCopy.textContent = config.copy;
+    if (authSubmitBtn) authSubmitBtn.textContent = config.submit;
+    if (authSwitchLead) authSwitchLead.textContent = config.switchLead;
 
-      if (mode === "register") {
-        const nickname = form.querySelector('[name="nickname"]').value.trim();
-        const agreed = form.querySelector('[name="agree"]').checked;
-        if (!nickname) {
-          message.textContent = "请先填写昵称。";
-          return;
-        }
-        if (!agreed) {
-          message.textContent = "请先勾选同意《用户协议》和《隐私政策》。";
-          return;
-        }
+    authSwitchButtons.forEach((button) => {
+      button.dataset.authSwitch = config.nextMode;
+      button.textContent = config.switchAction;
+      button.classList.remove("auth-hidden");
+      button.disabled = false;
+    });
 
-        const users = getRegisteredUsers();
-        if (users.some((user) => user.email === email)) {
-          message.textContent = "这个邮箱已经注册过了，请直接登录。";
-          return;
-        }
-
-        const newUser = { email, password, nickname };
-        saveStorage(STORAGE_KEYS.registeredUsers, [...users, newUser]);
-        window.localStorage.setItem(STORAGE_KEYS.loggedIn, "true");
-        saveStorage(STORAGE_KEYS.authUser, { email, nickname });
-        window.location.replace("./index.html");
-        return;
-      }
-
-      const users = getRegisteredUsers();
-      const matchedUser = users.find((user) => user.email === email && user.password === password);
-      if (!matchedUser) {
-        message.textContent = "邮箱或密码不正确，请检查后重试。";
-        return;
-      }
-
-      saveStorage(STORAGE_KEYS.authUser, {
-        email: matchedUser.email,
-        nickname: matchedUser.nickname,
+    authModeFields.forEach((field) => {
+      const visible = field.dataset.authVisible === mode;
+      field.classList.toggle("auth-hidden", !visible);
+      field.setAttribute("aria-hidden", String(!visible));
+      field.querySelectorAll("input").forEach((input) => {
+        input.disabled = !visible;
       });
-      window.localStorage.setItem(STORAGE_KEYS.loggedIn, "true");
-      window.location.replace("./index.html");
+    });
+
+    passwordField.autocomplete = mode === "register" ? "new-password" : "current-password";
+    setMessage("");
+  };
+
+  authSwitchButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      setAuthMode(button.dataset.authSwitch || "login");
     });
   });
-}
 
-function initDevLoginButton() {
-  if (!loginBtn) return;
-
-  loginBtn.addEventListener("click", function (event) {
+  form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    window.location.href = "./index.html";
+    setMessage("");
+
+    const mode = form.dataset.authMode || "login";
+    const email = emailField.value.trim().toLowerCase();
+    const password = passwordField.value.trim();
+
+    if (!email || !password) {
+      setMessage("请先填写邮箱和密码。");
+      return;
+    }
+
+    if (mode === "register") {
+      const nickname = nicknameField.value.trim();
+      const agreed = agreeField.checked;
+
+      if (!nickname) {
+        setMessage("请先填写昵称。");
+        nicknameField.focus();
+        return;
+      }
+
+      if (!agreed) {
+        setMessage("请先勾选同意《用户协议》和《隐私政策》。");
+        return;
+      }
+
+      setSubmitting(true);
+      try {
+        const result = await authRequest(AUTH_ROUTES.register, {
+          method: "POST",
+          body: { email, password, nickname },
+        });
+
+        rememberAuthUser(result.user);
+        window.location.replace("./index.html");
+      } catch (error) {
+        setMessage(error.message || "注册失败，请稍后重试。");
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const result = await authRequest(AUTH_ROUTES.login, {
+        method: "POST",
+        body: { email, password },
+      });
+
+      rememberAuthUser(result.user);
+      window.location.replace("./index.html");
+    } catch (error) {
+      setMessage(error.message || "登录失败，请稍后重试。");
+    } finally {
+      setSubmitting(false);
+    }
   });
+
+  setAuthMode(form.dataset.authMode || "login");
 }
 
-function logout() {
-  window.localStorage.removeItem(STORAGE_KEYS.loggedIn);
-  window.localStorage.removeItem(STORAGE_KEYS.authUser);
+async function logout() {
+  try {
+    await authRequest(AUTH_ROUTES.logout, { method: "POST" });
+  } catch {
+    // Local session cleanup should still happen if the server is unreachable.
+  }
+
+  clearAuthState();
   window.location.replace("./login.html");
 }
 
@@ -595,14 +921,34 @@ function getClassifier() {
   return classifierPromise;
 }
 
+function getBirdInfo() {
+  if (!birdInfoPromise) {
+    birdInfoPromise = fetch(OSEA_LABELS_PATH)
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`鸟类标签库加载失败：${response.status}`);
+        }
+        return response.json();
+      })
+      .then((labels) => {
+        if (!Array.isArray(labels)) {
+          throw new Error("鸟类标签库格式不正确。");
+        }
+        return labels;
+      });
+  }
+
+  return birdInfoPromise;
+}
+
 function updateModelReadiness() {
   if (!resultMeta || !modelDetail) return;
 
   window.setTimeout(() => {
     if (window.ort) {
-      resultMeta.textContent = "OSEA 模型运行器已就绪，首次识别会加载 26MB 模型";
+      resultMeta.textContent = "OSEA 模型运行器已就绪，首次识别会加载模型和标签库";
       modelDetail.textContent =
-        "已接入 sun-jiao/osea_mobile 的 bird_model.onnx，当前结果限定为 10 个支持鸟种。";
+        "已接入 sun-jiao/osea_mobile 的 bird_model.onnx，识别时从全量标签库返回 Top 5 候选。";
     } else {
       resultMeta.textContent = "AI 模型准备中，如果一直不变请检查资源文件";
       modelDetail.textContent = "ONNX Runtime 或模型资源未加载完成，上传时会自动重试。";
@@ -632,100 +978,492 @@ function imageToOseaTensor(imageElement) {
   return new window.ort.Tensor("float32", input, [1, 3, size, size]);
 }
 
-function softmax(values) {
-  const max = Math.max(...values);
-  const exps = values.map((value) => Math.exp(value - max));
-  const sum = exps.reduce((total, value) => total + value, 0);
-  return exps.map((value) => value / sum);
+function normalizeOseaLabel(entry, index) {
+  const [cn, en, latin] = Array.isArray(entry) ? entry : [];
+
+  return {
+    index,
+    cn: cn || `OSEA 标签 ${index + 1}`,
+    en: en || "",
+    latin: latin || "",
+  };
 }
 
-function topSupportedBird(logits) {
-  const supportedScores = recognitionRules.map((rule) => ({
-    ...rule,
-    raw: logits[rule.oseaIndex],
-  }));
-  const selectedProbabilities = softmax(supportedScores.map((item) => item.raw));
-  return supportedScores
-    .map((item, index) => ({ ...item, selectedProbability: selectedProbabilities[index] }))
-    .sort((a, b) => b.selectedProbability - a.selectedProbability)[0];
+function insertTopCandidate(candidates, candidate, limit) {
+  const insertAt = candidates.findIndex((item) => candidate.raw > item.raw);
+
+  if (insertAt === -1) {
+    candidates.push(candidate);
+  } else {
+    candidates.splice(insertAt, 0, candidate);
+  }
+
+  if (candidates.length > limit) {
+    candidates.pop();
+  }
+}
+
+function findAtlasBirdForCandidate(candidate) {
+  const mappedName = localAtlasMatches.get(candidate.index);
+  if (mappedName) {
+    return birds.find((bird) => bird.name === mappedName) || null;
+  }
+
+  return (
+    birds.find((bird) => {
+      return bird.name === candidate.cn || bird.latin === candidate.latin;
+    }) || null
+  );
+}
+
+function topOseaCandidates(logits, birdInfo, limit = OSEA_TOP_K) {
+  const length = Math.min(logits.length, birdInfo.length);
+  let maxLogit = -Infinity;
+
+  for (let index = 0; index < length; index += 1) {
+    const raw = Number(logits[index]);
+    if (Number.isFinite(raw) && raw > maxLogit) {
+      maxLogit = raw;
+    }
+  }
+
+  if (!Number.isFinite(maxLogit)) {
+    return [];
+  }
+
+  let sumExp = 0;
+  const candidates = [];
+
+  for (let index = 0; index < length; index += 1) {
+    const raw = Number(logits[index]);
+    if (!Number.isFinite(raw)) continue;
+
+    const exp = Math.exp(raw - maxLogit);
+    sumExp += exp;
+    insertTopCandidate(candidates, {
+      ...normalizeOseaLabel(birdInfo[index], index),
+      raw,
+      exp,
+    }, limit);
+  }
+
+  return candidates.map((candidate) => {
+    const probability = sumExp > 0 ? candidate.exp / sumExp : 0;
+    return {
+      ...candidate,
+      probability,
+      atlasBird: findAtlasBirdForCandidate(candidate),
+    };
+  });
 }
 
 async function classifyImageElement(imageElement) {
-  const classifier = await getClassifier();
+  const [classifier, birdInfo] = await Promise.all([getClassifier(), getBirdInfo()]);
   const tensor = imageToOseaTensor(imageElement);
   const feeds = { [classifier.inputNames[0]]: tensor };
   const outputMap = await classifier.run(feeds);
   const output = outputMap[classifier.outputNames[0]];
-  const logits = Array.from(output.data);
-  return topSupportedBird(logits);
+  const candidates = topOseaCandidates(output.data, birdInfo);
+
+  return {
+    candidates,
+    labelCount: birdInfo.length,
+    top: candidates[0] || null,
+    isConfident: Boolean(candidates[0] && candidates[0].probability >= OSEA_CONFIDENCE_THRESHOLD),
+  };
 }
 
-function renderBirds() {
-  if (!birdGrid || !birdSearch) return;
+function buildSearchText(parts) {
+  return parts
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
 
-  const query = birdSearch.value.trim().toLowerCase();
-  const filtered = birds.filter((bird) => {
-    return (
-      bird.name.toLowerCase().includes(query) ||
-      bird.latin.toLowerCase().includes(query) ||
-      bird.feature.toLowerCase().includes(query) ||
-      bird.clue.toLowerCase().includes(query) ||
-      bird.place.toLowerCase().includes(query) ||
-      bird.food.toLowerCase().includes(query)
-    );
+function createRichAtlasEntry(bird, index = null, label = null) {
+  const cn = label?.cn || bird.name;
+  const en = label?.en || "";
+  const latin = label?.latin || bird.latin;
+
+  return {
+    index,
+    name: bird.name,
+    cn,
+    en,
+    latin,
+    habitat: bird.habitat,
+    place: bird.place,
+    feature: bird.feature,
+    food: bird.food,
+    clue: bird.clue,
+    image: bird.image,
+    source: bird.source,
+    imageCredit: bird.imageCredit,
+    license: bird.license,
+    detailLevel: "rich",
+    status: "图文已补充",
+    searchText: buildSearchText([
+      bird.name,
+      cn,
+      en,
+      latin,
+      bird.place,
+      bird.feature,
+      bird.food,
+      bird.clue,
+    ]),
+  };
+}
+
+function createBasicAtlasEntry(label, index) {
+  const normalized = normalizeOseaLabel(label, index);
+  const displayName = normalized.cn;
+
+  return {
+    index,
+    name: displayName,
+    cn: normalized.cn,
+    en: normalized.en,
+    latin: normalized.latin,
+    habitat: "unknown",
+    place: "分布资料待补充",
+    feature: "已收录 OSEA 基础标签，详细形态、栖息地、食性和图片资料待补充。",
+    food: "待补充",
+    clue: "可先结合中文名、英文名、拉丁名和识别候选继续判断。",
+    image: "",
+    source: "",
+    detailLevel: "basic",
+    status: "基础标签",
+    searchText: buildSearchText([normalized.cn, normalized.en, normalized.latin]),
+  };
+}
+
+function buildAtlasEntries(labels) {
+  const richByName = new Map(birds.map((bird) => [bird.name, bird]));
+  const entries = labels.map((label, index) => {
+    const normalized = normalizeOseaLabel(label, index);
+    const mappedName = localAtlasMatches.get(index);
+    const richBird =
+      (mappedName && richByName.get(mappedName)) ||
+      birds.find((bird) => bird.name === normalized.cn || bird.latin === normalized.latin);
+
+    return richBird ? createRichAtlasEntry(richBird, index, normalized) : createBasicAtlasEntry(label, index);
   });
 
-  if (!filtered.length) {
-    birdGrid.classList.add("is-empty");
-    birdGrid.innerHTML =
-      `<article class="bird-card"><div><h3>没有找到鸟种</h3><p>可以换一个关键词再试试。</p></div></article>`;
+  return entries.sort((a, b) => {
+    if (a.detailLevel !== b.detailLevel) {
+      return a.detailLevel === "rich" ? -1 : 1;
+    }
+
+    return a.cn.localeCompare(b.cn, "zh-CN");
+  });
+}
+
+function getAtlasEntries() {
+  if (!atlasEntriesPromise) {
+    atlasEntriesPromise = Promise.all([getBirdInfo(), getBirdProfiles()]).then(([labels]) =>
+      buildAtlasEntries(labels)
+    );
+  }
+
+  return atlasEntriesPromise;
+}
+
+function renderAtlasSummary(total, shown, matched, query, progress = null) {
+  if (!atlasSummary) return;
+
+  const sourceNote =
+    birdProfilesSource === "fallback"
+      ? ` 富图鉴资料文件暂不可用，已使用内置兜底资料。${birdProfilesLoadError ? `(${birdProfilesLoadError})` : ""}`
+      : "";
+  const progressNote = progress
+    ? ` 富图鉴进度：${progress.richCount}/${progress.targetCount} 个候选已补齐。`
+    : "";
+
+  if (query) {
+    atlasSummary.textContent =
+      matched > shown
+        ? `已索引 ${total.toLocaleString("zh-CN")} 个 OSEA 标签，找到 ${matched.toLocaleString("zh-CN")} 个结果，先显示前 ${shown} 个。${progressNote}${sourceNote}`
+        : `已索引 ${total.toLocaleString("zh-CN")} 个 OSEA 标签，找到 ${matched.toLocaleString("zh-CN")} 个结果。${progressNote}${sourceNote}`;
     return;
   }
 
-  birdGrid.classList.remove("is-empty");
+  atlasSummary.textContent = `已索引 ${total.toLocaleString("zh-CN")} 个 OSEA 标签；默认展示已补充图文的常见鸟和部分基础标签。${progressNote}${sourceNote}`;
+}
 
-  const cardsMarkup = filtered
-    .map(
-      (bird) => `
-        <article class="bird-card">
-          <figure class="bird-photo">
-            <img src="${bird.image}" alt="${bird.name}照片" loading="lazy" />
-            <figcaption>图片来源 Wikimedia</figcaption>
-          </figure>
-          <div>
-            <h3>${bird.name}</h3>
-            <p>${bird.latin}</p>
-            <p>${bird.feature}</p>
-            <p class="bird-clue">${bird.clue}</p>
-            <div class="tag-row">
-              <span>${bird.place}</span>
-              <span>${bird.food}</span>
-            </div>
-            <a class="source-link" href="${bird.source}" target="_blank" rel="noreferrer">查看来源</a>
-          </div>
-        </article>
-      `
-    )
-    .join("");
+function renderAtlasCard(entry) {
+  const isRich = entry.detailLevel === "rich";
+  const hasImage = Boolean(isRich && entry.image);
+  const caption = entry.imageCredit
+    ? `${entry.imageCredit}${entry.license ? ` · ${entry.license}` : ""}`
+    : "图片来源 Wikimedia";
+  const photo = hasImage
+    ? `
+      <figure class="bird-photo">
+        <img src="${escapeHtml(entry.image)}" alt="${escapeHtml(entry.name)}照片" loading="lazy" />
+        <figcaption>${escapeHtml(caption)}</figcaption>
+      </figure>
+    `
+    : `
+      <figure class="bird-photo bird-placeholder" aria-label="${escapeHtml(entry.name)}待补充图片">
+        <span>${escapeHtml(entry.cn.slice(0, 1))}</span>
+        <figcaption>图片待补充</figcaption>
+      </figure>
+    `;
+  const sourceLink = entry.source
+    ? `<a class="source-link" href="${escapeHtml(entry.source)}" target="_blank" rel="noreferrer">查看来源</a>`
+    : `<span class="source-link source-link-muted">来自 OSEA 标签库</span>`;
 
-  birdGrid.innerHTML = `
-    <div class="bird-marquee">
-      <div class="bird-track">
-        ${cardsMarkup}
+  return `
+    <article class="bird-card ${isRich ? "is-rich" : "is-basic"}">
+      ${photo}
+      <div>
+        <h3>${escapeHtml(entry.name)}</h3>
+        <p>${escapeHtml(entry.en ? `${entry.en} · ${entry.latin}` : entry.latin)}</p>
+        <p>${escapeHtml(entry.feature)}</p>
+        <p class="bird-clue">${escapeHtml(entry.clue)}</p>
+        <div class="tag-row">
+          <span>${escapeHtml(entry.status)}</span>
+          <span>${escapeHtml(entry.place)}</span>
+        </div>
+        <div class="atlas-card-actions">
+          ${sourceLink}
+          <button class="source-link atlas-open" type="button" data-atlas-index="${entry.index}">查看详情</button>
+        </div>
       </div>
-      <div class="bird-track" aria-hidden="true">
-        ${cardsMarkup}
-      </div>
-    </div>
+    </article>
   `;
+}
+
+function renderAtlasDetail(entry, context = "图鉴详情") {
+  if (!atlasDetail || !entry) return;
+
+  const imageRights = entry.image
+    ? `${entry.imageCredit || "图片来源待补充"}${entry.license ? ` · ${entry.license}` : ""}`
+    : "图片待补充";
+  const sourceMarkup = entry.source
+    ? `<a href="${escapeHtml(entry.source)}" target="_blank" rel="noreferrer">查看图片/资料来源</a>`
+    : `<span>资料来源：OSEA 标签库，百科资料待补充</span>`;
+
+  selectedAtlasIndex = entry.index;
+  atlasDetail.innerHTML = `
+    <div>
+      <p class="eyebrow">${escapeHtml(context)}</p>
+      <h3>${escapeHtml(entry.name)}</h3>
+      <p>${escapeHtml(entry.en || "英文名待补充")} · ${escapeHtml(entry.latin || "拉丁名待补充")}</p>
+    </div>
+    <dl>
+      <div><dt>资料状态</dt><dd>${escapeHtml(entry.status)}</dd></div>
+      <div><dt>识别标签</dt><dd>OSEA index ${entry.index == null ? "待匹配" : entry.index}</dd></div>
+      <div><dt>栖息地</dt><dd>${escapeHtml(entry.place)}</dd></div>
+      <div><dt>观察线索</dt><dd>${escapeHtml(entry.clue)}</dd></div>
+      <div><dt>食性</dt><dd>${escapeHtml(entry.food)}</dd></div>
+      <div><dt>图片版权</dt><dd>${escapeHtml(imageRights)}</dd></div>
+      <div><dt>来源</dt><dd>${sourceMarkup}</dd></div>
+    </dl>
+  `;
+}
+
+async function openAtlasDetailByIndex(index, options = {}) {
+  const entries = await getAtlasEntries();
+  const entry = entries.find((item) => item.index === index);
+  if (!entry) return;
+
+  renderAtlasDetail(entry, options.context || "图鉴详情");
+
+  if (options.syncSearch && birdSearch) {
+    birdSearch.value = entry.cn;
+    await renderBirds({ keepDetail: true });
+  }
+
+  if (options.scroll && atlasDetail) {
+    atlasDetail.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+}
+
+async function renderBirds(options = {}) {
+  if (!birdGrid || !birdSearch) return;
+
+  const query = birdSearch.value.trim().toLowerCase();
+  birdGrid.classList.remove("is-empty");
+  birdGrid.innerHTML = `<article class="bird-card atlas-loading"><div><h3>正在加载图鉴索引</h3><p>正在读取 OSEA 鸟类标签库...</p></div></article>`;
+
+  try {
+    const [entries, commonBirdCandidates] = await Promise.all([
+      getAtlasEntries(),
+      getCommonBirdCandidates(),
+    ]);
+    const matched = query
+      ? entries.filter((entry) => entry.searchText.includes(query))
+      : entries;
+    const visible = query
+      ? matched.slice(0, ATLAS_SEARCH_LIMIT)
+      : [
+          ...entries.filter((entry) => entry.detailLevel === "rich"),
+          ...entries.filter((entry) => entry.detailLevel !== "rich").slice(0, ATLAS_INITIAL_LIMIT),
+        ].slice(0, ATLAS_INITIAL_LIMIT);
+    const candidateIndexSet = new Set(commonBirdCandidates.map((candidate) => candidate.oseaIndex));
+    const progress = commonBirdCandidates.length
+      ? {
+          richCount: entries.filter(
+            (entry) => entry.detailLevel === "rich" && candidateIndexSet.has(entry.index)
+          ).length,
+          targetCount: commonBirdCandidates.length,
+        }
+      : null;
+
+    renderAtlasSummary(entries.length, visible.length, matched.length, query, progress);
+
+    if (visible[0] && !options.keepDetail) {
+      renderAtlasDetail(visible[0], query ? "搜索结果详情" : "默认展示");
+    }
+
+    if (!visible.length) {
+      birdGrid.classList.add("is-empty");
+      birdGrid.innerHTML =
+        `<article class="bird-card"><div><h3>没有找到鸟种</h3><p>可以换一个中文名、英文名或拉丁名再试。</p></div></article>`;
+      return;
+    }
+
+    birdGrid.classList.remove("is-empty");
+    birdGrid.innerHTML = `
+      <div class="atlas-results">
+        ${visible.map(renderAtlasCard).join("")}
+      </div>
+    `;
+  } catch (error) {
+    birdGrid.classList.add("is-empty");
+    birdGrid.innerHTML =
+      `<article class="bird-card"><div><h3>图鉴加载失败</h3><p>${escapeHtml(error.message || "请稍后重试。")}</p></div></article>`;
+    if (atlasSummary) {
+      atlasSummary.textContent = "图鉴索引加载失败。";
+    }
+  }
 }
 
 function initAtlasSearch() {
   if (!birdSearch) return;
-  birdSearch.addEventListener("input", renderBirds);
+
+  birdSearch.addEventListener("input", () => {
+    window.clearTimeout(atlasSearchTimer);
+    atlasSearchTimer = window.setTimeout(() => {
+      renderBirds();
+    }, 120);
+  });
+
+  if (birdGrid) {
+    birdGrid.addEventListener("click", (event) => {
+      const trigger = event.target.closest("[data-atlas-index]");
+      if (!trigger) return;
+
+      openAtlasDetailByIndex(Number(trigger.dataset.atlasIndex), {
+        context: "图鉴详情",
+        scroll: true,
+      });
+    });
+  }
+
+  if (candidateList) {
+    candidateList.addEventListener("click", (event) => {
+      const trigger = event.target.closest("[data-candidate-index]");
+      if (!trigger) return;
+
+      openAtlasDetailByIndex(Number(trigger.dataset.candidateIndex), {
+        context: "识别候选详情",
+        syncSearch: true,
+        scroll: true,
+      });
+    });
+  }
 }
 
-function setResult(bird, confidence = 92, detail = "模型已匹配到图鉴中的常见鸟种。") {
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function formatCandidateScore(probability) {
+  const percent = probability * 100;
+  if (!Number.isFinite(percent) || percent <= 0) return "0%";
+  if (percent >= 10) return `${Math.round(percent)}%`;
+  if (percent >= 1) return `${percent.toFixed(1)}%`;
+  return "<1%";
+}
+
+function displayConfidence(probability) {
+  const percent = Math.round(probability * 100);
+  return Math.max(1, Math.min(99, percent));
+}
+
+function setConfidenceRing(confidence, color = "var(--green)") {
+  if (!confidenceRing) return;
+
+  confidenceRing.style.background = `
+    radial-gradient(circle at center, #fff 55%, transparent 56%),
+    conic-gradient(${color} 0 ${confidence}%, #e9f0ec ${confidence}% 100%)
+  `;
+}
+
+function setCandidateListMessage(message) {
+  if (!candidateList) return;
+
+  candidateList.innerHTML = `
+    <li class="candidate-empty">${escapeHtml(message)}</li>
+  `;
+}
+
+function renderCandidateList(candidates = []) {
+  if (!candidateList) return;
+
+  if (!candidates.length) {
+    setCandidateListMessage("上传照片后显示模型 Top 5 候选。");
+    return;
+  }
+
+  candidateList.innerHTML = candidates
+    .map((candidate, index) => {
+      const latin = candidate.latin ? ` · ${candidate.latin}` : "";
+      const atlasNote = candidate.atlasBird ? "图鉴已收录" : "图鉴待补充";
+
+      return `
+        <li>
+          <button class="candidate-open" type="button" data-candidate-index="${candidate.index}">
+            <span>
+              <strong>${index + 1}. ${escapeHtml(candidate.cn)}</strong>
+              <small>${escapeHtml(candidate.en || "英文名待补充")}${escapeHtml(latin)}</small>
+            </span>
+            <span>
+              <b>${escapeHtml(formatCandidateScore(candidate.probability))}</b>
+              <em>${escapeHtml(atlasNote)}</em>
+            </span>
+          </button>
+        </li>
+      `;
+    })
+    .join("");
+}
+
+function createCandidateBird(candidate) {
+  return {
+    name: candidate.cn,
+    latin: candidate.latin || candidate.en || "OSEA 标签",
+    place: "图鉴资料待补充",
+    feature: `${candidate.cn}${candidate.en ? ` / ${candidate.en}` : ""} 是 OSEA 全量标签库返回的候选结果，当前本地图鉴还没有补充详细资料。`,
+    food: "待补充",
+    clue: "建议结合照片主体大小、拍摄地点和 Top 候选继续判断。",
+  };
+}
+
+function setResult(
+  bird,
+  confidence = 92,
+  detail = "模型已匹配到图鉴中的常见鸟种。",
+  candidates = []
+) {
   if (!confidenceText || !resultName || !resultMeta || !resultFeature || !modelDetail) return;
 
   detectedBird = bird;
@@ -734,10 +1472,8 @@ function setResult(bird, confidence = 92, detail = "模型已匹配到图鉴中�
   resultMeta.textContent = `${bird.latin} · ${bird.place}`;
   resultFeature.textContent = bird.feature;
   modelDetail.textContent = detail;
-  document.querySelector(".confidence-ring").style.background = `
-    radial-gradient(circle at center, #fff 55%, transparent 56%),
-    conic-gradient(var(--green) 0 ${confidence}%, #e9f0ec ${confidence}% 100%)
-  `;
+  renderCandidateList(candidates);
+  setConfidenceRing(confidence);
 }
 
 function setPendingResult(text) {
@@ -748,20 +1484,30 @@ function setPendingResult(text) {
   resultMeta.textContent = "AI 模型正在分析这张照片";
   resultFeature.textContent = "请稍等几秒，首次加载模型可能会更慢。";
   modelDetail.textContent = text;
+  setCandidateListMessage("模型运行完成后会显示 Top 5 候选。");
 }
 
-function setUnknownResult(predictions) {
+function setUnknownResult(predictions, candidates = []) {
   if (!confidenceText || !resultName || !resultMeta || !resultFeature || !modelDetail) return;
 
   confidenceText.textContent = "--";
   resultName.textContent = "未确定鸟种";
   resultMeta.textContent = "建议换一张更清晰、主体更大的鸟类照片";
-  resultFeature.textContent = "当前模型没有把照片稳定匹配到支持的 10 种鸟。";
+  resultFeature.textContent = "当前模型没有给出足够稳定的全量标签候选。";
   modelDetail.textContent = predictions || "模型没有返回可用结果。";
-  document.querySelector(".confidence-ring").style.background = `
-    radial-gradient(circle at center, #fff 55%, transparent 56%),
-    conic-gradient(#9ba9a2 0 100%, #e9f0ec 100% 100%)
-  `;
+  renderCandidateList(candidates);
+  setConfidenceRing(100, "#9ba9a2");
+}
+
+function setCandidateResult(result) {
+  const top = result.top;
+  const bird = top.atlasBird || createCandidateBird(top);
+  const confidence = displayConfidence(top.probability);
+  const detail = top.atlasBird
+    ? `OSEA 全量 ${result.labelCount.toLocaleString("zh-CN")} 个标签 Top 1：${top.cn} / ${top.en}。`
+    : `OSEA 全量 ${result.labelCount.toLocaleString("zh-CN")} 个标签 Top 1：${top.cn} / ${top.en}，本地图鉴资料待补充。`;
+
+  setResult(bird, confidence, detail, result.candidates);
 }
 
 function initBirdRecognition() {
@@ -781,22 +1527,28 @@ function initBirdRecognition() {
         preview.src = objectUrl;
       });
 
-      const top = await classifyImageElement(preview);
-      const bird = birds.find((item) => item.name === top.bird);
-      if (!bird) {
-        setUnknownResult(`识别到 ${top.cn}，但网站图鉴里还没有对应卡片。`);
+      const result = await classifyImageElement(preview);
+      if (!result.top) {
+        setUnknownResult("模型没有返回可用候选。");
         return;
       }
 
-      const confidence = Math.round(Math.max(45, Math.min(98, top.selectedProbability * 100)));
-      const detail = `OSEA 支持类别：${top.cn} / ${top.en}。当前演示只在 10 个鸟种中取最高分。`;
-      setResult(bird, confidence, detail);
+      if (!result.isConfident) {
+        setUnknownResult(
+          `Top 1 为 ${result.top.cn}，置信度 ${formatCandidateScore(result.top.probability)}，低于上线阈值。`,
+          result.candidates
+        );
+        return;
+      }
+
+      setCandidateResult(result);
     } catch (error) {
       confidenceText.textContent = "!";
       resultName.textContent = "识别失败";
       resultMeta.textContent = "模型加载或图片读取失败";
       resultFeature.textContent = "请确认使用 http://localhost 或正式网址打开，而不是直接 file:// 打开。";
       modelDetail.textContent = error.message || "未知错误";
+      setCandidateListMessage("识别失败，暂无候选结果。");
     }
   });
 }
@@ -860,10 +1612,178 @@ function initScrollButtons() {
   });
 }
 
-if (!requireAuth()) {
+function getSavedDeviceConnectionState() {
+  const saved = window.localStorage.getItem(STORAGE_KEYS.deviceConnected);
+  return saved === "connected" || saved === "true" ? "connected" : "disconnected";
+}
+
+function updateDeviceConnectionUI(state) {
+  if (
+    !deviceConnectionTitle ||
+    !deviceConnectBtn ||
+    !deviceBatteryValue ||
+    !deviceStorageValue ||
+    !deviceFirmwareValue ||
+    !deviceSyncStatus
+  ) {
+    return;
+  }
+
+  const isConnecting = state === "connecting";
+  const isConnected = state === "connected";
+
+  deviceConnectionTitle.textContent = `Birdora Glasses ${isConnecting ? "连接中" : isConnected ? "已连接" : "未连接"}`;
+  deviceConnectBtn.textContent = isConnecting ? "连接中..." : isConnected ? "断开连接" : "连接设备";
+  deviceConnectBtn.disabled = isConnecting;
+  deviceConnectBtn.classList.toggle("is-connecting", isConnecting);
+  deviceConnectBtn.setAttribute("aria-busy", String(isConnecting));
+  deviceConnectBtn.setAttribute("data-device-state", state);
+  deviceBatteryValue.textContent = isConnected ? "86%" : "—";
+  deviceStorageValue.textContent = isConnected ? "32.4GB" : "—";
+  deviceFirmwareValue.textContent = isConnected ? "V2.0.5" : "—";
+  deviceSyncStatus.textContent = isConnecting
+    ? "正在搜索附近的 Birdora Glasses..."
+    : isConnected
+      ? "蓝牙在线 · 最近同步 3 分钟前"
+      : "蓝牙未连接";
+  deviceSyncStatus.classList.toggle("is-connecting", isConnecting);
+}
+
+function initDeviceConnection() {
+  if (!deviceConnectBtn) return;
+
+  updateDeviceConnectionUI(getSavedDeviceConnectionState());
+
+  deviceConnectBtn.addEventListener("click", () => {
+    const currentState = deviceConnectBtn.dataset.deviceState || "disconnected";
+
+    if (currentState === "connecting") {
+      return;
+    }
+
+    if (currentState === "connected") {
+      window.clearTimeout(deviceConnectionTimer);
+      window.localStorage.setItem(STORAGE_KEYS.deviceConnected, "disconnected");
+      deviceConnectionTimer = null;
+      updateDeviceConnectionUI("disconnected");
+      return;
+    }
+
+    updateDeviceConnectionUI("connecting");
+    window.clearTimeout(deviceConnectionTimer);
+    deviceConnectionTimer = window.setTimeout(() => {
+      window.localStorage.setItem(STORAGE_KEYS.deviceConnected, "connected");
+      updateDeviceConnectionUI("connected");
+      deviceConnectionTimer = null;
+    }, 1500);
+  });
+}
+
+function syncHomeCommunityReveal() {
+  if (page === "community") return;
+
+  const preview = document.querySelector("#community .feed-preview");
+  if (!preview) return;
+
+  const revealItems = [
+    ...preview.querySelectorAll(".feed-card"),
+    ...preview.querySelectorAll(".more-link"),
+  ];
+  if (!revealItems.length) return;
+
+  const prefersReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
+  revealItems.forEach((item, index) => {
+    item.classList.add("reveal-card");
+    item.style.transitionDelay = homeCommunityRevealPlayed || prefersReducedMotion ? "0ms" : `${index * 120}ms`;
+    item.classList.toggle("is-visible", homeCommunityRevealPlayed || prefersReducedMotion);
+  });
+}
+
+function initHomeCommunityReveal() {
+  if (page === "community") return;
+
+  const preview = document.querySelector("#community .feed-preview");
+  if (!preview) return;
+
+  syncHomeCommunityReveal();
+
+  const prefersReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  if (prefersReducedMotion) {
+    homeCommunityRevealPlayed = true;
+    return;
+  }
+
+  if (homeCommunityRevealPlayed) return;
+
+  homeCommunityRevealObserver?.disconnect();
+  homeCommunityRevealObserver = new IntersectionObserver(
+    (entries, observer) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        homeCommunityRevealPlayed = true;
+        syncHomeCommunityReveal();
+        observer.disconnect();
+      });
+    },
+    {
+      threshold: 0.22,
+      rootMargin: "0px 0px -10% 0px",
+    }
+  );
+
+  homeCommunityRevealObserver.observe(preview);
+}
+
+function initSoftReveal() {
+  const sections = document.querySelectorAll(
+    ".hero, .hero-section, .identify-section, #identify, .bird-section, .atlas-section, #atlas, .community-section, #community, .device-section, #device"
+  );
+  if (!sections.length) return;
+
+  const prefersReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  sections.forEach((section) => section.classList.add("reveal-on-scroll"));
+
+  if (prefersReducedMotion || !("IntersectionObserver" in window)) {
+    sections.forEach((section) => section.classList.add("is-visible"));
+    return;
+  }
+
+  const observer = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        entry.target.classList.add("is-visible");
+        observer.unobserve(entry.target);
+      });
+    },
+    {
+      threshold: 0.16,
+      rootMargin: "0px 0px -8% 0px",
+    }
+  );
+
+  sections.forEach((section) => observer.observe(section));
+}
+
+async function initLoginPage() {
+  const status = await fetchAuthStatus();
+  if (status.authenticated && status.user) {
+    rememberAuthUser(status.user);
+    window.location.replace("./index.html");
+    return;
+  }
+
+  clearAuthState();
   initAuthForms();
-  initDevLoginButton();
-} else {
+}
+
+async function initAuthenticatedPage() {
+  if (!(await requireAuth())) {
+    return;
+  }
+
+  await getBirdProfiles();
   loadUserPosts();
   loadComments();
   renderBirds();
@@ -877,6 +1797,9 @@ if (!requireAuth()) {
   initBirdRecognition();
   initPublishing();
   initScrollButtons();
+  initDeviceConnection();
+  initHomeCommunityReveal();
+  initSoftReveal();
 
   if (new URLSearchParams(window.location.search).has("selftest")) {
     window.setTimeout(async () => {
@@ -888,18 +1811,33 @@ if (!requireAuth()) {
           testImage.onload = resolve;
           testImage.onerror = reject;
         });
-        const top = await classifyImageElement(testImage);
-        const bird = birds.find((item) => item.name === top.bird);
-        if (!bird) throw new Error(`自测识别到 ${top.cn}，但图鉴没有对应卡片。`);
-        const confidence = Math.round(Math.max(45, Math.min(98, top.selectedProbability * 100)));
-        setResult(bird, confidence, `自测通过：OSEA 返回 ${top.cn} / ${top.en}。`);
+        const result = await classifyImageElement(testImage);
+        if (!result.top) throw new Error("自测没有返回候选结果。");
+        if (!result.isConfident) {
+          throw new Error(`自测 Top 1 为 ${result.top.cn}，但置信度低于上线阈值。`);
+        }
+        setCandidateResult(result);
+        modelDetail.textContent = `自测通过：OSEA 全量 Top 1 返回 ${result.top.cn} / ${result.top.en}。`;
       } catch (error) {
         confidenceText.textContent = "!";
         resultName.textContent = "OSEA 自测失败";
         resultMeta.textContent = "模型、WASM 或资源路径需要检查";
         resultFeature.textContent = "请使用本地服务器或正式网址访问，不要直接用 file:// 打开 OSEA 版本。";
         modelDetail.textContent = error.message || "未知错误";
+        setCandidateListMessage("自测失败，暂无候选结果。");
       }
     }, 800);
   }
 }
+
+function initApp() {
+  if (page === "login") {
+    initLoginPage();
+  } else if (AUTH_PAGES.has(page)) {
+    initAuthenticatedPage();
+  } else {
+    initSoftReveal();
+  }
+}
+
+initApp();

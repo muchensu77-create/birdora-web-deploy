@@ -4,7 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>登录 / 注册 - Birdora</title>
-    <link rel="stylesheet" href="./styles.css?v=20260625-headspace-refresh" />
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="./styles.css" />
   </head>
   <body data-page="login">
     <main class="auth-page auth-page-simple">
@@ -15,40 +16,31 @@
           <p>登录后继续识鸟、记录观察，并查看你的社区分享。</p>
         </div>
 
-        <form class="auth-card auth-card-main" data-auth-form="login" novalidate>
-          <div class="auth-card-head">
-            <p class="eyebrow">登录</p>
-            <h2>继续你的观鸟记录</h2>
+        <form class="auth-card auth-card-main auth-card-switcher" data-auth-form="account" data-auth-mode="login" novalidate>
+          <div class="auth-card-head auth-card-head-compact">
+            <p class="eyebrow" id="authModeEyebrow">登录</p>
+            <h2 id="authModeTitle">继续你的观鸟记录</h2>
+            <p class="auth-subcopy" id="authModeCopy">登录 Birdora，继续保存你的观鸟笔记、评论和识别记录。</p>
           </div>
 
-          <label>
-            <span>邮箱</span>
-            <input type="email" name="email" placeholder="name@example.com" />
-          </label>
+          <div class="auth-fields">
+            <label class="auth-field auth-field-optional auth-hidden" data-auth-visible="register">
+              <span>昵称</span>
+              <input type="text" name="nickname" placeholder="为你的账号起一个名字" autocomplete="nickname" />
+            </label>
 
-          <label>
-            <span>密码</span>
-            <input type="password" name="password" placeholder="请输入密码" />
-          </label>
+            <label class="auth-field">
+              <span>邮箱</span>
+              <input type="email" name="email" placeholder="name@example.com" autocomplete="email" />
+            </label>
 
-          <button class="primary-btn auth-submit auth-submit-pill" id="loginBtn" type="button">登录</button>
-          <p class="auth-message" data-auth-message></p>
-        </form>
-
-        <form class="auth-card auth-card-subtle" data-auth-form="register">
-          <div class="auth-register-copy">
-            <p class="eyebrow">注册</p>
-            <h2>还没有账号？</h2>
-            <p>创建一个本地演示账号，继续保存你的观鸟笔记和评论。</p>
+            <label class="auth-field">
+              <span>密码</span>
+              <input type="password" name="password" placeholder="请输入密码" autocomplete="current-password" />
+            </label>
           </div>
 
-          <div class="auth-inline-fields">
-            <input type="text" name="nickname" placeholder="昵称" required />
-            <input type="email" name="email" placeholder="邮箱地址" required />
-            <input type="password" name="password" placeholder="设置密码" required />
-          </div>
-
-          <label class="agree-row">
+          <label class="agree-row auth-hidden" data-auth-visible="register">
             <input type="checkbox" name="agree" />
             <span>
               注册即表示你同意
@@ -58,8 +50,13 @@
             </span>
           </label>
 
-          <button class="secondary-btn auth-submit auth-submit-pill" type="submit">注册并进入</button>
-          <p class="auth-message" data-auth-message></p>
+          <button class="primary-btn auth-submit auth-submit-pill" id="authSubmitBtn" type="submit">登录</button>
+          <p class="auth-message" data-auth-message aria-live="polite"></p>
+
+          <p class="auth-switch-copy">
+            <span id="authSwitchLead">还没有账号？</span>
+            <button class="auth-switch-btn" type="button" data-auth-switch="register">去注册</button>
+          </p>
         </form>
 
         <div class="auth-legal">
@@ -70,6 +67,6 @@
       </section>
     </main>
 
-    <script src="./script.js?v=20260624-auth-community"></script>
+    <script src="./script.js"></script>
   </body>
 </html>

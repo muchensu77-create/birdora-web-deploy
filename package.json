@@ -1,0 +1,30 @@
+{
+  "name": "birdora-web",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Birdora static site with Express JWT auth backend",
+  "main": "server.js",
+  "engines": {
+    "node": ">=24.14.0"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "start:api": "node server.js",
+    "prestart:web": "node scripts/sync-public.js",
+    "start:web": "node scripts/static-server.js",
+    "sync:public": "node scripts/sync-public.js",
+    "dev": "node --watch server.js",
+    "test:auth": "node scripts/test-auth.js",
+    "test:atlas": "node scripts/validate-atlas-data.js",
+    "atlas:template": "node scripts/create-atlas-profile-template.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^17.4.2",
+    "express": "^4.21.2",
+    "express-rate-limit": "^8.5.2",
+    "jsonwebtoken": "^9.0.2"
+  }
+}
