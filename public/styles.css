@@ -778,7 +778,7 @@ dd {
   display: flex;
   width: max-content;
   gap: 24px;
-  animation: bird-marquee-scroll 25s linear infinite;
+  animation: bird-marquee-scroll 50s linear infinite;
   will-change: transform;
 }
 
@@ -3611,7 +3611,7 @@ textarea:focus-visible,
 
   .bird-grid.is-marquee .bird-marquee {
     gap: 16px;
-    animation: bird-marquee-scroll 32s linear infinite;
+    animation: bird-marquee-scroll 64s linear infinite;
   }
 
   .bird-grid.is-marquee .bird-track {
@@ -3627,6 +3627,69 @@ textarea:focus-visible,
     flex-basis: min(280px, calc(100vw - 64px));
     border-radius: 28px;
   }
+
+  .bird-grid.is-marquee .bird-photo {
+    height: 156px;
+  }
+
+  .bird-grid.is-marquee .bird-card > div:last-child {
+    padding: 16px;
+  }
+
+  .bird-grid.is-marquee .bird-card h3 {
+    margin-bottom: 6px;
+    font-size: 22px;
+    line-height: 1.12;
+  }
+
+  .bird-grid.is-marquee .bird-card > div > p {
+    margin: 0 0 8px;
+    font-size: 15px;
+    line-height: 1.55;
+  }
+
+  .bird-grid.is-marquee .bird-card > div > p:first-of-type {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .bird-grid.is-marquee .bird-card > div > p:nth-of-type(2),
+  .bird-grid.is-marquee .bird-clue {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .bird-grid.is-marquee .bird-clue {
+    padding: 10px 12px;
+    border-radius: 14px;
+  }
+
+  .bird-grid.is-marquee .tag-row {
+    gap: 6px;
+    margin-top: 10px;
+  }
+
+  .bird-grid.is-marquee .tag-row span {
+    padding: 6px 9px;
+    font-size: 11px;
+  }
+
+  .bird-grid.is-marquee .atlas-card-actions {
+    margin-top: 10px;
+  }
+
+  .bird-grid.is-marquee .source-link {
+    margin-top: 0;
+  }
+}
+
+.bird-grid:hover .bird-marquee,
+.bird-grid:focus-within .bird-marquee,
+.bird-grid.is-paused .bird-marquee {
+  animation-play-state: paused;
 }
 
 @media (max-width: 380px) {

@@ -32,6 +32,7 @@ const ATLAS_SEARCH_LIMIT = 24;
 const ATLAS_TABLET_INITIAL_LIMIT = 12;
 const ATLAS_MOBILE_INITIAL_LIMIT = 8;
 const ATLAS_MOBILE_SEARCH_LIMIT = 12;
+const ATLAS_DEFAULT_HIDDEN_INDEXES = new Set([3334]);
 const POST_TITLE_MAX_LENGTH = 80;
 const POST_BODY_MAX_LENGTH = 600;
 const COMMENT_MAX_LENGTH = 180;
@@ -1637,11 +1638,18 @@ async function renderBirds(options = {}) {
     const candidateEntries = commonBirdCandidates
       .map((candidate) => entryByIndex.get(candidate.oseaIndex))
       .filter(Boolean);
+    const defaultCandidateEntries = candidateEntries.filter(
+      (entry) => !ATLAS_DEFAULT_HIDDEN_INDEXES.has(entry.index)
+    );
     const candidateEntryIndexSet = new Set(candidateEntries.map((entry) => entry.index));
-    const fallbackEntries = entries.filter((entry) => !candidateEntryIndexSet.has(entry.index));
+    const fallbackEntries = entries.filter(
+      (entry) =>
+        !candidateEntryIndexSet.has(entry.index) &&
+        !ATLAS_DEFAULT_HIDDEN_INDEXES.has(entry.index)
+    );
     const visible = query
       ? matched.slice(0, getAtlasSearchLimit())
-      : [...candidateEntries, ...fallbackEntries].slice(0, initialLimit);
+      : [...defaultCandidateEntries, ...fallbackEntries].slice(0, initialLimit);
     const candidateIndexSet = new Set(commonBirdCandidates.map((candidate) => candidate.oseaIndex));
     const progress = commonBirdCandidates.length
       ? {
@@ -1721,6 +1729,11 @@ function initAtlasSearch() {
     birdGrid.addEventListener("pointerdown", pauseMarquee);
     birdGrid.addEventListener("focusin", pauseMarquee);
     birdGrid.addEventListener("pointerleave", resumeMarquee);
+    birdGrid.addEventListener("pointerup", resumeMarquee);
+    birdGrid.addEventListener("pointercancel", resumeMarquee);
+    birdGrid.addEventListener("touchstart", pauseMarquee, { passive: true });
+    birdGrid.addEventListener("touchend", resumeMarquee);
+    birdGrid.addEventListener("touchcancel", resumeMarquee);
     birdGrid.addEventListener("focusout", () => {
       window.setTimeout(resumeMarquee, 0);
     });
