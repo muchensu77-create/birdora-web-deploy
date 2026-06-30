@@ -1209,6 +1209,14 @@ dd {
   font-weight: 700;
 }
 
+.form-message {
+  min-height: 20px;
+  margin: 0;
+  color: #b05b45;
+  font-size: 14px;
+  font-weight: 800;
+}
+
 .auth-hidden {
   display: none !important;
 }
@@ -3070,6 +3078,35 @@ footer {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
 }
 
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+.candidate-open:focus-visible {
+  outline: 3px solid rgba(16, 35, 29, 0.72);
+  outline-offset: 3px;
+}
+
+.upload-zone:focus-within {
+  border-color: rgba(31, 111, 75, 0.48);
+  box-shadow:
+    var(--shadow),
+    0 0 0 4px rgba(31, 111, 75, 0.14);
+}
+
+[aria-invalid="true"] {
+  border-color: rgba(176, 91, 69, 0.72) !important;
+  box-shadow: 0 0 0 3px rgba(176, 91, 69, 0.12);
+}
+
+.atlas-card-actions {
+  flex-wrap: wrap;
+}
+
+.source-link {
+  overflow-wrap: anywhere;
+}
+
 .bird-grid.is-marquee {
   overflow: hidden;
   min-height: 0;
@@ -3107,11 +3144,12 @@ footer {
 }
 
 .community-page .comment-box.is-open .comment-panel {
-  max-height: none;
-  overflow: visible;
+  max-height: min(520px, 60vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
-@media (min-width: 768px) and (max-width: 920px) {
+@media (min-width: 840px) and (max-width: 920px) {
   .nav {
     display: flex;
     gap: 4px;
@@ -3131,6 +3169,12 @@ footer {
 
   .topbar-actions .ghost-btn {
     padding-inline: 16px;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 839px) {
+  .nav {
+    display: none;
   }
 }
 
@@ -3193,6 +3237,10 @@ footer {
   .brand-user {
     max-width: 70px;
     font-size: 12px;
+  }
+
+  body[data-page="community"] .brand-user {
+    max-width: 48px;
   }
 
   .brand-mark {
@@ -3369,6 +3417,10 @@ footer {
 @media (max-width: 380px) {
   .hero h1 {
     font-size: 36px;
+  }
+
+  body[data-page="community"] .brand-user {
+    display: none;
   }
 
   .topbar-actions .ghost-btn,

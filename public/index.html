@@ -126,9 +126,10 @@
           <h2>发布你的观鸟笔记</h2>
         </div>
         <div class="community-layout">
-          <form class="post-panel" id="postForm">
-            <input id="postTitle" type="text" placeholder="记录标题，例如：清晨遇到一只翠鸟" required />
-            <textarea id="postBody" placeholder="写下地点、行为、天气或你的观察..." required></textarea>
+          <form class="post-panel" id="postForm" novalidate>
+            <input id="postTitle" type="text" placeholder="记录标题，例如：清晨遇到一只翠鸟" required aria-describedby="postMessage" />
+            <textarea id="postBody" placeholder="写下地点、行为、天气或你的观察..." required aria-describedby="postMessage"></textarea>
+            <p class="form-message post-message" id="postMessage" aria-live="polite" role="alert"></p>
             <div class="post-tools">
               <button class="secondary-btn" type="button" id="useDetected">带入识别结果</button>
               <button class="primary-btn" type="submit">发布</button>

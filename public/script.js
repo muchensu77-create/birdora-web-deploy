@@ -9,7 +9,7 @@ const STORAGE_KEYS = {
   deviceConnected: "birdora-device-connected",
 };
 
-const AUTH_PAGES = new Set(["home", "community"]);
+const APP_PAGES = new Set(["home", "community"]);
 const AUTH_API_BASE_URL = resolveAuthApiBaseUrl();
 const AUTH_ROUTES = {
   register: "/api/auth/register",
@@ -23,10 +23,11 @@ const BIRD_PROFILES_PATH = "./assets/atlas/bird-profiles.json";
 const COMMON_BIRD_CANDIDATES_PATH = "./assets/atlas/common-bird-candidates.json";
 const OSEA_TOP_K = 5;
 const OSEA_CONFIDENCE_THRESHOLD = 0.05;
+const OSEA_EXPECTED_OUTPUT_COUNT = 11000;
 const ATLAS_INITIAL_LIMIT = 12;
 const ATLAS_SEARCH_LIMIT = 24;
-const ATLAS_TABLET_INITIAL_LIMIT = 8;
-const ATLAS_MOBILE_INITIAL_LIMIT = 4;
+const ATLAS_TABLET_INITIAL_LIMIT = 12;
+const ATLAS_MOBILE_INITIAL_LIMIT = 8;
 const ATLAS_MOBILE_SEARCH_LIMIT = 12;
 const POST_TITLE_MAX_LENGTH = 80;
 const POST_BODY_MAX_LENGTH = 600;
@@ -236,6 +237,7 @@ const communityFeed = document.querySelector("#communityFeed");
 const postForm = document.querySelector("#postForm");
 const postTitle = document.querySelector("#postTitle");
 const postBody = document.querySelector("#postBody");
+const postMessage = document.querySelector("#postMessage");
 const useDetected = document.querySelector("#useDetected");
 const communityTabs = document.querySelectorAll("[data-community-tab]");
 const logoutButtons = document.querySelectorAll("[data-logout]");
@@ -264,6 +266,7 @@ let birdProfilesPromise;
 let commonBirdCandidatesPromise;
 let atlasEntriesPromise;
 let atlasSearchTimer = null;
+let atlasRenderRunId = 0;
 let selectedAtlasIndex = null;
 let birdProfilesSource = "fallback";
 let birdProfilesLoadError = "";
@@ -348,6 +351,7 @@ function getBirdProfiles() {
         birdProfilesSource = "fallback";
         birdProfilesLoadError = error.message || "富图鉴资料加载失败。";
         console.warn(birdProfilesLoadError);
+        birdProfilesPromise = null;
         return birds;
       });
   }
@@ -372,6 +376,7 @@ function getCommonBirdCandidates() {
       })
       .catch((error) => {
         console.warn(error.message || "候选清单加载失败。");
+        commonBirdCandidatesPromise = null;
         return [];
       });
   }
@@ -391,7 +396,43 @@ function safeParseStorage(key, fallback) {
 }
 
 function saveStorage(key, value) {
-  window.localStorage.setItem(key, JSON.stringify(value));
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function getCurrentPagePath() {
+  return `${window.location.pathname}${window.location.search}${window.location.hash}`;
+}
+
+function getLoginUrl() {
+  return `./login.html?next=${encodeURIComponent(getCurrentPagePath())}`;
+}
+
+function getPostLoginUrl() {
+  const next = new URLSearchParams(window.location.search).get("next");
+  if (!next) return "./index.html";
+
+  try {
+    const url = new URL(next, window.location.href);
+    if (url.origin !== window.location.origin) {
+      return "./index.html";
+    }
+
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return "./index.html";
+  }
+}
+
+function requireLoginForAction() {
+  if (currentUser) return true;
+
+  window.location.href = getLoginUrl();
+  return false;
 }
 
 function resolveAuthApiBaseUrl() {
@@ -437,7 +478,11 @@ function rememberAuthUser(user) {
   const normalizedUser = normalizeAuthUser(user);
   if (!normalizedUser) return null;
 
-  window.localStorage.setItem(STORAGE_KEYS.loggedIn, "true");
+  try {
+    window.localStorage.setItem(STORAGE_KEYS.loggedIn, "true");
+  } catch {
+    // The auth cookie is the source of truth; localStorage only restores display state.
+  }
   saveStorage(STORAGE_KEYS.authUser, normalizedUser);
   currentUser = normalizedUser;
   renderUserChrome();
@@ -445,8 +490,12 @@ function rememberAuthUser(user) {
 }
 
 function clearAuthState() {
-  window.localStorage.removeItem(STORAGE_KEYS.loggedIn);
-  window.localStorage.removeItem(STORAGE_KEYS.authUser);
+  try {
+    window.localStorage.removeItem(STORAGE_KEYS.loggedIn);
+    window.localStorage.removeItem(STORAGE_KEYS.authUser);
+  } catch {
+    // Keep rendering even if browser storage is blocked.
+  }
   currentUser = null;
   renderUserChrome();
 }
@@ -457,12 +506,21 @@ function renderUserChrome() {
   userNameBadges.forEach((badge) => {
     if (!displayName) {
       badge.textContent = "";
+      badge.removeAttribute("title");
+      badge.removeAttribute("aria-label");
       badge.hidden = true;
       return;
     }
 
     badge.textContent = displayName;
+    badge.title = displayName;
+    badge.setAttribute("aria-label", `当前用户：${displayName}`);
     badge.hidden = false;
+  });
+
+  logoutButtons.forEach((button) => {
+    button.textContent = currentUser ? "退出登录" : "登录";
+    button.setAttribute("aria-label", currentUser ? "退出登录" : "登录 Birdora");
   });
 }
 
@@ -520,9 +578,11 @@ async function authRequest(path, options = {}) {
 async function fetchAuthStatus() {
   try {
     return await authRequest(AUTH_ROUTES.status);
-  } catch {
+  } catch (error) {
     return {
       authenticated: false,
+      authUnavailable: true,
+      message: error.message || "认证服务暂不可用",
       user: null,
     };
   }
@@ -533,7 +593,11 @@ function getAuthUser() {
 }
 
 function isLoggedIn() {
-  return window.localStorage.getItem(STORAGE_KEYS.loggedIn) === "true";
+  try {
+    return window.localStorage.getItem(STORAGE_KEYS.loggedIn) === "true";
+  } catch {
+    return false;
+  }
 }
 
 function getValidatedAuthUser() {
@@ -544,20 +608,25 @@ function getValidatedAuthUser() {
   return normalizeAuthUser(getAuthUser());
 }
 
-async function requireAuth() {
-  if (!AUTH_PAGES.has(page)) {
-    return true;
-  }
-
+async function syncAuthState() {
   const status = await fetchAuthStatus();
-  if (!status.authenticated || !status.user) {
-    clearAuthState();
-    window.location.replace("./login.html");
-    return false;
+
+  if (status.authenticated && status.user) {
+    rememberAuthUser(status.user);
+    return status;
   }
 
-  rememberAuthUser(status.user);
-  return true;
+  if (status.authUnavailable) {
+    const cachedUser = getValidatedAuthUser();
+    if (cachedUser) {
+      currentUser = cachedUser;
+    }
+    renderUserChrome();
+    return status;
+  }
+
+  clearAuthState();
+  return status;
 }
 
 function createPostId() {
@@ -587,17 +656,20 @@ function normalizeUserText(value, maxLength) {
 
 function loadUserPosts() {
   const allPosts = safeParseStorage(STORAGE_KEYS.userPosts, []);
-  userPosts = currentUser ? allPosts.filter((post) => post.ownerEmail === currentUser.email) : [];
+  const posts = Array.isArray(allPosts) ? allPosts : [];
+  userPosts = currentUser ? posts.filter((post) => post.ownerEmail === currentUser.email) : [];
 }
 
 function saveUserPosts() {
   const allPosts = safeParseStorage(STORAGE_KEYS.userPosts, []);
-  const otherPosts = currentUser ? allPosts.filter((post) => post.ownerEmail !== currentUser.email) : allPosts;
+  const posts = Array.isArray(allPosts) ? allPosts : [];
+  const otherPosts = currentUser ? posts.filter((post) => post.ownerEmail !== currentUser.email) : posts;
   saveStorage(STORAGE_KEYS.userPosts, [...userPosts, ...otherPosts]);
 }
 
 function loadComments() {
-  commentsByPostId = safeParseStorage(STORAGE_KEYS.comments, {});
+  const comments = safeParseStorage(STORAGE_KEYS.comments, {});
+  commentsByPostId = comments && typeof comments === "object" && !Array.isArray(comments) ? comments : {};
 }
 
 function saveComments() {
@@ -608,9 +680,18 @@ function getAllCommunityPosts() {
   return [...userPosts, ...recommendedPosts];
 }
 
-function getComments(postId) {
+function getStoredComments(postId) {
   const comments = commentsByPostId[postId];
   return Array.isArray(comments) ? comments : [];
+}
+
+function getComments(postId) {
+  const comments = getStoredComments(postId);
+  if (!currentUser) {
+    return comments.filter((comment) => !comment.ownerEmail);
+  }
+
+  return comments.filter((comment) => !comment.ownerEmail || comment.ownerEmail === currentUser.email);
 }
 
 function formatComments(postId) {
@@ -674,6 +755,17 @@ function renderHomeFeed() {
 function renderCommunityFeed() {
   if (!communityFeed) return;
 
+  if (activeCommunityTab === "mine" && !currentUser) {
+    communityFeed.innerHTML = `
+      <article class="feed-card empty-feed-card">
+        <h3>登录后查看你的帖子</h3>
+        <p>推荐内容可以直接浏览；登录后会显示你发布过的观鸟笔记。</p>
+        <a class="primary-btn more-link" href="${escapeHtml(getLoginUrl())}">登录</a>
+      </article>
+    `;
+    return;
+  }
+
   const posts = activeCommunityTab === "mine" ? userPosts : recommendedPosts;
   if (!posts.length) {
     communityFeed.innerHTML = `
@@ -706,6 +798,8 @@ function toggleComments(postId) {
 }
 
 function submitComment(postId) {
+  if (!requireLoginForAction()) return;
+
   const currentFeed = page === "community" ? communityFeed : feed;
   const field = currentFeed?.querySelector(`[data-comment-input="${postId}"]`);
   if (!field) return;
@@ -718,6 +812,8 @@ function submitComment(postId) {
 
   const comment = {
     text,
+    ownerEmail: currentUser?.email || "",
+    author: currentUser?.nickname || currentUser?.email || "我",
     time: new Date().toLocaleString("zh-CN", {
       month: "numeric",
       day: "numeric",
@@ -726,7 +822,7 @@ function submitComment(postId) {
     }),
   };
 
-  commentsByPostId[postId] = [...getComments(postId), comment];
+  commentsByPostId[postId] = [...getStoredComments(postId), comment];
   saveComments();
   expandedComments.add(postId);
   renderCurrentFeed();
@@ -759,13 +855,29 @@ function bindCommentFeed(root) {
 function syncCommunityTabs() {
   if (!communityTabs.length) return;
 
-  activeCommunityTab = window.localStorage.getItem(STORAGE_KEYS.communityTab) || "recommended";
+  try {
+    activeCommunityTab = window.localStorage.getItem(STORAGE_KEYS.communityTab) || "recommended";
+  } catch {
+    activeCommunityTab = "recommended";
+  }
+
+  if (![...communityTabs].some((tab) => tab.dataset.communityTab === activeCommunityTab)) {
+    activeCommunityTab = "recommended";
+  }
 
   communityTabs.forEach((tab) => {
     const active = tab.dataset.communityTab === activeCommunityTab;
     tab.classList.toggle("is-active", active);
     tab.setAttribute("aria-selected", String(active));
+    tab.tabIndex = active ? 0 : -1;
   });
+
+  if (communityFeed) {
+    const activeTab = Array.from(communityTabs).find((tab) => tab.dataset.communityTab === activeCommunityTab);
+    if (activeTab?.id) {
+      communityFeed.setAttribute("aria-labelledby", activeTab.id);
+    }
+  }
 }
 
 function initCommunityTabs() {
@@ -779,9 +891,39 @@ function initCommunityTabs() {
   communityTabs.forEach((tab) => {
     tab.addEventListener("click", () => {
       activeCommunityTab = tab.dataset.communityTab;
-      window.localStorage.setItem(STORAGE_KEYS.communityTab, activeCommunityTab);
+      try {
+        window.localStorage.setItem(STORAGE_KEYS.communityTab, activeCommunityTab);
+      } catch {
+        // The selected tab can remain in memory for this visit.
+      }
       syncCommunityTabs();
       renderCommunityFeed();
+    });
+
+    tab.addEventListener("keydown", (event) => {
+      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+
+      event.preventDefault();
+      const tabs = Array.from(communityTabs);
+      const currentIndex = tabs.indexOf(tab);
+      const nextIndex =
+        event.key === "Home"
+          ? 0
+          : event.key === "End"
+            ? tabs.length - 1
+            : (currentIndex + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+      const nextTab = tabs[nextIndex];
+      if (!nextTab) return;
+
+      activeCommunityTab = nextTab.dataset.communityTab;
+      try {
+        window.localStorage.setItem(STORAGE_KEYS.communityTab, activeCommunityTab);
+      } catch {
+        // The selected tab can remain in memory for this visit.
+      }
+      syncCommunityTabs();
+      renderCommunityFeed();
+      nextTab.focus();
     });
   });
 }
@@ -905,7 +1047,7 @@ function initAuthForms() {
         });
 
         rememberAuthUser(result.user);
-        window.location.replace("./index.html");
+        window.location.replace(getPostLoginUrl());
       } catch (error) {
         setMessage(error.message || "注册失败，请稍后重试。");
       } finally {
@@ -922,7 +1064,7 @@ function initAuthForms() {
       });
 
       rememberAuthUser(result.user);
-      window.location.replace("./index.html");
+      window.location.replace(getPostLoginUrl());
     } catch (error) {
       setMessage(error.message || "登录失败，请稍后重试。");
     } finally {
@@ -946,7 +1088,14 @@ async function logout() {
 
 function initLogoutButtons() {
   logoutButtons.forEach((button) => {
-    button.addEventListener("click", logout);
+    button.addEventListener("click", () => {
+      if (!currentUser) {
+        window.location.href = getLoginUrl();
+        return;
+      }
+
+      logout();
+    });
   });
 }
 
@@ -955,12 +1104,18 @@ function getClassifier() {
     if (!window.ort) {
       classifierPromise = Promise.reject(
         new Error("ONNX Runtime 没有加载完成，请确认 assets/vendor/ort.min.js 存在。")
-      );
+      ).catch((error) => {
+        classifierPromise = null;
+        throw error;
+      });
     } else {
       window.ort.env.wasm.numThreads = 1;
       window.ort.env.wasm.wasmPaths = new URL("./assets/vendor/", window.location.href).href;
       classifierPromise = window.ort.InferenceSession.create("./assets/osea/bird_model.onnx", {
         executionProviders: ["wasm"],
+      }).catch((error) => {
+        classifierPromise = null;
+        throw error;
       });
     }
   }
@@ -981,6 +1136,10 @@ function getBirdInfo() {
           throw new Error("鸟类标签库格式不正确。");
         }
         return labels;
+      })
+      .catch((error) => {
+        birdInfoPromise = null;
+        throw error;
       });
   }
 
@@ -991,6 +1150,8 @@ function updateModelReadiness() {
   if (!resultMeta || !modelDetail) return;
 
   window.setTimeout(() => {
+    if (lastRecognitionStatus !== "idle") return;
+
     if (window.ort) {
       resultMeta.textContent = "OSEA 模型运行器已就绪，首次识别会加载模型和标签库";
       modelDetail.textContent =
@@ -1026,12 +1187,14 @@ function imageToOseaTensor(imageElement) {
 
 function normalizeOseaLabel(entry, index) {
   const [cn, en, latin] = Array.isArray(entry) ? entry : [];
+  const isMapped = Boolean(cn || en || latin);
 
   return {
     index,
-    cn: cn || `OSEA 标签 ${index + 1}`,
+    cn: cn || `未映射 OSEA 输出标签 ${index + 1}`,
     en: en || "",
     latin: latin || "",
+    isMapped,
   };
 }
 
@@ -1063,7 +1226,7 @@ function findAtlasBirdForCandidate(candidate) {
 }
 
 function topOseaCandidates(logits, birdInfo, limit = OSEA_TOP_K) {
-  const length = Math.min(logits.length, birdInfo.length);
+  const length = logits.length;
   let maxLogit = -Infinity;
 
   for (let index = 0; index < length; index += 1) {
@@ -1098,7 +1261,7 @@ function topOseaCandidates(logits, birdInfo, limit = OSEA_TOP_K) {
     return {
       ...candidate,
       probability,
-      atlasBird: findAtlasBirdForCandidate(candidate),
+      atlasBird: candidate.isMapped ? findAtlasBirdForCandidate(candidate) : null,
     };
   });
 }
@@ -1113,7 +1276,9 @@ async function classifyImageElement(imageElement) {
 
   return {
     candidates,
+    outputCount: output.data.length,
     labelCount: birdInfo.length,
+    unmappedOutputCount: Math.max(0, output.data.length - birdInfo.length),
     top: candidates[0] || null,
     isConfident: Boolean(candidates[0] && candidates[0].probability >= OSEA_CONFIDENCE_THRESHOLD),
   };
@@ -1209,9 +1374,12 @@ function buildAtlasEntries(labels) {
 
 function getAtlasEntries() {
   if (!atlasEntriesPromise) {
-    atlasEntriesPromise = Promise.all([getBirdInfo(), getBirdProfiles()]).then(([labels]) =>
-      buildAtlasEntries(labels)
-    );
+    atlasEntriesPromise = Promise.all([getBirdInfo(), getBirdProfiles()])
+      .then(([labels]) => buildAtlasEntries(labels))
+      .catch((error) => {
+        atlasEntriesPromise = null;
+        throw error;
+      });
   }
 
   return atlasEntriesPromise;
@@ -1236,7 +1404,7 @@ function renderAtlasSummary(total, shown, matched, query, progress = null) {
     return;
   }
 
-  atlasSummary.textContent = `已索引 ${total.toLocaleString("zh-CN")} 个 OSEA 标签；默认展示已补充图文的常见鸟和部分基础标签。${progressNote}${sourceNote}`;
+  atlasSummary.textContent = `已索引 ${total.toLocaleString("zh-CN")} 个 OSEA 标签；默认优先展示常见候选清单里的鸟种。${progressNote}${sourceNote}`;
 }
 
 function getAtlasInitialLimit() {
@@ -1257,9 +1425,10 @@ function getAtlasSearchLimit() {
     : ATLAS_SEARCH_LIMIT;
 }
 
-function renderAtlasCard(entry) {
+function renderAtlasCard(entry, options = {}) {
   const isRich = entry.detailLevel === "rich";
   const hasImage = Boolean(isRich && entry.image);
+  const duplicateTabIndex = options.duplicate ? ' tabindex="-1"' : "";
   const caption = entry.imageCredit
     ? `${entry.imageCredit}${entry.license ? ` · ${entry.license}` : ""}`
     : "图片来源 Wikimedia";
@@ -1277,7 +1446,7 @@ function renderAtlasCard(entry) {
       </figure>
     `;
   const sourceLink = entry.source
-    ? `<a class="source-link" href="${escapeHtml(entry.source)}" target="_blank" rel="noreferrer">查看来源</a>`
+    ? `<a class="source-link" href="${escapeHtml(entry.source)}" target="_blank" rel="noreferrer"${duplicateTabIndex}>查看来源</a>`
     : `<span class="source-link source-link-muted">来自 OSEA 标签库</span>`;
 
   return `
@@ -1294,7 +1463,7 @@ function renderAtlasCard(entry) {
         </div>
         <div class="atlas-card-actions">
           ${sourceLink}
-          <button class="source-link atlas-open" type="button" data-atlas-index="${entry.index}">查看详情</button>
+          <button class="source-link atlas-open" type="button" data-atlas-index="${entry.index}"${duplicateTabIndex}>查看详情</button>
         </div>
       </div>
     </article>
@@ -1350,6 +1519,7 @@ async function openAtlasDetailByIndex(index, options = {}) {
 async function renderBirds(options = {}) {
   if (!birdGrid || !birdSearch) return;
 
+  const runId = ++atlasRenderRunId;
   const query = birdSearch.value.trim().toLowerCase();
   birdGrid.classList.remove("is-empty");
   birdGrid.classList.remove("is-marquee");
@@ -1360,16 +1530,21 @@ async function renderBirds(options = {}) {
       getAtlasEntries(),
       getCommonBirdCandidates(),
     ]);
+    if (runId !== atlasRenderRunId) return;
+
     const matched = query
       ? entries.filter((entry) => entry.searchText.includes(query))
       : entries;
     const initialLimit = getAtlasInitialLimit();
+    const entryByIndex = new Map(entries.map((entry) => [entry.index, entry]));
+    const candidateEntries = commonBirdCandidates
+      .map((candidate) => entryByIndex.get(candidate.oseaIndex))
+      .filter(Boolean);
+    const candidateEntryIndexSet = new Set(candidateEntries.map((entry) => entry.index));
+    const fallbackEntries = entries.filter((entry) => !candidateEntryIndexSet.has(entry.index));
     const visible = query
       ? matched.slice(0, getAtlasSearchLimit())
-      : [
-          ...entries.filter((entry) => entry.detailLevel === "rich"),
-          ...entries.filter((entry) => entry.detailLevel !== "rich").slice(0, initialLimit),
-        ].slice(0, initialLimit);
+      : [...candidateEntries, ...fallbackEntries].slice(0, initialLimit);
     const candidateIndexSet = new Set(commonBirdCandidates.map((candidate) => candidate.oseaIndex));
     const progress = commonBirdCandidates.length
       ? {
@@ -1404,6 +1579,8 @@ async function renderBirds(options = {}) {
       `
       : renderAtlasMarquee(visible);
   } catch (error) {
+    if (runId !== atlasRenderRunId) return;
+
     birdGrid.classList.add("is-empty");
     birdGrid.classList.remove("is-marquee");
     birdGrid.innerHTML =
@@ -1416,11 +1593,12 @@ async function renderBirds(options = {}) {
 
 function renderAtlasMarquee(entries) {
   const cards = entries.map(renderAtlasCard).join("");
+  const duplicateCards = entries.map((entry) => renderAtlasCard(entry, { duplicate: true })).join("");
 
   return `
     <div class="bird-marquee" aria-label="默认鸟类卡片滚动列表">
       <div class="bird-track">${cards}</div>
-      <div class="bird-track" aria-hidden="true">${cards}</div>
+      <div class="bird-track" aria-hidden="true">${duplicateCards}</div>
     </div>
   `;
 }
@@ -1522,7 +1700,11 @@ function renderCandidateList(candidates = []) {
   candidateList.innerHTML = candidates
     .map((candidate, index) => {
       const latin = candidate.latin ? ` · ${candidate.latin}` : "";
-      const atlasNote = candidate.atlasBird ? "图鉴已收录" : "图鉴待补充";
+      const atlasNote = !candidate.isMapped
+        ? "标签待映射"
+        : candidate.atlasBird
+          ? "图鉴已收录"
+          : "图鉴待补充";
 
       return `
         <li>
@@ -1543,11 +1725,13 @@ function renderCandidateList(candidates = []) {
 }
 
 function createCandidateBird(candidate) {
+  const labelState = candidate.isMapped ? "本地图鉴还没有补充详细资料" : "标签映射表还没有补齐";
+
   return {
     name: candidate.cn,
-    latin: candidate.latin || candidate.en || "OSEA 标签",
-    place: "图鉴资料待补充",
-    feature: `${candidate.cn}${candidate.en ? ` / ${candidate.en}` : ""} 是 OSEA 全量标签库返回的候选结果，当前本地图鉴还没有补充详细资料。`,
+    latin: candidate.latin || candidate.en || "OSEA 输出标签",
+    place: candidate.isMapped ? "图鉴资料待补充" : "标签映射待补齐",
+    feature: `${candidate.cn}${candidate.en ? ` / ${candidate.en}` : ""} 是 OSEA 全量模型返回的候选结果，当前${labelState}。`,
     food: "待补充",
     clue: "建议结合照片主体大小、拍摄地点和 Top 候选继续判断。",
   };
@@ -1605,9 +1789,17 @@ function setCandidateResult(result) {
   const top = result.top;
   const bird = top.atlasBird || createCandidateBird(top);
   const confidence = displayConfidence(top.probability);
-  const detail = top.atlasBird
-    ? `OSEA 全量 ${result.labelCount.toLocaleString("zh-CN")} 个标签 Top 1：${top.cn} / ${top.en}。`
-    : `OSEA 全量 ${result.labelCount.toLocaleString("zh-CN")} 个标签 Top 1：${top.cn} / ${top.en}，本地图鉴资料待补充。`;
+  const outputCount = result.outputCount || OSEA_EXPECTED_OUTPUT_COUNT;
+  const labelCount = result.labelCount || 0;
+  const coverageNote = result.unmappedOutputCount
+    ? `；${result.unmappedOutputCount.toLocaleString("zh-CN")} 个输出类仍待补标签映射`
+    : "";
+  const topLabel = top.en ? `${top.cn} / ${top.en}` : top.cn;
+  const detail = top.isMapped
+    ? top.atlasBird
+      ? `OSEA 模型 ${outputCount.toLocaleString("zh-CN")} 维输出，已映射 ${labelCount.toLocaleString("zh-CN")} 个标签${coverageNote}。Top 1：${topLabel}。`
+      : `OSEA 模型 ${outputCount.toLocaleString("zh-CN")} 维输出，已映射 ${labelCount.toLocaleString("zh-CN")} 个标签${coverageNote}。Top 1：${topLabel}，本地图鉴资料待补充。`
+    : `OSEA 模型 ${outputCount.toLocaleString("zh-CN")} 维输出，Top 1 落在未映射输出类：${topLabel}。需要补齐标签映射后才能给出正式鸟种名。`;
 
   setResult(bird, confidence, detail, result.candidates);
 }
@@ -1677,15 +1869,38 @@ function initBirdRecognition() {
 
 function initPublishing() {
   if (postForm && postTitle && postBody) {
+    const setPostMessage = (text = "") => {
+      if (postMessage) {
+        postMessage.textContent = text;
+      }
+    };
+
+    [postTitle, postBody].forEach((field) => {
+      field.addEventListener("input", () => {
+        field.setAttribute("aria-invalid", "false");
+        if (postTitle.value.trim() && postBody.value.trim()) {
+          setPostMessage("");
+        }
+      });
+    });
+
     postForm.addEventListener("submit", (event) => {
       event.preventDefault();
 
+      if (!requireLoginForAction()) return;
+
       const title = normalizeUserText(postTitle.value, POST_TITLE_MAX_LENGTH);
       const body = normalizeUserText(postBody.value, POST_BODY_MAX_LENGTH);
+      postTitle.setAttribute("aria-invalid", String(!title));
+      postBody.setAttribute("aria-invalid", String(!body));
+
       if (!title || !body) {
+        setPostMessage(title ? "请先写下观察内容。" : "请先填写记录标题。");
         (title ? postBody : postTitle).focus();
         return;
       }
+
+      setPostMessage("");
 
       const newPost = {
         id: createPostId(),
@@ -1701,6 +1916,8 @@ function initPublishing() {
       userPosts.unshift(newPost);
       saveUserPosts();
       postForm.reset();
+      postTitle.setAttribute("aria-invalid", "false");
+      postBody.setAttribute("aria-invalid", "false");
       renderCurrentFeed();
     });
   }
@@ -1722,6 +1939,8 @@ function initPublishing() {
   if (shareDetectedButton) {
     updateRecognitionActions();
     shareDetectedButton.addEventListener("click", () => {
+      if (!requireLoginForAction()) return;
+
       if (lastRecognitionStatus !== "success") {
         upload?.focus();
         return;
@@ -1753,8 +1972,12 @@ function initScrollButtons() {
 }
 
 function getSavedDeviceConnectionState() {
-  const saved = window.localStorage.getItem(STORAGE_KEYS.deviceConnected);
-  return saved === "connected" || saved === "true" ? "connected" : "disconnected";
+  try {
+    const saved = window.localStorage.getItem(STORAGE_KEYS.deviceConnected);
+    return saved === "connected" || saved === "true" ? "connected" : "disconnected";
+  } catch {
+    return "disconnected";
+  }
 }
 
 function updateDeviceConnectionUI(state) {
@@ -1803,7 +2026,11 @@ function initDeviceConnection() {
 
     if (currentState === "connected") {
       window.clearTimeout(deviceConnectionTimer);
-      window.localStorage.setItem(STORAGE_KEYS.deviceConnected, "disconnected");
+      try {
+        window.localStorage.setItem(STORAGE_KEYS.deviceConnected, "disconnected");
+      } catch {
+        // Device connection is simulated; storage failure should not block the UI.
+      }
       deviceConnectionTimer = null;
       updateDeviceConnectionUI("disconnected");
       return;
@@ -1812,7 +2039,11 @@ function initDeviceConnection() {
     updateDeviceConnectionUI("connecting");
     window.clearTimeout(deviceConnectionTimer);
     deviceConnectionTimer = window.setTimeout(() => {
-      window.localStorage.setItem(STORAGE_KEYS.deviceConnected, "connected");
+      try {
+        window.localStorage.setItem(STORAGE_KEYS.deviceConnected, "connected");
+      } catch {
+        // Keep the visible connected state even if browser storage is unavailable.
+      }
       updateDeviceConnectionUI("connected");
       deviceConnectionTimer = null;
     }, 1500);
@@ -1910,7 +2141,7 @@ async function initLoginPage() {
   const status = await fetchAuthStatus();
   if (status.authenticated && status.user) {
     rememberAuthUser(status.user);
-    window.location.replace("./index.html");
+    window.location.replace(getPostLoginUrl());
     return;
   }
 
@@ -1919,17 +2150,15 @@ async function initLoginPage() {
 }
 
 async function initAuthenticatedPage() {
-  if (!(await requireAuth())) {
-    return;
+  const cachedUser = getValidatedAuthUser();
+  if (cachedUser) {
+    currentUser = cachedUser;
   }
+  renderUserChrome();
 
-  await getBirdProfiles();
   loadUserPosts();
   loadComments();
-  renderBirds();
   initAtlasSearch();
-  renderCurrentFeed();
-  updateModelReadiness();
   bindCommentFeed(feed);
   bindCommentFeed(communityFeed);
   initCommunityTabs();
@@ -1938,8 +2167,23 @@ async function initAuthenticatedPage() {
   initPublishing();
   initScrollButtons();
   initDeviceConnection();
+  renderCurrentFeed();
+  updateModelReadiness();
+  renderBirds();
   initHomeCommunityReveal();
   initSoftReveal();
+
+  syncAuthState()
+    .then(() => {
+      loadUserPosts();
+      loadComments();
+      syncCommunityTabs();
+      renderCurrentFeed();
+      syncHomeCommunityReveal();
+    })
+    .catch(() => {
+      renderUserChrome();
+    });
 
   if (new URLSearchParams(window.location.search).has("selftest")) {
     window.setTimeout(async () => {
@@ -1973,7 +2217,7 @@ async function initAuthenticatedPage() {
 function initApp() {
   if (page === "login") {
     initLoginPage();
-  } else if (AUTH_PAGES.has(page)) {
+  } else if (APP_PAGES.has(page)) {
     initAuthenticatedPage();
   } else {
     initSoftReveal();

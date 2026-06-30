@@ -37,10 +37,10 @@
 
       <section class="community-browser">
         <div class="community-switch" role="tablist" aria-label="帖子筛选">
-          <button class="community-tab is-active" type="button" data-community-tab="recommended">推荐</button>
-          <button class="community-tab" type="button" data-community-tab="mine">我的</button>
+          <button class="community-tab is-active" id="communityTabRecommended" type="button" role="tab" data-community-tab="recommended" aria-controls="communityFeed">推荐</button>
+          <button class="community-tab" id="communityTabMine" type="button" role="tab" data-community-tab="mine" aria-controls="communityFeed">我的</button>
         </div>
-        <div class="community-list feed" id="communityFeed" aria-live="polite"></div>
+        <div class="community-list feed" id="communityFeed" role="tabpanel" aria-live="polite" tabindex="0"></div>
       </section>
     </main>
 
