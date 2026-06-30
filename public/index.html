@@ -113,7 +113,7 @@
           <h2>检索鸟种、习性与观测线索</h2>
         </div>
         <div class="search-row">
-          <input id="birdSearch" type="search" placeholder="搜索中文名、英文名或拉丁名，例如：翠鸟、Kingfisher、Alcedo..." />
+          <input id="birdSearch" type="search" aria-label="搜索鸟种" placeholder="搜索中文名、英文名或拉丁名，例如：翠鸟、Kingfisher、Alcedo..." />
         </div>
         <p class="atlas-summary" id="atlasSummary">正在准备 OSEA 鸟类标签索引...</p>
         <article class="atlas-detail" id="atlasDetail" aria-live="polite"></article>
@@ -127,8 +127,8 @@
         </div>
         <div class="community-layout">
           <form class="post-panel" id="postForm" novalidate>
-            <input id="postTitle" type="text" placeholder="记录标题，例如：清晨遇到一只翠鸟" required aria-describedby="postMessage" />
-            <textarea id="postBody" placeholder="写下地点、行为、天气或你的观察..." required aria-describedby="postMessage"></textarea>
+            <input id="postTitle" type="text" aria-label="观鸟笔记标题" placeholder="记录标题，例如：清晨遇到一只翠鸟" required aria-describedby="postMessage" />
+            <textarea id="postBody" aria-label="观鸟笔记内容" placeholder="写下地点、行为、天气或你的观察..." required aria-describedby="postMessage"></textarea>
             <p class="form-message post-message" id="postMessage" aria-live="polite" role="alert"></p>
             <div class="post-tools">
               <button class="secondary-btn" type="button" id="useDetected">带入识别结果</button>

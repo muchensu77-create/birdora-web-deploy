@@ -722,18 +722,30 @@ function buildFeedCard(post, options = {}) {
   const body = previewMode ? truncateText(post.body, 88) : post.body;
   const authorText = post.author || post.bird;
   const previewClass = previewMode ? " feed-card-preview" : "";
+  const commentsOpen = expandedComments.has(post.id);
+  const commentPanelId = `comment-panel-${post.id}`;
+  const commentToggleLabel = commentsOpen
+    ? `收起《${post.title}》的评论`
+    : `展开《${post.title}》的评论`;
 
   return `
     <article class="feed-card${previewClass}" data-post-id="${post.id}">
       <div class="feed-meta"><span>${escapeHtml(authorText)}</span><span>${escapeHtml(post.time)}</span></div>
       <h3>${escapeHtml(post.title)}</h3>
       <p class="feed-body">${escapeHtml(body)}</p>
-      <div class="comment-box ${expandedComments.has(post.id) ? "is-open" : ""}">
+      <div class="comment-box ${commentsOpen ? "is-open" : ""}">
         <div class="comment-toolbar">
-          <button class="comment-toggle" type="button" data-comment-toggle="${post.id}">评论</button>
+          <button
+            class="comment-toggle"
+            type="button"
+            data-comment-toggle="${post.id}"
+            aria-expanded="${String(commentsOpen)}"
+            aria-controls="${escapeHtml(commentPanelId)}"
+            aria-label="${escapeHtml(commentToggleLabel)}"
+          >评论</button>
           <span class="comment-count">评论 ${getComments(post.id).length}</span>
         </div>
-        <div class="comment-panel">
+        <div class="comment-panel" id="${escapeHtml(commentPanelId)}">
           <div class="comment-form">
             <input
               class="comment-input"

@@ -7,6 +7,8 @@ const authConfig = require("../config/auth.config");
 const tokenService = require("../services/token.service");
 const userService = require("../services/user.service");
 
+const DEFAULT_AUTH_COOKIE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
 function isValidEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
@@ -41,10 +43,19 @@ function issueAuthToken(user) {
   };
 }
 
-function setAuthCookie(res, token) {
+function getAuthCookieMaxAge(expiresAt) {
+  if (!expiresAt) return DEFAULT_AUTH_COOKIE_MAX_AGE_MS;
+
+  const expiresAtMs = new Date(expiresAt).getTime();
+  if (!Number.isFinite(expiresAtMs)) return DEFAULT_AUTH_COOKIE_MAX_AGE_MS;
+
+  return Math.max(0, expiresAtMs - Date.now());
+}
+
+function setAuthCookie(res, token, expiresAt) {
   const cookieOptions = {
     ...authConfig.getCookieOptions(),
-    maxAge: 7 * 24 * 60 * 60 * 1000,
+    maxAge: getAuthCookieMaxAge(expiresAt),
   };
 
   res.cookie(authConfig.jwtCookieName, token, cookieOptions);
@@ -88,7 +99,7 @@ async function register(req, res) {
   });
 
   const authToken = issueAuthToken(user);
-  setAuthCookie(res, authToken.token);
+  setAuthCookie(res, authToken.token, authToken.expiresAt);
 
   res.status(201).json({
     message: "registered successfully",
@@ -118,7 +129,7 @@ async function login(req, res) {
   }
 
   const authToken = issueAuthToken(user);
-  setAuthCookie(res, authToken.token);
+  setAuthCookie(res, authToken.token, authToken.expiresAt);
 
   res.json({
     message: "login successful",
