@@ -21,12 +21,13 @@ CORS_ORIGIN=http://localhost:4174
 JWT_SECRET=change-this-in-production
 JWT_EXPIRES_IN=7d
 JWT_COOKIE_NAME=birdora_token
+COOKIE_SECURE=false
 ```
 
 Authentication:
 
-- Login and register return a JWT in the JSON response.
-- The server also sets an `HttpOnly` cookie named `birdora_token`.
+- Login and register set an `HttpOnly` cookie named `birdora_token`.
+- Web clients should rely on the cookie; the JWT is not returned in the JSON response.
 - Protected routes accept either:
   - `Authorization: Bearer <token>`
   - or the auth cookie
@@ -66,8 +67,6 @@ Success response `201`:
 ```json
 {
   "message": "registered successfully",
-  "token": "jwt-token",
-  "expiresIn": "7d",
   "user": {
     "id": "uuid",
     "email": "bird@example.com",
@@ -96,8 +95,6 @@ Success response `200`:
 ```json
 {
   "message": "login successful",
-  "token": "jwt-token",
-  "expiresIn": "7d",
   "user": {
     "id": "uuid",
     "email": "bird@example.com",

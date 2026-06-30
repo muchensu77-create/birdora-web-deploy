@@ -141,7 +141,7 @@ curl -I https://jewelry-api.birdai-glasses.com
 - `zhubao-api` 正常在线。
 - `3000` 被现有 `birdora-api` 占用。
 - `3002` 被现有珠宝后端占用。
-- `3003` 没有被占用。
+- 首次部署时 `3003` 没有被占用；已上线后的复查中，`3003` 应由 `birdora-web-auth` 占用。
 - `5432` 只在 `127.0.0.1` 监听。
 - 珠宝 API 返回 `HTTP 200`。
 

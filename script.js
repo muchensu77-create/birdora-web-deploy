@@ -19,11 +19,14 @@ const AUTH_ROUTES = {
   status: "/api/auth/status",
 };
 const OSEA_LABELS_PATH = "./assets/osea/bird_info.json";
+const OSEA_MODEL_PATH = "./assets/osea/bird_model.onnx";
 const BIRD_PROFILES_PATH = "./assets/atlas/bird-profiles.json";
 const COMMON_BIRD_CANDIDATES_PATH = "./assets/atlas/common-bird-candidates.json";
 const OSEA_TOP_K = 5;
 const OSEA_CONFIDENCE_THRESHOLD = 0.05;
 const OSEA_EXPECTED_OUTPUT_COUNT = 11000;
+const OSEA_MODEL_LOAD_TIMEOUT_MS = 60000;
+const OSEA_LABEL_LOAD_TIMEOUT_MS = 15000;
 const ATLAS_INITIAL_LIMIT = 12;
 const ATLAS_SEARCH_LIMIT = 24;
 const ATLAS_TABLET_INITIAL_LIMIT = 12;
@@ -1110,7 +1113,37 @@ function initLogoutButtons() {
   });
 }
 
-function getClassifier() {
+function withTimeout(promise, timeoutMs, message) {
+  let timeoutId = 0;
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = window.setTimeout(() => {
+      reject(new Error(message));
+    }, timeoutMs);
+  });
+
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    window.clearTimeout(timeoutId);
+  });
+}
+
+function fetchJsonWithTimeout(url, timeoutMs, message) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => {
+    controller.abort();
+  }, timeoutMs);
+
+  return fetch(url, { signal: controller.signal }).finally(() => {
+    window.clearTimeout(timeoutId);
+  }).catch((error) => {
+    if (error.name === "AbortError") {
+      throw new Error(message);
+    }
+
+    throw error;
+  });
+}
+
+function getClassifier(onStatus = () => {}) {
   if (!classifierPromise) {
     if (!window.ort) {
       classifierPromise = Promise.reject(
@@ -1120,22 +1153,34 @@ function getClassifier() {
         throw error;
       });
     } else {
+      onStatus("正在准备 OSEA 模型运行器...");
       window.ort.env.wasm.numThreads = 1;
       window.ort.env.wasm.wasmPaths = new URL("./assets/vendor/", window.location.href).href;
-      classifierPromise = window.ort.InferenceSession.create("./assets/osea/bird_model.onnx", {
-        executionProviders: ["wasm"],
-      }).catch((error) => {
+      classifierPromise = withTimeout(
+        window.ort.InferenceSession.create(OSEA_MODEL_PATH, {
+          executionProviders: ["wasm"],
+        }),
+        OSEA_MODEL_LOAD_TIMEOUT_MS,
+        "OSEA 模型加载超时，请检查网络后重新选择照片。"
+      ).catch((error) => {
         classifierPromise = null;
         throw error;
       });
     }
+  } else {
+    onStatus("正在等待 OSEA 模型加载完成...");
   }
   return classifierPromise;
 }
 
-function getBirdInfo() {
+function getBirdInfo(onStatus = () => {}) {
   if (!birdInfoPromise) {
-    birdInfoPromise = fetch(OSEA_LABELS_PATH)
+    onStatus("正在加载 OSEA 鸟类标签库...");
+    birdInfoPromise = fetchJsonWithTimeout(
+      OSEA_LABELS_PATH,
+      OSEA_LABEL_LOAD_TIMEOUT_MS,
+      "鸟类标签库加载超时，请检查网络后重试。"
+    )
       .then((response) => {
         if (!response.ok) {
           throw new Error(`鸟类标签库加载失败：${response.status}`);
@@ -1152,6 +1197,8 @@ function getBirdInfo() {
         birdInfoPromise = null;
         throw error;
       });
+  } else {
+    onStatus("正在读取已缓存的鸟类标签库...");
   }
 
   return birdInfoPromise;
@@ -1277,12 +1324,22 @@ function topOseaCandidates(logits, birdInfo, limit = OSEA_TOP_K) {
   });
 }
 
-async function classifyImageElement(imageElement) {
-  const [classifier, birdInfo] = await Promise.all([getClassifier(), getBirdInfo()]);
+async function classifyImageElement(imageElement, onStatus = () => {}) {
+  onStatus("正在加载 OSEA 模型和鸟类标签库，首次使用可能需要更久...");
+  const [classifier, birdInfo] = await Promise.all([
+    getClassifier(onStatus),
+    getBirdInfo(onStatus),
+  ]);
+
+  onStatus("正在把照片转换为模型输入...");
   const tensor = imageToOseaTensor(imageElement);
   const feeds = { [classifier.inputNames[0]]: tensor };
+
+  onStatus("正在运行 OSEA 鸟类识别模型...");
   const outputMap = await classifier.run(feeds);
   const output = outputMap[classifier.outputNames[0]];
+
+  onStatus("正在整理 Top 5 识别候选...");
   const candidates = topOseaCandidates(output.data, birdInfo);
 
   return {
@@ -1835,8 +1892,14 @@ function initBirdRecognition() {
     const file = upload.files[0];
     if (!file) return;
     const runId = ++recognitionRunId;
+    const reportRecognitionStage = (text) => {
+      if (runId === recognitionRunId) {
+        setPendingResult(text);
+      }
+    };
+
     uploadZone.classList.remove("has-image");
-    setPendingResult("正在加载/运行 OSEA 鸟类识别模型...");
+    reportRecognitionStage("正在读取照片并准备 OSEA 鸟类识别模型...");
 
     let objectUrl = "";
     try {
@@ -1852,7 +1915,7 @@ function initBirdRecognition() {
       if (runId !== recognitionRunId) return;
 
       uploadZone.classList.add("has-image");
-      const result = await classifyImageElement(preview);
+      const result = await classifyImageElement(preview, reportRecognitionStage);
       if (runId !== recognitionRunId) return;
 
       if (!result.top) {
@@ -1881,7 +1944,10 @@ function initBirdRecognition() {
       confidenceText.textContent = "!";
       resultName.textContent = "识别失败";
       resultMeta.textContent = "模型加载或图片读取失败";
-      resultFeature.textContent = "请确认使用 http://localhost 或正式网址打开，而不是直接 file:// 打开。";
+      resultFeature.textContent =
+        window.location.protocol === "file:"
+          ? "请使用 http://localhost 或正式网址打开网站，直接 file:// 打开无法加载模型资源。"
+          : "请检查网络和模型资源是否可访问，重新选择照片即可重试。";
       modelDetail.textContent = error.message || "未知错误";
       setCandidateListMessage("识别失败，暂无候选结果。");
       setConfidenceRing(100, "#b36b5e");

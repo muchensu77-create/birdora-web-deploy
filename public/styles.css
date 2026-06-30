@@ -2998,7 +2998,6 @@ button:active,
 html,
 body {
   max-width: 100%;
-  overflow-x: hidden;
 }
 
 body,
@@ -3009,7 +3008,7 @@ textarea {
 }
 
 main {
-  overflow-x: clip;
+  overflow-x: visible;
   overflow-y: visible;
 }
 

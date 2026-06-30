@@ -92,8 +92,6 @@ async function register(req, res) {
 
   res.status(201).json({
     message: "registered successfully",
-    token: authToken.token,
-    expiresIn: authToken.expiresIn,
     user: userService.sanitizeUser(user),
   });
 }
@@ -124,8 +122,6 @@ async function login(req, res) {
 
   res.json({
     message: "login successful",
-    token: authToken.token,
-    expiresIn: authToken.expiresIn,
     user: userService.sanitizeUser(user),
   });
 }

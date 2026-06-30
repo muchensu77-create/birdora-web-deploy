@@ -3,6 +3,7 @@ set -euo pipefail
 
 DOMAIN="birdora.birdai-glasses.com"
 EXPECTED_IP="39.106.221.224"
+PM2_APP="birdora-web-auth"
 
 echo "== Host =="
 hostnamectl || true
@@ -17,9 +18,22 @@ echo
 echo "== Listening ports =="
 ss -lntp | grep -E ':(80|443|3000|3002|3003|5432)\b' || true
 
+port_is_owned_by_pm2_app() {
+  local app_pid
+  app_pid="$(pm2 pid "$PM2_APP" 2>/dev/null || true)"
+  [[ "$app_pid" =~ ^[0-9]+$ ]] || return 1
+  ss -lntp | grep -qE ":3003\\b.*pid=$app_pid,"
+}
+
 if ss -lntp | grep -qE ':3003\b'; then
-  echo "ERROR: port 3003 is already in use. Pick a different Birdora web auth port before continuing." >&2
-  exit 1
+  if port_is_owned_by_pm2_app; then
+    echo "port 3003 is already owned by $PM2_APP: ok"
+  else
+    echo "ERROR: port 3003 is already in use by another service. Pick a different Birdora web auth port before continuing." >&2
+    exit 1
+  fi
+else
+  echo "port 3003 is free: ok"
 fi
 
 echo

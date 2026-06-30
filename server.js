@@ -9,6 +9,18 @@ const authRoutes = require("./app/routes/auth.routes");
 const app = express();
 const port = Number(process.env.PORT) || 4000;
 const isProduction = process.env.NODE_ENV === "production";
+const configuredCorsOrigin = process.env.CORS_ORIGIN || "";
+const configuredCorsOrigins = configuredCorsOrigin
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+const usesHttpsOrigin = configuredCorsOrigins.some((origin) => origin.startsWith("https://"));
+const usesProductionDataPath = String(process.env.DATABASE_FILE || "").startsWith("/var/lib/birdora");
+const isProductionLike =
+  isProduction ||
+  usesHttpsOrigin ||
+  usesProductionDataPath ||
+  process.env.PORT === "3003";
 const defaultAllowedOrigins = [
   "http://localhost:4174",
   "http://127.0.0.1:4174",
@@ -22,15 +34,12 @@ function parseTrustProxy(value) {
   return Number.isNaN(numericValue) ? value : numericValue;
 }
 
-if (isProduction && !process.env.CORS_ORIGIN) {
-  throw new Error("CORS_ORIGIN must be set in production.");
+if (isProductionLike && !configuredCorsOrigin) {
+  throw new Error("CORS_ORIGIN must be set in production-like deployments.");
 }
 
-const allowedOrigins = (process.env.CORS_ORIGIN || defaultAllowedOrigins.join(","))
-  .split(",")
-  .map((origin) => origin.trim())
-  .filter(Boolean);
-const trustProxy = parseTrustProxy(process.env.TRUST_PROXY || (isProduction ? "1" : ""));
+const allowedOrigins = configuredCorsOrigins.length ? configuredCorsOrigins : defaultAllowedOrigins;
+const trustProxy = parseTrustProxy(process.env.TRUST_PROXY || (isProductionLike ? "1" : ""));
 
 app.disable("x-powered-by");
 

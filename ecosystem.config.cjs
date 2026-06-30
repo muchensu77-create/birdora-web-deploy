@@ -4,6 +4,7 @@ const productionEnv = {
   CORS_ORIGIN: process.env.CORS_ORIGIN || "https://birdora.birdai-glasses.com",
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || "7d",
   JWT_COOKIE_NAME: process.env.JWT_COOKIE_NAME || "birdora_token",
+  COOKIE_SECURE: process.env.COOKIE_SECURE || "true",
   AUTH_RATE_LIMIT: process.env.AUTH_RATE_LIMIT || "30",
   DATABASE_FILE: process.env.DATABASE_FILE || "/var/lib/birdora/birdora.sqlite",
   TRUST_PROXY: process.env.TRUST_PROXY || "1",

@@ -11,7 +11,7 @@
 - 使用 `assets/osea/bird_info.json` 生成 10,964 个基础图鉴索引。
 - 建立 `assets/atlas/common-bird-candidates.json`，作为 100 种常见鸟富资料补齐队列。
 - 图鉴搜索支持中文名、英文名和拉丁名。
-- 默认优先展示已补充图文资料的 10 种常见鸟，并展示部分 OSEA 基础标签。
+- 默认优先展示已补充图文资料的 11 种常见鸟，并展示部分 OSEA 基础标签。
 - 识别 Top 5 候选可点击跳到对应图鉴详情。
 - 未补资料的鸟种显示“基础标签 / 图片待补充 / 资料待补充”，避免误导。
 
@@ -21,7 +21,7 @@
 
 1. 富资料层：`assets/atlas/bird-profiles.json`。
    - 有中文名、拉丁名、栖息地、特征、食物、观察线索、图片和来源。
-   - 当前 10 种。
+   - 当前 11 种。
 
 2. 基础标签层：`assets/osea/bird_info.json`。
    - 有中文名、英文名、拉丁名。
@@ -37,6 +37,7 @@ pnpm test:atlas
 ```
 
 校验脚本会检查必填字段、重复名称、重复拉丁名、重复 OSEA index，以及 OSEA 标签中的拉丁名是否一致。
+部署脚本会在同步 `public/` 前运行 `pnpm test:atlas`，防止半成品富资料进入上线目录。
 
 从候选清单生成富资料模板：
 
@@ -66,6 +67,7 @@ pnpm atlas:template 11
 当前页面会展示 `imageCredit` 和 `license` 字段。若后续资料条目没有图片，页面会自动使用“图片待补充”占位图。
 
 本地静态服务对 JSON 数据文件使用 `no-cache`，避免图鉴资料更新后仍读取旧缓存。
+生产 Nginx 配置也已对 `.json` 设置 `Cache-Control: no-cache`。
 
 ## 4. 下一步资料补齐顺序
 

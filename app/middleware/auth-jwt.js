@@ -4,6 +4,14 @@ const authConfig = require("../config/auth.config");
 const tokenService = require("../services/token.service");
 const userService = require("../services/user.service");
 
+function isJwtAuthError(error) {
+  return (
+    error instanceof jwt.JsonWebTokenError ||
+    error instanceof jwt.TokenExpiredError ||
+    error instanceof jwt.NotBeforeError
+  );
+}
+
 function getTokenFromRequest(req) {
   const authHeader = req.headers.authorization || "";
   if (authHeader.startsWith("Bearer ")) {
@@ -36,7 +44,11 @@ async function resolveAuthSession(req) {
     }
 
     return { authenticated: true, token, payload, user };
-  } catch {
+  } catch (error) {
+    if (!isJwtAuthError(error)) {
+      throw error;
+    }
+
     return { authenticated: false, token, payload: null, user: null };
   }
 }

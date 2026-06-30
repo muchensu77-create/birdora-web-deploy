@@ -19,14 +19,14 @@ const testAccount = {
   password: "123456",
 };
 
-let issuedToken = null;
+let issuedCookieToken = null;
 
 function cleanupTestData() {
   if (!generatedTestEmail) return;
 
   try {
     const db = getDatabase();
-    const payload = issuedToken ? jwt.decode(issuedToken) : null;
+    const payload = issuedCookieToken ? jwt.decode(issuedCookieToken) : null;
     if (payload && payload.jti) {
       db.prepare("DELETE FROM revoked_tokens WHERE jti = ?").run(payload.jti);
     }
@@ -69,6 +69,9 @@ function createCookieJar() {
     count() {
       return cookies.size;
     },
+    firstValue() {
+      return cookies.values().next().value || null;
+    },
   };
 }
 
@@ -76,6 +79,13 @@ function maskToken(token) {
   if (!token || typeof token !== "string") return "none";
   if (token.length <= 16) return `${token.slice(0, 4)}...`;
   return `${token.slice(0, 10)}...${token.slice(-6)}`;
+}
+
+function responseOmitsAuthFields(body) {
+  if (!body || typeof body !== "object") return true;
+
+  const leakedFields = ["token", "expiresIn", "expiresAt", "jti"];
+  return leakedFields.every((field) => !Object.prototype.hasOwnProperty.call(body, field));
 }
 
 async function request(path, options = {}) {
@@ -159,6 +169,14 @@ async function main() {
   console.log(`HTTP ${registerResult.status}`);
   if (registerResult.status === 201) {
     console.log("Account created for test flow.");
+    const registerTokenHidden = responseOmitsAuthFields(registerResult.body);
+    printResult("Register JWT omitted from JSON response", registerTokenHidden);
+    if (!registerTokenHidden) {
+      console.log(registerResult.body);
+      summary.push({ step: "register-token-hidden", ok: false, detail: registerResult.body });
+      throw new Error("Register response should not expose JWT in JSON.");
+    }
+    summary.push({ step: "register-token-hidden", ok: true });
   } else if (registerResult.status === 409) {
     console.log("Account already exists, continuing with login test.");
   } else {
@@ -207,8 +225,14 @@ async function main() {
   }
 
   console.log(`User: ${loginResult.body.user.email}`);
-  console.log(`JWT preview: ${maskToken(loginResult.body.token)}`);
-  issuedToken = loginResult.body.token;
+  const tokenHidden = responseOmitsAuthFields(loginResult.body);
+  printResult("JWT omitted from JSON response", tokenHidden);
+  if (!tokenHidden) {
+    console.log(loginResult.body);
+    summary.push({ step: "login-token-hidden", ok: false, detail: loginResult.body });
+    throw new Error("Login response should not expose JWT in JSON.");
+  }
+  summary.push({ step: "login-token-hidden", ok: true });
   summary.push({ step: "login", ok: true, status: loginResult.status });
 
   printStep("4. Save login cookie");
@@ -219,6 +243,8 @@ async function main() {
     summary.push({ step: "cookie", ok: false, detail: "No Set-Cookie header captured." });
     throw new Error("Login cookie was not saved.");
   }
+  issuedCookieToken = loginCookieJar.firstValue();
+  console.log(`Cookie token preview: ${maskToken(issuedCookieToken)}`);
   summary.push({ step: "cookie", ok: true, count: loginCookieJar.count() });
 
   printStep("5. Request /api/auth/me with cookie");

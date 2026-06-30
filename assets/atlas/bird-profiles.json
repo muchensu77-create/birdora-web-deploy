@@ -1,6 +1,8 @@
 [
   {
     "oseaIndex": 3334,
+    "oseaName": "普通翠鸟",
+    "aliases": ["普通翠鸟"],
     "name": "翠鸟",
     "latin": "Alcedo atthis",
     "habitat": "water",
@@ -138,5 +140,19 @@
     "imageCredit": "Wikimedia Commons",
     "license": "See source page",
     "clue": "常成群在地面啄食，头顶栗褐色。"
+  },
+  {
+    "oseaIndex": 10868,
+    "name": "喜鹊",
+    "latin": "Pica serica",
+    "habitat": "city",
+    "place": "城市绿地、公园、林缘、农田和村镇",
+    "feature": "黑白羽色分明，肩部白斑醒目，长尾带蓝绿色金属光泽。",
+    "food": "昆虫、果实、种子、小型动物、鸟卵和腐食",
+    "image": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dc/Oriental_Magpie_on_Longevity_Hill%2C_Beijing.jpg/330px-Oriental_Magpie_on_Longevity_Hill%2C_Beijing.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Oriental_Magpie_on_Longevity_Hill,_Beijing.jpg",
+    "imageCredit": "Daniel Case / Wikimedia Commons",
+    "license": "CC BY-SA 3.0",
+    "clue": "常成对或小群活动，黑白对比和长尾是远距离识别重点。"
   }
 ]

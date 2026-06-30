@@ -124,6 +124,7 @@ CORS_ORIGIN=http://localhost:4174,http://127.0.0.1:4174
 JWT_SECRET=replace-with-at-least-32-random-characters
 JWT_EXPIRES_IN=7d
 JWT_COOKIE_NAME=birdora_token
+COOKIE_SECURE=false
 AUTH_RATE_LIMIT=30
 DATABASE_FILE=app/data/birdora.sqlite
 TRUST_PROXY=0
@@ -131,7 +132,7 @@ TRUST_PROXY=0
 
 后端会在启动时加载 `.env` 文件。生产环境也可以通过进程管理器或服务器环境显式注入环境变量。
 
-生产环境必须设置强随机 `JWT_SECRET`，不能使用默认值。
+生产环境或生产相似配置必须设置强随机 `JWT_SECRET`，不能使用默认值。当前服务会在 `NODE_ENV=production`、正式 HTTPS `CORS_ORIGIN`、`PORT=3003` 或 `/var/lib/birdora` 数据目录下启用生产级密钥检查。
 生产环境必须将 `CORS_ORIGIN` 设置为真实前端域名，例如 `https://example.com`。
 如果后端在 Nginx 后面运行，生产环境建议设置 `TRUST_PROXY=1`，让限流和真实客户端 IP 判断更准确。
 
@@ -165,7 +166,7 @@ TRUST_PROXY=0
 }
 ```
 
-成功返回 `201`，并返回 JWT，同时设置 `HttpOnly` cookie。
+成功返回 `201`，并设置 `HttpOnly` cookie。Web 端 JSON 响应不再返回 JWT。
 
 ### 登录
 
@@ -180,7 +181,7 @@ TRUST_PROXY=0
 }
 ```
 
-成功返回 `200`，并返回 JWT，同时设置 `HttpOnly` cookie。
+成功返回 `200`，并设置 `HttpOnly` cookie。Web 端 JSON 响应不再返回 JWT。
 
 ### 登出
 
@@ -276,7 +277,7 @@ SQLite 适合单机部署。若后续要多实例、多人高并发或云数据�
 - `node --check scripts/sync-public.js`
 - `node --check scripts/test-auth.js`
 - `pnpm audit --prod`：未发现已知漏洞
-- `pnpm test:auth`：认证接口注册、登录、cookie、登出、撤销 token 全链路通过
+- `pnpm test:auth`：认证接口注册、登录、cookie-only 响应、登出、撤销 token 全链路通过
 
 API 冒烟测试通过：
 
@@ -295,7 +296,7 @@ API 冒烟测试通过：
 
 ### 已完成：前端接入后端认证
 
-当前状态：注册、登录、登出和登录态恢复已统一使用后端 API。
+当前状态：注册、登录、登出和登录态恢复已统一使用后端 API。Web 端改为 cookie-only，注册和登录接口不再把 JWT 放进 JSON 响应。
 
 后续建议：继续做浏览器级回归测试，确认所有页面跳转和提示文案符合预期。
 
