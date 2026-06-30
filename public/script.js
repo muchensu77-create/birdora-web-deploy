@@ -281,6 +281,8 @@ let localAtlasMatches = new Map();
 let communityTabsBound = false;
 let recognitionRunId = 0;
 let lastRecognitionStatus = "idle";
+let currentRecognitionShareKey = "";
+let lastSharedRecognitionKey = "";
 
 rebuildLocalAtlasMatches();
 
@@ -734,6 +736,8 @@ function buildFeedCard(post, options = {}) {
               class="comment-input"
               type="text"
               placeholder="写下你的观察或想法..."
+              aria-label="写下你的观察或想法"
+              aria-invalid="false"
               data-comment-input="${post.id}"
             />
             <button class="comment-send" type="button" data-comment-submit="${post.id}">发送</button>
@@ -806,6 +810,7 @@ function submitComment(postId) {
 
   const text = normalizeUserText(field.value, COMMENT_MAX_LENGTH);
   if (!text) {
+    field.setAttribute("aria-invalid", "true");
     field.focus();
     return;
   }
@@ -849,6 +854,12 @@ function bindCommentFeed(root) {
     if (!input || event.key !== "Enter") return;
     event.preventDefault();
     submitComment(input.dataset.commentInput);
+  });
+
+  root.addEventListener("input", (event) => {
+    const input = event.target.closest("[data-comment-input]");
+    if (!input) return;
+    input.setAttribute("aria-invalid", "false");
   });
 }
 
@@ -1673,12 +1684,19 @@ function setConfidenceRing(confidence, color = "var(--green)") {
 function updateRecognitionActions() {
   const canUseResult = lastRecognitionStatus === "success";
   const shareDetectedButton = document.querySelector("#shareDetected");
+  const recognitionAlreadyShared =
+    canUseResult && currentRecognitionShareKey && currentRecognitionShareKey === lastSharedRecognitionKey;
 
-  [shareDetectedButton, useDetected].forEach((button) => {
-    if (!button) return;
-    button.disabled = !canUseResult;
-    button.setAttribute("aria-disabled", String(!canUseResult));
-  });
+  if (useDetected) {
+    useDetected.disabled = !canUseResult;
+    useDetected.setAttribute("aria-disabled", String(!canUseResult));
+  }
+
+  if (shareDetectedButton) {
+    shareDetectedButton.disabled = !canUseResult || recognitionAlreadyShared;
+    shareDetectedButton.setAttribute("aria-disabled", String(!canUseResult || recognitionAlreadyShared));
+    shareDetectedButton.textContent = recognitionAlreadyShared ? "已发布" : "发布到社区";
+  }
 }
 
 function setCandidateListMessage(message) {
@@ -1747,6 +1765,8 @@ function setResult(
 
   detectedBird = bird;
   lastRecognitionStatus = "success";
+  currentRecognitionShareKey = `${bird.name}|${bird.latin}|${bird.feature}`;
+  lastSharedRecognitionKey = "";
   confidenceText.textContent = `${confidence}%`;
   resultName.textContent = bird.name;
   resultMeta.textContent = `${bird.latin} · ${bird.place}`;
@@ -1761,6 +1781,7 @@ function setPendingResult(text) {
   if (!confidenceText || !resultName || !resultMeta || !resultFeature || !modelDetail) return;
 
   lastRecognitionStatus = "pending";
+  currentRecognitionShareKey = "";
   confidenceText.textContent = "...";
   resultName.textContent = "正在识别";
   resultMeta.textContent = "AI 模型正在分析这张照片";
@@ -1775,6 +1796,7 @@ function setUnknownResult(predictions, candidates = []) {
   if (!confidenceText || !resultName || !resultMeta || !resultFeature || !modelDetail) return;
 
   lastRecognitionStatus = "unknown";
+  currentRecognitionShareKey = "";
   confidenceText.textContent = "--";
   resultName.textContent = "未确定鸟种";
   resultMeta.textContent = "建议换一张更清晰、主体更大的鸟类照片";
@@ -1853,6 +1875,7 @@ function initBirdRecognition() {
       }
       if (runId !== recognitionRunId) return;
       lastRecognitionStatus = "failed";
+      currentRecognitionShareKey = "";
       uploadZone.classList.remove("has-image");
       preview.removeAttribute("src");
       confidenceText.textContent = "!";
@@ -1906,7 +1929,7 @@ function initPublishing() {
         id: createPostId(),
         title,
         body,
-        bird: detectedBird.name,
+        bird: lastRecognitionStatus === "success" ? detectedBird.name : "观鸟笔记",
         time: "刚刚",
         author: currentUser?.nickname || "我",
         ownerEmail: currentUser?.email || "",
@@ -1931,6 +1954,11 @@ function initPublishing() {
 
       postTitle.value = `今天观察到 ${detectedBird.name}`;
       postBody.value = `${detectedBird.name}，${detectedBird.feature} 观察地点可以补充为公园、湿地或校园。`;
+      postTitle.setAttribute("aria-invalid", "false");
+      postBody.setAttribute("aria-invalid", "false");
+      if (postMessage) {
+        postMessage.textContent = "";
+      }
       postBody.focus();
     });
   }
@@ -1946,6 +1974,11 @@ function initPublishing() {
         return;
       }
 
+      if (currentRecognitionShareKey && currentRecognitionShareKey === lastSharedRecognitionKey) {
+        document.querySelector("#community")?.scrollIntoView({ behavior: "smooth" });
+        return;
+      }
+
       userPosts.unshift({
         id: createPostId(),
         title: `我识别到了一只 ${detectedBird.name}`,
@@ -1956,7 +1989,9 @@ function initPublishing() {
         ownerEmail: currentUser?.email || "",
         source: "mine",
       });
+      lastSharedRecognitionKey = currentRecognitionShareKey;
       saveUserPosts();
+      updateRecognitionActions();
       renderCurrentFeed();
       document.querySelector("#community")?.scrollIntoView({ behavior: "smooth" });
     });

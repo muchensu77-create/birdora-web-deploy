@@ -2559,9 +2559,9 @@ body {
 }
 
 #community .feed-card-preview {
-  min-height: 0;
-  height: 158px;
-  overflow: hidden;
+  min-height: 148px;
+  height: auto;
+  overflow: visible;
 }
 
 #community .feed-card {
@@ -2573,13 +2573,18 @@ body {
 }
 
 #community .feed h3 {
+  display: -webkit-box;
+  overflow: hidden;
   margin-bottom: 0;
   font-size: 19px;
   line-height: 1.18;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 #community .feed-body {
   min-height: 0;
+  max-height: calc(1.5em * 2);
   line-height: 1.5;
   -webkit-line-clamp: 2;
 }
