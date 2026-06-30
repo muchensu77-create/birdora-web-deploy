@@ -1541,19 +1541,36 @@ function renderAtlasCard(entry, options = {}) {
 function renderAtlasDetail(entry, context = "图鉴详情") {
   if (!atlasDetail || !entry) return;
 
+  const hasImage = Boolean(entry.image);
   const imageRights = entry.image
     ? `${entry.imageCredit || "图片来源待补充"}${entry.license ? ` · ${entry.license}` : ""}`
     : "图片待补充";
   const sourceMarkup = entry.source
     ? `<a href="${escapeHtml(entry.source)}" target="_blank" rel="noreferrer">查看图片/资料来源</a>`
     : `<span>资料来源：OSEA 标签库，百科资料待补充</span>`;
+  const photoMarkup = hasImage
+    ? `
+      <figure class="atlas-detail-photo">
+        <img src="${escapeHtml(entry.image)}" alt="${escapeHtml(entry.name)}照片" loading="eager" />
+        <figcaption>${escapeHtml(imageRights)}</figcaption>
+      </figure>
+    `
+    : `
+      <figure class="atlas-detail-photo bird-placeholder" aria-label="${escapeHtml(entry.name)}待补充图片">
+        <span>${escapeHtml(entry.cn.slice(0, 1))}</span>
+        <figcaption>图片待补充</figcaption>
+      </figure>
+    `;
 
   selectedAtlasIndex = entry.index;
   atlasDetail.innerHTML = `
-    <div>
-      <p class="eyebrow">${escapeHtml(context)}</p>
-      <h3>${escapeHtml(entry.name)}</h3>
-      <p>${escapeHtml(entry.en || "英文名待补充")} · ${escapeHtml(entry.latin || "拉丁名待补充")}</p>
+    <div class="atlas-detail-main">
+      ${photoMarkup}
+      <div class="atlas-detail-heading">
+        <p class="eyebrow">${escapeHtml(context)}</p>
+        <h3>${escapeHtml(entry.name)}</h3>
+        <p>${escapeHtml(entry.en || "英文名待补充")} · ${escapeHtml(entry.latin || "拉丁名待补充")}</p>
+      </div>
     </div>
     <dl>
       <div><dt>资料状态</dt><dd>${escapeHtml(entry.status)}</dd></div>
@@ -1682,6 +1699,20 @@ function initAtlasSearch() {
   });
 
   if (birdGrid) {
+    const pauseMarquee = () => birdGrid.classList.add("is-paused");
+    const resumeMarquee = () => {
+      if (birdGrid.contains(document.activeElement)) return;
+      birdGrid.classList.remove("is-paused");
+    };
+
+    birdGrid.addEventListener("pointerenter", pauseMarquee);
+    birdGrid.addEventListener("pointerdown", pauseMarquee);
+    birdGrid.addEventListener("focusin", pauseMarquee);
+    birdGrid.addEventListener("pointerleave", resumeMarquee);
+    birdGrid.addEventListener("focusout", () => {
+      window.setTimeout(resumeMarquee, 0);
+    });
+
     birdGrid.addEventListener("click", (event) => {
       const trigger = event.target.closest("[data-atlas-index]");
       if (!trigger) return;

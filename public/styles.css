@@ -690,6 +690,51 @@ dd {
   display: none;
 }
 
+.atlas-detail-main {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  min-width: 0;
+}
+
+.atlas-detail-photo {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  min-height: 260px;
+  margin: 0;
+  overflow: hidden;
+  border-radius: 20px;
+  background: #dfe9e4;
+}
+
+.atlas-detail-photo img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.atlas-detail-photo figcaption {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  max-width: calc(100% - 28px);
+  padding: 6px 10px;
+  border-radius: 999px;
+  color: #fff;
+  background: rgba(12, 30, 23, 0.66);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.35;
+  backdrop-filter: blur(10px);
+}
+
+.atlas-detail-photo.bird-placeholder {
+  display: grid;
+  place-items: center;
+}
+
 .atlas-detail h3 {
   margin: 0 0 8px;
   font-size: 30px;
@@ -744,7 +789,9 @@ dd {
   width: max-content;
 }
 
-.bird-grid:hover .bird-marquee {
+.bird-grid:hover .bird-marquee,
+.bird-grid:focus-within .bird-marquee,
+.bird-grid.is-paused .bird-marquee {
   animation-play-state: paused;
 }
 
@@ -3437,5 +3484,177 @@ textarea:focus-visible,
   .auth-card-main,
   .doc-card {
     padding-inline: 16px;
+  }
+}
+
+/* Mobile typography and atlas-flow polish. */
+:where(
+  .primary-btn,
+  .secondary-btn,
+  .ghost-btn,
+  .link-btn,
+  .more-link,
+  .auth-submit,
+  .community-tab,
+  .comment-toggle,
+  .comment-send
+) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+  text-align: center;
+  line-height: 1.12;
+  white-space: nowrap;
+}
+
+.topbar {
+  overflow: hidden;
+}
+
+.topbar-actions {
+  margin-left: auto;
+}
+
+.topbar-actions .ghost-btn,
+.topbar-actions .link-btn {
+  flex: 0 0 auto;
+}
+
+.bird-photo {
+  border-radius: 0;
+}
+
+.bird-photo figcaption {
+  right: auto;
+  left: 14px;
+  max-width: calc(100% - 28px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.bird-card {
+  contain: paint;
+}
+
+.bird-grid.is-marquee {
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 28px, #000 calc(100% - 28px), transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0, #000 28px, #000 calc(100% - 28px), transparent 100%);
+}
+
+.bird-grid.is-marquee .bird-card {
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+}
+
+@media (max-width: 560px) {
+  .topbar {
+    gap: clamp(6px, 2vw, 10px);
+    padding: 10px;
+  }
+
+  .brand {
+    flex: 1 1 auto;
+    gap: 8px;
+    max-width: 100%;
+    font-size: clamp(17px, 4.8vw, 20px);
+  }
+
+  .brand-user {
+    max-width: min(58px, 14vw);
+    font-size: clamp(11px, 3vw, 12px);
+  }
+
+  .brand-user::before {
+    margin-right: 4px;
+  }
+
+  .topbar-actions {
+    flex: 0 0 auto;
+    gap: 6px;
+  }
+
+  .topbar-actions .ghost-btn,
+  .topbar-actions .link-btn {
+    height: 44px;
+    min-height: 44px;
+    padding: 0 12px;
+    border-radius: 999px;
+    font-size: clamp(11px, 3.1vw, 13px);
+    line-height: 1;
+  }
+
+  .topbar-actions [data-logout] {
+    min-width: 82px;
+    max-width: 88px;
+  }
+
+  body[data-page="community"] .topbar-actions .link-btn {
+    max-width: 82px;
+  }
+
+  .bird-grid.is-marquee {
+    margin-inline: -16px;
+    padding-inline: 16px;
+    overflow: hidden;
+    scrollbar-width: none;
+    touch-action: pan-y;
+    -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 22px, #000 calc(100% - 22px), transparent 100%);
+    mask-image: linear-gradient(90deg, transparent 0, #000 22px, #000 calc(100% - 22px), transparent 100%);
+  }
+
+  .bird-grid.is-marquee::-webkit-scrollbar {
+    display: none;
+  }
+
+  .bird-grid.is-marquee .bird-marquee {
+    gap: 16px;
+    animation: bird-marquee-scroll 32s linear infinite;
+  }
+
+  .bird-grid.is-marquee .bird-track {
+    gap: 16px;
+  }
+
+  .bird-grid.is-marquee .bird-track[aria-hidden="true"] {
+    display: flex;
+  }
+
+  .bird-grid.is-marquee .bird-card {
+    width: min(280px, calc(100vw - 64px));
+    flex-basis: min(280px, calc(100vw - 64px));
+    border-radius: 28px;
+  }
+}
+
+@media (max-width: 380px) {
+  .brand {
+    gap: 6px;
+    font-size: 17px;
+  }
+
+  .brand-mark {
+    width: 32px;
+    height: 32px;
+  }
+
+  .topbar-actions .ghost-btn,
+  .topbar-actions .link-btn {
+    height: 40px;
+    min-height: 40px;
+    padding-inline: 9px;
+    font-size: 11px;
+  }
+
+  .topbar-actions [data-logout] {
+    min-width: 72px;
+    max-width: 76px;
+  }
+
+  .bird-grid.is-marquee .bird-card {
+    width: min(270px, calc(100vw - 58px));
+    flex-basis: min(270px, calc(100vw - 58px));
   }
 }
