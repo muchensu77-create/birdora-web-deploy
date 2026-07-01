@@ -3,7 +3,6 @@ const page = document.body.dataset.page || "home";
 const STORAGE_KEYS = {
   loggedIn: "birdoraLoggedIn",
   authUser: "birdora-auth-user",
-  userPosts: "birdora-user-posts",
   comments: "birdora-post-comments",
   communityTab: "birdora-community-tab",
   deviceConnected: "birdora-device-connected",
@@ -18,6 +17,9 @@ const AUTH_ROUTES = {
   me: "/api/auth/me",
   status: "/api/auth/status",
 };
+const communityApi = window.BirdoraCommunityApi.createCommunityApi({
+  baseUrl: AUTH_API_BASE_URL,
+});
 const OSEA_LABELS_PATH = "./assets/osea/bird_info.json";
 const OSEA_MODEL_PATH = "./assets/osea/bird_model.onnx";
 const BIRD_PROFILES_PATH = "./assets/atlas/bird-profiles.json";
@@ -281,9 +283,13 @@ let atlasMarqueeUserActive = false;
 let selectedAtlasIndex = null;
 let birdProfilesSource = "fallback";
 let birdProfilesLoadError = "";
+let communityPosts = [];
 let userPosts = [];
+let communityLoadState = "loading";
+let communityLoadMessage = "";
 let commentsByPostId = {};
 let activeCommunityTab = "recommended";
+let editingPostId = "";
 let currentUser = null;
 let homeCommunityRevealPlayed = false;
 let homeCommunityRevealObserver = null;
@@ -642,10 +648,6 @@ async function syncAuthState() {
   return status;
 }
 
-function createPostId() {
-  return `post-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (char) => {
     const entities = {
@@ -667,17 +669,20 @@ function normalizeUserText(value, maxLength) {
   return String(value || "").trim().slice(0, maxLength);
 }
 
-function loadUserPosts() {
-  const allPosts = safeParseStorage(STORAGE_KEYS.userPosts, []);
-  const posts = Array.isArray(allPosts) ? allPosts : [];
-  userPosts = currentUser ? posts.filter((post) => post.ownerEmail === currentUser.email) : [];
-}
+async function loadCommunityPosts() {
+  communityLoadState = "loading";
+  communityLoadMessage = "";
 
-function saveUserPosts() {
-  const allPosts = safeParseStorage(STORAGE_KEYS.userPosts, []);
-  const posts = Array.isArray(allPosts) ? allPosts : [];
-  const otherPosts = currentUser ? posts.filter((post) => post.ownerEmail !== currentUser.email) : posts;
-  saveStorage(STORAGE_KEYS.userPosts, [...userPosts, ...otherPosts]);
+  try {
+    communityPosts = await communityApi.list();
+    userPosts = communityPosts.filter((post) => post.canManage);
+    communityLoadState = "ready";
+  } catch (error) {
+    communityLoadState = "error";
+    communityLoadMessage = error.message || "社区内容加载失败，请稍后重试。";
+  }
+
+  renderCurrentFeed();
 }
 
 function loadComments() {
@@ -690,7 +695,21 @@ function saveComments() {
 }
 
 function getAllCommunityPosts() {
-  return [...userPosts, ...recommendedPosts];
+  return [...communityPosts, ...recommendedPosts];
+}
+
+function formatPostTime(post) {
+  if (!post.createdAt) return post.time || "";
+
+  const createdAt = new Date(post.createdAt);
+  if (Number.isNaN(createdAt.getTime())) return post.time || "";
+
+  return createdAt.toLocaleString("zh-CN", {
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function getStoredComments(postId) {
@@ -727,49 +746,18 @@ function formatComments(postId) {
 
 function buildFeedCard(post, options = {}) {
   const previewMode = options.preview === true;
-  const body = previewMode ? truncateText(post.body, 88) : post.body;
-  const authorText = post.author || post.bird;
-  const previewClass = previewMode ? " feed-card-preview" : "";
-  const commentsOpen = expandedComments.has(post.id);
-  const commentPanelId = `comment-panel-${post.id}`;
-  const commentToggleLabel = commentsOpen
-    ? `收起《${post.title}》的评论`
-    : `展开《${post.title}》的评论`;
-
-  return `
-    <article class="feed-card${previewClass}" data-post-id="${post.id}">
-      <div class="feed-meta"><span>${escapeHtml(authorText)}</span><span>${escapeHtml(post.time)}</span></div>
-      <h3>${escapeHtml(post.title)}</h3>
-      <p class="feed-body">${escapeHtml(body)}</p>
-      <div class="comment-box ${commentsOpen ? "is-open" : ""}">
-        <div class="comment-toolbar">
-          <button
-            class="comment-toggle"
-            type="button"
-            data-comment-toggle="${post.id}"
-            aria-expanded="${String(commentsOpen)}"
-            aria-controls="${escapeHtml(commentPanelId)}"
-            aria-label="${escapeHtml(commentToggleLabel)}"
-          >评论</button>
-          <span class="comment-count">评论 ${getComments(post.id).length}</span>
-        </div>
-        <div class="comment-panel" id="${escapeHtml(commentPanelId)}">
-          <div class="comment-form">
-            <input
-              class="comment-input"
-              type="text"
-              placeholder="写下你的观察或想法..."
-              aria-label="写下你的观察或想法"
-              aria-invalid="false"
-              data-comment-input="${post.id}"
-            />
-            <button class="comment-send" type="button" data-comment-submit="${post.id}">发送</button>
-          </div>
-          <ul class="comment-list">${formatComments(post.id)}</ul>
-        </div>
-      </div>
-    </article>
-  `;
+  return window.BirdoraCommunityPostCard.renderPostCard(post, {
+    preview: previewMode,
+    isEditing: editingPostId === post.id,
+    commentsOpen: expandedComments.has(post.id),
+    displayBody: previewMode ? truncateText(post.body, 88) : post.body,
+    author: post.author || post.bird,
+    time: formatPostTime(post),
+    commentCount: getComments(post.id).length,
+    commentsHtml: formatComments(post.id),
+    titleMaxLength: POST_TITLE_MAX_LENGTH,
+    bodyMaxLength: POST_BODY_MAX_LENGTH,
+  });
 }
 
 function renderHomeFeed() {
@@ -782,6 +770,27 @@ function renderHomeFeed() {
 function renderCommunityFeed() {
   if (!communityFeed) return;
 
+  if (communityLoadState === "loading") {
+    communityFeed.innerHTML = `
+      <article class="feed-card empty-feed-card" role="status">
+        <h3>正在加载社区内容</h3>
+        <p>正在同步大家发布的观鸟笔记。</p>
+      </article>
+    `;
+    return;
+  }
+
+  if (communityLoadState === "error") {
+    communityFeed.innerHTML = `
+      <article class="feed-card empty-feed-card">
+        <h3>社区内容暂时无法加载</h3>
+        <p>${escapeHtml(communityLoadMessage)}</p>
+        <button class="primary-btn community-retry" type="button" data-community-retry>重新加载</button>
+      </article>
+    `;
+    return;
+  }
+
   if (activeCommunityTab === "mine" && !currentUser) {
     communityFeed.innerHTML = `
       <article class="feed-card empty-feed-card">
@@ -793,7 +802,7 @@ function renderCommunityFeed() {
     return;
   }
 
-  const posts = activeCommunityTab === "mine" ? userPosts : recommendedPosts;
+  const posts = activeCommunityTab === "mine" ? userPosts : getAllCommunityPosts();
   if (!posts.length) {
     communityFeed.innerHTML = `
       <article class="feed-card empty-feed-card">
@@ -812,6 +821,104 @@ function renderCurrentFeed() {
     renderCommunityFeed();
   } else {
     renderHomeFeed();
+  }
+}
+
+function syncCommunityPostState(nextPost = null, removedPostId = "") {
+  if (removedPostId) {
+    communityPosts = communityPosts.filter((post) => post.id !== removedPostId);
+  } else if (nextPost) {
+    const existingIndex = communityPosts.findIndex((post) => post.id === nextPost.id);
+    if (existingIndex >= 0) {
+      communityPosts.splice(existingIndex, 1, nextPost);
+    } else {
+      communityPosts.unshift(nextPost);
+    }
+  }
+
+  userPosts = communityPosts.filter((post) => post.canManage);
+}
+
+function getCommunityMutationMessage(error, fallback) {
+  if (error?.status === 401) return "登录状态已失效，请重新登录。";
+  if (error?.status === 403) return "你只能修改或删除自己发布的帖子。";
+  if (error?.status === 404) return "这条帖子已不存在，请刷新后重试。";
+  return error?.message || fallback;
+}
+
+function startEditingPost(postId) {
+  const post = communityPosts.find((item) => item.id === postId);
+  if (!post?.canManage) return;
+  editingPostId = postId;
+  expandedComments.delete(postId);
+  renderCurrentFeed();
+  communityFeed?.querySelector(`[data-post-edit-form="${postId}"] input`)?.focus();
+}
+
+function cancelEditingPost(postId) {
+  if (editingPostId !== postId) return;
+  editingPostId = "";
+  renderCurrentFeed();
+  communityFeed?.querySelector(`[data-post-edit="${postId}"]`)?.focus();
+}
+
+async function submitPostEdit(form) {
+  const postId = form.dataset.postEditForm;
+  const titleField = form.elements.title;
+  const bodyField = form.elements.body;
+  const message = form.querySelector("[data-post-edit-message]");
+  const submitButton = form.querySelector('[type="submit"]');
+  const title = normalizeUserText(titleField.value, POST_TITLE_MAX_LENGTH);
+  const body = normalizeUserText(bodyField.value, POST_BODY_MAX_LENGTH);
+
+  titleField.setAttribute("aria-invalid", String(!title));
+  bodyField.setAttribute("aria-invalid", String(!body));
+  if (!title || !body) {
+    message.textContent = title ? "请填写帖子内容。" : "请填写帖子标题。";
+    (title ? bodyField : titleField).focus();
+    return;
+  }
+
+  message.textContent = "正在保存...";
+  submitButton.disabled = true;
+
+  try {
+    const updatedPost = await communityApi.update(postId, { title, body });
+    syncCommunityPostState(updatedPost);
+    editingPostId = "";
+    renderCurrentFeed();
+    communityFeed?.querySelector(`[data-post-edit="${postId}"]`)?.focus();
+  } catch (error) {
+    message.textContent = getCommunityMutationMessage(error, "保存失败，请稍后重试。");
+    submitButton.disabled = false;
+    if (error?.status === 401) {
+      clearAuthState();
+    }
+  }
+}
+
+async function deleteCommunityPost(postId, button) {
+  const post = communityPosts.find((item) => item.id === postId);
+  if (!post?.canManage) return;
+  if (!window.confirm(`确定删除《${post.title}》吗？删除后无法恢复。`)) return;
+
+  button.disabled = true;
+  button.textContent = "删除中...";
+
+  try {
+    await communityApi.remove(postId);
+    syncCommunityPostState(null, postId);
+    expandedComments.delete(postId);
+    delete commentsByPostId[postId];
+    saveComments();
+    renderCurrentFeed();
+  } catch (error) {
+    button.disabled = false;
+    button.textContent = "删除";
+    window.alert(getCommunityMutationMessage(error, "删除失败，请稍后重试。"));
+    if (error?.status === 401) {
+      clearAuthState();
+    }
   }
 }
 
@@ -860,6 +967,30 @@ function bindCommentFeed(root) {
   if (!root) return;
 
   root.addEventListener("click", (event) => {
+    const retryButton = event.target.closest("[data-community-retry]");
+    if (retryButton) {
+      loadCommunityPosts();
+      return;
+    }
+
+    const editButton = event.target.closest("[data-post-edit]");
+    if (editButton) {
+      startEditingPost(editButton.dataset.postEdit);
+      return;
+    }
+
+    const cancelEditButton = event.target.closest("[data-post-edit-cancel]");
+    if (cancelEditButton) {
+      cancelEditingPost(cancelEditButton.dataset.postEditCancel);
+      return;
+    }
+
+    const deleteButton = event.target.closest("[data-post-delete]");
+    if (deleteButton) {
+      deleteCommunityPost(deleteButton.dataset.postDelete, deleteButton);
+      return;
+    }
+
     const toggleButton = event.target.closest("[data-comment-toggle]");
     if (toggleButton) {
       toggleComments(toggleButton.dataset.commentToggle);
@@ -870,6 +1001,13 @@ function bindCommentFeed(root) {
     if (submitButton) {
       submitComment(submitButton.dataset.commentSubmit);
     }
+  });
+
+  root.addEventListener("submit", (event) => {
+    const editForm = event.target.closest("[data-post-edit-form]");
+    if (!editForm) return;
+    event.preventDefault();
+    submitPostEdit(editForm);
   });
 
   root.addEventListener("keydown", (event) => {
@@ -2143,7 +2281,7 @@ function initPublishing() {
       });
     });
 
-    postForm.addEventListener("submit", (event) => {
+    postForm.addEventListener("submit", async (event) => {
       event.preventDefault();
 
       if (!requireLoginForAction()) return;
@@ -2159,25 +2297,31 @@ function initPublishing() {
         return;
       }
 
-      setPostMessage("");
+      const submitButton = postForm.querySelector('[type="submit"]');
+      setPostMessage("正在发布...");
+      submitButton.disabled = true;
 
-      const newPost = {
-        id: createPostId(),
-        title,
-        body,
-        bird: lastRecognitionStatus === "success" ? detectedBird.name : "观鸟笔记",
-        time: "刚刚",
-        author: currentUser?.nickname || "我",
-        ownerEmail: currentUser?.email || "",
-        source: "mine",
-      };
+      try {
+        const newPost = await communityApi.create({
+          title,
+          body,
+          bird: lastRecognitionStatus === "success" ? detectedBird.name : "观鸟笔记",
+        });
 
-      userPosts.unshift(newPost);
-      saveUserPosts();
-      postForm.reset();
-      postTitle.setAttribute("aria-invalid", "false");
-      postBody.setAttribute("aria-invalid", "false");
-      renderCurrentFeed();
+        syncCommunityPostState(newPost);
+        postForm.reset();
+        postTitle.setAttribute("aria-invalid", "false");
+        postBody.setAttribute("aria-invalid", "false");
+        setPostMessage("发布成功，所有社区用户现在都能看到这条笔记。");
+        renderCurrentFeed();
+      } catch (error) {
+        setPostMessage(getCommunityMutationMessage(error, "发布失败，请稍后重试。"));
+        if (error?.status === 401) {
+          clearAuthState();
+        }
+      } finally {
+        submitButton.disabled = false;
+      }
     });
   }
 
@@ -2202,7 +2346,7 @@ function initPublishing() {
   const shareDetectedButton = document.querySelector("#shareDetected");
   if (shareDetectedButton) {
     updateRecognitionActions();
-    shareDetectedButton.addEventListener("click", () => {
+    shareDetectedButton.addEventListener("click", async () => {
       if (!requireLoginForAction()) return;
 
       if (lastRecognitionStatus !== "success") {
@@ -2215,21 +2359,26 @@ function initPublishing() {
         return;
       }
 
-      userPosts.unshift({
-        id: createPostId(),
-        title: `我识别到了一只 ${detectedBird.name}`,
-        body: `${detectedBird.feature} 这条记录已从 AI 识别结果生成。`,
-        bird: detectedBird.name,
-        time: "刚刚",
-        author: currentUser?.nickname || "我",
-        ownerEmail: currentUser?.email || "",
-        source: "mine",
-      });
-      lastSharedRecognitionKey = currentRecognitionShareKey;
-      saveUserPosts();
-      updateRecognitionActions();
-      renderCurrentFeed();
-      document.querySelector("#community")?.scrollIntoView({ behavior: "smooth" });
+      shareDetectedButton.disabled = true;
+      try {
+        const newPost = await communityApi.create({
+          title: `我识别到了一只 ${detectedBird.name}`,
+          body: `${detectedBird.feature} 这条记录已从 AI 识别结果生成。`,
+          bird: detectedBird.name,
+        });
+        syncCommunityPostState(newPost);
+        lastSharedRecognitionKey = currentRecognitionShareKey;
+        updateRecognitionActions();
+        renderCurrentFeed();
+        document.querySelector("#community")?.scrollIntoView({ behavior: "smooth" });
+      } catch (error) {
+        window.alert(getCommunityMutationMessage(error, "发布失败，请稍后重试。"));
+        if (error?.status === 401) {
+          clearAuthState();
+        }
+      } finally {
+        shareDetectedButton.disabled = false;
+      }
     });
   }
 }
@@ -2427,7 +2576,6 @@ async function initAuthenticatedPage() {
   }
   renderUserChrome();
 
-  loadUserPosts();
   loadComments();
   initAtlasSearch();
   bindCommentFeed(feed);
@@ -2445,8 +2593,8 @@ async function initAuthenticatedPage() {
   initSoftReveal();
 
   syncAuthState()
-    .then(() => {
-      loadUserPosts();
+    .then(async () => {
+      await loadCommunityPosts();
       loadComments();
       syncCommunityTabs();
       renderCurrentFeed();

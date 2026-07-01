@@ -99,8 +99,23 @@ function getDatabase() {
       expires_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS community_posts (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      body TEXT NOT NULL,
+      bird TEXT NOT NULL DEFAULT '观鸟笔记',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
     CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
     CREATE INDEX IF NOT EXISTS idx_revoked_tokens_expires_at ON revoked_tokens(expires_at);
+    CREATE INDEX IF NOT EXISTS idx_community_posts_created_at
+      ON community_posts(created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_community_posts_user_id_created_at
+      ON community_posts(user_id, created_at DESC);
   `);
 
   migrateLegacyJsonData(database);

@@ -10,6 +10,9 @@ const publicFiles = [
   "privacy.html",
   "terms.html",
   "styles.css",
+  "community-api.js",
+  "community-post-card.css",
+  "community-post-card.js",
   "script.js",
 ];
 const blockedAssetExtensions = new Set([

@@ -1,0 +1,17 @@
+services:
+  birdora-web:
+    build:
+      context: .
+    env_file:
+      - .env
+    environment:
+      DATABASE_FILE: /data/birdora.sqlite
+      PORT: 4000
+    ports:
+      - "4000:4000"
+    restart: unless-stopped
+    volumes:
+      - birdora_data:/data
+
+volumes:
+  birdora_data:

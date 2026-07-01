@@ -5,6 +5,7 @@ const cors = require("cors");
 const cookieParser = require("cookie-parser");
 
 const authRoutes = require("./app/routes/auth.routes");
+const communityPostRoutes = require("./app/routes/community-post.routes");
 
 const app = express();
 const port = Number(process.env.PORT) || 4000;
@@ -76,6 +77,7 @@ app.get("/api/health", (_req, res) => {
 });
 
 app.use("/api/auth", authRoutes);
+app.use("/api/community/posts", communityPostRoutes);
 
 app.use((err, _req, res, _next) => {
   const statusCode = err.statusCode || 500;

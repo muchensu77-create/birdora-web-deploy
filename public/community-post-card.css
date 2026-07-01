@@ -1,0 +1,98 @@
+.feed-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.feed-card-head .feed-meta {
+  flex: 1;
+}
+
+.post-management,
+.post-edit-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.post-action {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid rgba(31, 111, 75, 0.14);
+  border-radius: 999px;
+  color: var(--green);
+  background: rgba(255, 255, 255, 0.88);
+  font-weight: 800;
+}
+
+.post-action.is-danger {
+  color: #9b3f35;
+  border-color: rgba(155, 63, 53, 0.18);
+  background: rgba(255, 246, 244, 0.92);
+}
+
+.post-edit-form {
+  display: grid;
+  gap: 14px;
+}
+
+.post-edit-form label {
+  display: grid;
+  gap: 8px;
+  color: var(--green);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.post-edit-form input,
+.post-edit-form textarea {
+  width: 100%;
+  border: 1px solid rgba(73, 112, 92, 0.14);
+  border-radius: 18px;
+  padding: 12px 14px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.96);
+  font: inherit;
+  outline: none;
+}
+
+.post-edit-form textarea {
+  min-height: 150px;
+  resize: vertical;
+}
+
+.post-edit-form input:focus,
+.post-edit-form textarea:focus {
+  border-color: rgba(31, 111, 75, 0.34);
+  box-shadow: 0 0 0 4px rgba(31, 111, 75, 0.08);
+}
+
+.post-edit-message {
+  min-height: 20px;
+  margin: 0;
+  color: #9b3f35;
+  font-size: 13px;
+}
+
+.post-save,
+.community-retry {
+  width: auto;
+  min-height: 40px;
+  padding: 0 18px;
+}
+
+@media (max-width: 560px) {
+  .feed-card-head {
+    display: grid;
+  }
+
+  .post-management {
+    justify-content: flex-start;
+  }
+
+  .post-action {
+    min-height: 44px;
+  }
+}
