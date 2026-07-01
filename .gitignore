@@ -7,3 +7,4 @@ app/data/*.sqlite
 app/data/*.sqlite-shm
 app/data/*.sqlite-wal
 app/data/*.json
+app/data/uploads/

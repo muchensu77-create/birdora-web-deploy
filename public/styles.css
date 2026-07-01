@@ -660,6 +660,19 @@ dd {
   outline: none;
 }
 
+.post-image-field {
+  display: grid;
+  gap: 8px;
+  color: var(--green);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.post-image-field input {
+  min-height: 44px;
+  padding: 10px 14px;
+}
+
 .search-row input:focus,
 .post-panel input:focus,
 .post-panel textarea:focus {
@@ -892,8 +905,8 @@ dd {
 }
 
 .atlas-open {
-  min-height: auto;
-  padding: 0;
+  min-height: 44px;
+  padding: 0 2px;
   border: 0;
   color: var(--green);
   background: transparent;
@@ -951,6 +964,8 @@ dd {
 
 .source-link {
   display: inline-flex;
+  align-items: center;
+  min-height: 44px;
   margin-top: 18px;
   color: var(--green);
   font-size: 13px;
@@ -1351,14 +1366,14 @@ dd {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0;
+  padding: 0 4px;
   border: 0;
   color: var(--green);
   background: transparent;
   box-shadow: none;
   font-size: 14px;
   font-weight: 800;
-  min-height: auto;
+  min-height: 44px;
 }
 
 .auth-switch-btn:hover,
@@ -1463,7 +1478,7 @@ dd {
 }
 
 .comment-toggle {
-  min-height: 38px;
+  min-height: 44px;
   padding: 0 16px;
   color: var(--green);
   background: rgba(220, 239, 229, 0.88);
@@ -2137,7 +2152,7 @@ body {
 }
 
 .comment-toggle {
-  min-height: 36px;
+  min-height: 44px;
   color: var(--green);
   background: rgba(220, 239, 229, 0.84);
 }
@@ -2643,11 +2658,11 @@ body {
 }
 
 #community .comment-toolbar {
-  min-height: 40px;
+  min-height: 44px;
 }
 
 #community .comment-toggle {
-  min-height: 32px;
+  min-height: 44px;
   padding: 0 12px;
 }
 
@@ -2657,7 +2672,7 @@ body {
 
 #community .more-link {
   width: 104px;
-  min-height: 42px;
+  min-height: 44px;
   margin-top: 2px;
 }
 
@@ -3718,8 +3733,8 @@ textarea:focus-visible,
 
   .topbar-actions .ghost-btn,
   .topbar-actions .link-btn {
-    height: 40px;
-    min-height: 40px;
+    height: 44px;
+    min-height: 44px;
     padding-inline: 9px;
     font-size: 11px;
   }

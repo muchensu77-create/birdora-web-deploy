@@ -2,8 +2,22 @@
   function createCommunityApi(options = {}) {
     const baseUrl = String(options.baseUrl || "").replace(/\/$/, "");
 
+    function normalizePost(post) {
+      if (!post || typeof post !== "object") return post;
+      if (post.imageUrl && post.imageUrl.startsWith("/api/") && baseUrl) {
+        return {
+          ...post,
+          imageUrl: `${baseUrl}${post.imageUrl}`,
+        };
+      }
+      return post;
+    }
+
     async function request(path = "", requestOptions = {}) {
-      const response = await fetch(`${baseUrl}/api/community/posts${path}`, {
+      const query = requestOptions.query
+        ? `?${new URLSearchParams(requestOptions.query).toString()}`
+        : "";
+      const response = await fetch(`${baseUrl}/api/community/posts${path}${query}`, {
         method: requestOptions.method || "GET",
         credentials: "include",
         headers: {
@@ -32,23 +46,47 @@
     }
 
     return {
-      async list() {
-        const data = await request();
-        return Array.isArray(data?.posts) ? data.posts : [];
+      async list(options = {}) {
+        const data = await request("", { query: options });
+        return {
+          posts: Array.isArray(data?.posts) ? data.posts.map(normalizePost) : [],
+          pageInfo: data?.pageInfo || { limit: 0, offset: 0, nextOffset: 0, hasMore: false },
+        };
       },
       async create(post) {
         const data = await request("", { method: "POST", body: post });
-        return data.post;
+        return normalizePost(data.post);
       },
       async update(id, post) {
         const data = await request(`/${encodeURIComponent(id)}`, {
           method: "PATCH",
           body: post,
         });
-        return data.post;
+        return normalizePost(data.post);
       },
       async remove(id) {
         await request(`/${encodeURIComponent(id)}`, { method: "DELETE" });
+      },
+      async comment(id, body) {
+        const data = await request(`/${encodeURIComponent(id)}/comments`, {
+          method: "POST",
+          body: { body },
+        });
+        return normalizePost(data.post);
+      },
+      async question(id, body) {
+        const data = await request(`/${encodeURIComponent(id)}/questions`, {
+          method: "POST",
+          body: { body },
+        });
+        return normalizePost(data.post);
+      },
+      async react(id, reactionType) {
+        const data = await request(`/${encodeURIComponent(id)}/reactions`, {
+          method: "POST",
+          body: { reactionType },
+        });
+        return normalizePost(data.post);
       },
     };
   }
