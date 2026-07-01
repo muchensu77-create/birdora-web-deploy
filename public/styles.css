@@ -3392,7 +3392,11 @@ textarea:focus-visible,
   .bird-grid.is-marquee {
     overflow-x: auto;
     overflow-y: hidden;
-    scrollbar-width: thin;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    touch-action: pan-x pan-y;
+    -webkit-overflow-scrolling: touch;
   }
 
   .bird-grid.is-marquee .bird-marquee {
@@ -3400,12 +3404,16 @@ textarea:focus-visible,
   }
 
   .bird-grid.is-marquee .bird-track[aria-hidden="true"] {
-    display: none;
+    display: flex;
   }
 
   .bird-grid.is-marquee .bird-card {
     width: min(280px, calc(100vw - 48px));
     flex-basis: min(280px, calc(100vw - 48px));
+  }
+
+  .bird-grid.is-marquee.is-auto-scrolling {
+    scroll-snap-type: none;
   }
 
   #postBody {
@@ -3623,7 +3631,7 @@ textarea:focus-visible,
   }
 
   .bird-grid.is-marquee .bird-track[aria-hidden="true"] {
-    display: none;
+    display: flex;
   }
 
   .bird-grid.is-marquee .bird-card {

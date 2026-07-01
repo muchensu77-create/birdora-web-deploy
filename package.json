@@ -1,6 +1,6 @@
 {
   "name": "birdora-web",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "description": "Birdora static site with Express JWT auth backend",
   "main": "server.js",

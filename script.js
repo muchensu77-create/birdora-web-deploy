@@ -33,6 +33,9 @@ const ATLAS_TABLET_INITIAL_LIMIT = 12;
 const ATLAS_MOBILE_INITIAL_LIMIT = 8;
 const ATLAS_MOBILE_SEARCH_LIMIT = 12;
 const ATLAS_DEFAULT_HIDDEN_INDEXES = new Set([3334]);
+const ATLAS_TOUCH_MARQUEE_QUERY = "(max-width: 920px)";
+const ATLAS_TOUCH_MARQUEE_SPEED = 24;
+const ATLAS_TOUCH_MARQUEE_RESUME_DELAY_MS = 1100;
 const POST_TITLE_MAX_LENGTH = 80;
 const POST_BODY_MAX_LENGTH = 600;
 const COMMENT_MAX_LENGTH = 180;
@@ -271,6 +274,10 @@ let commonBirdCandidatesPromise;
 let atlasEntriesPromise;
 let atlasSearchTimer = null;
 let atlasRenderRunId = 0;
+let atlasMarqueeAutoScrollFrame = null;
+let atlasMarqueeAutoScrollLastTime = 0;
+let atlasMarqueeResumeTimer = null;
+let atlasMarqueeUserActive = false;
 let selectedAtlasIndex = null;
 let birdProfilesSource = "fallback";
 let birdProfilesLoadError = "";
@@ -1683,9 +1690,11 @@ async function renderBirds(options = {}) {
         </div>
       `
       : renderAtlasMarquee(visible);
+    syncAtlasMarqueeAutoScroll();
   } catch (error) {
     if (runId !== atlasRenderRunId) return;
 
+    stopAtlasMarqueeAutoScroll();
     birdGrid.classList.add("is-empty");
     birdGrid.classList.remove("is-marquee");
     birdGrid.innerHTML =
@@ -1708,6 +1717,106 @@ function renderAtlasMarquee(entries) {
   `;
 }
 
+function shouldUseTouchAtlasMarquee() {
+  return Boolean(window.matchMedia?.(ATLAS_TOUCH_MARQUEE_QUERY).matches);
+}
+
+function getAtlasMarqueeLoopWidth() {
+  const marquee = birdGrid?.querySelector(".bird-marquee");
+  const firstTrack = marquee?.querySelector(".bird-track:not([aria-hidden='true'])");
+  if (!marquee || !firstTrack) return 0;
+
+  const marqueeStyle = window.getComputedStyle(marquee);
+  const trackGap = Number.parseFloat(marqueeStyle.columnGap || marqueeStyle.gap || "0") || 0;
+  return firstTrack.getBoundingClientRect().width + trackGap;
+}
+
+function stopAtlasMarqueeAutoScroll(options = {}) {
+  if (atlasMarqueeAutoScrollFrame) {
+    window.cancelAnimationFrame(atlasMarqueeAutoScrollFrame);
+    atlasMarqueeAutoScrollFrame = null;
+  }
+
+  atlasMarqueeAutoScrollLastTime = 0;
+  birdGrid?.classList.remove("is-auto-scrolling");
+
+  if (options.clearResumeTimer !== false) {
+    window.clearTimeout(atlasMarqueeResumeTimer);
+    atlasMarqueeResumeTimer = null;
+  }
+}
+
+function startAtlasMarqueeAutoScroll() {
+  if (
+    atlasMarqueeAutoScrollFrame ||
+    atlasMarqueeUserActive ||
+    !birdGrid?.classList.contains("is-marquee") ||
+    !shouldUseTouchAtlasMarquee()
+  ) {
+    return;
+  }
+
+  birdGrid.classList.add("is-auto-scrolling");
+
+  const step = (timestamp) => {
+    if (
+      atlasMarqueeUserActive ||
+      !birdGrid?.classList.contains("is-marquee") ||
+      !shouldUseTouchAtlasMarquee()
+    ) {
+      stopAtlasMarqueeAutoScroll({ clearResumeTimer: false });
+      return;
+    }
+
+    if (!atlasMarqueeAutoScrollLastTime) {
+      atlasMarqueeAutoScrollLastTime = timestamp;
+    }
+
+    const elapsedSeconds = Math.min((timestamp - atlasMarqueeAutoScrollLastTime) / 1000, 0.05);
+    atlasMarqueeAutoScrollLastTime = timestamp;
+
+    const loopWidth = getAtlasMarqueeLoopWidth();
+    if (loopWidth > 0) {
+      if (birdGrid.scrollLeft >= loopWidth) {
+        birdGrid.scrollLeft -= loopWidth;
+      }
+
+      birdGrid.scrollLeft += ATLAS_TOUCH_MARQUEE_SPEED * elapsedSeconds;
+    }
+
+    atlasMarqueeAutoScrollFrame = window.requestAnimationFrame(step);
+  };
+
+  atlasMarqueeAutoScrollFrame = window.requestAnimationFrame(step);
+}
+
+function syncAtlasMarqueeAutoScroll() {
+  stopAtlasMarqueeAutoScroll();
+  atlasMarqueeUserActive = false;
+
+  if (!birdGrid?.classList.contains("is-marquee")) return;
+
+  if (!shouldUseTouchAtlasMarquee()) {
+    birdGrid.scrollLeft = 0;
+    return;
+  }
+
+  startAtlasMarqueeAutoScroll();
+}
+
+function pauseAtlasMarqueeForUser() {
+  atlasMarqueeUserActive = true;
+  stopAtlasMarqueeAutoScroll();
+}
+
+function resumeAtlasMarqueeAfterUser() {
+  window.clearTimeout(atlasMarqueeResumeTimer);
+  atlasMarqueeResumeTimer = window.setTimeout(() => {
+    atlasMarqueeUserActive = false;
+    startAtlasMarqueeAutoScroll();
+  }, ATLAS_TOUCH_MARQUEE_RESUME_DELAY_MS);
+}
+
 function initAtlasSearch() {
   if (!birdSearch) return;
 
@@ -1719,10 +1828,14 @@ function initAtlasSearch() {
   });
 
   if (birdGrid) {
-    const pauseMarquee = () => birdGrid.classList.add("is-paused");
+    const pauseMarquee = () => {
+      birdGrid.classList.add("is-paused");
+      pauseAtlasMarqueeForUser();
+    };
     const resumeMarquee = () => {
       if (birdGrid.contains(document.activeElement)) return;
       birdGrid.classList.remove("is-paused");
+      resumeAtlasMarqueeAfterUser();
     };
 
     birdGrid.addEventListener("pointerenter", pauseMarquee);
@@ -1737,6 +1850,7 @@ function initAtlasSearch() {
     birdGrid.addEventListener("focusout", () => {
       window.setTimeout(resumeMarquee, 0);
     });
+    window.addEventListener("resize", syncAtlasMarqueeAutoScroll);
 
     birdGrid.addEventListener("click", (event) => {
       const trigger = event.target.closest("[data-atlas-index]");
