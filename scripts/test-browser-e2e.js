@@ -192,7 +192,11 @@ async function evaluate(cdp, expression, label = "evaluation") {
   });
 
   if (result.exceptionDetails) {
-    throw new Error(`${label} failed: ${result.exceptionDetails.text || "runtime exception"}`);
+    const detail =
+      result.exceptionDetails.exception?.description ||
+      result.exceptionDetails.text ||
+      "runtime exception";
+    throw new Error(`${label} failed: ${detail}`);
   }
 
   return result.result?.value;
@@ -320,6 +324,47 @@ async function publishPost(cdp) {
   await navigate(cdp, `${WEB_BASE_URL}/index.html`);
   await evaluate(
     cdp,
+    pageScript(() => {
+      const panel = document.querySelector("#postForm");
+      const imageInput = document.querySelector("#postImage");
+      const imageControl = document.querySelector(".post-image-control");
+      const imageName = document.querySelector("#postImageName");
+      const postTools = document.querySelector(".post-tools");
+      const testFile = new File(["birdora-ui-test"], "kingfisher-platform-test.jpg", { type: "image/jpeg" });
+      const transfer = new DataTransfer();
+      transfer.items.add(testFile);
+      imageInput.files = transfer.files;
+      imageInput.dispatchEvent(new Event("change", { bubbles: true }));
+
+      const inputStyle = getComputedStyle(imageInput);
+      const selectedNameIsVisible = imageName.textContent === testFile.name;
+      const controlsStayInsidePanel =
+        postTools.getBoundingClientRect().bottom <= panel.getBoundingClientRect().bottom + 1;
+      const platformUiIsReplaced =
+        inputStyle.opacity === "0" &&
+        imageControl.getBoundingClientRect().height >= 44 &&
+        selectedNameIsVisible;
+
+      imageInput.value = "";
+      imageInput.dispatchEvent(new Event("change", { bubbles: true }));
+
+      if (!platformUiIsReplaced || !controlsStayInsidePanel || imageName.textContent !== "未选择图片") {
+        throw new Error(
+          `community post UI mismatch: ${JSON.stringify({
+            inputOpacity: inputStyle.opacity,
+            controlHeight: imageControl.getBoundingClientRect().height,
+            selectedNameIsVisible,
+            controlsStayInsidePanel,
+            resetName: imageName.textContent,
+          })}`
+        );
+      }
+      return true;
+    }),
+    "community post platform UI"
+  );
+  await evaluate(
+    cdp,
     pageScript((title, body) => {
       document.querySelector("#postTitle").value = title;
       document.querySelector("#postBody").value = body;
@@ -351,6 +396,30 @@ async function saveObservationFromInjectedRecognition(cdp) {
       ctx.fillRect(0, 0, 16, 16);
       ctx.fillStyle = "#f5f1e8";
       ctx.fillRect(4, 4, 8, 8);
+
+      const uploadZone = document.querySelector(".upload-zone");
+      const previewImage = document.querySelector("#previewImage");
+      const uploadIcon = uploadZone?.querySelector(".upload-icon");
+      const uploadTitle = uploadZone?.querySelector("strong");
+      const uploadHint = uploadZone?.querySelector("small");
+      previewImage.src = canvas.toDataURL("image/jpeg", 0.82);
+      uploadZone.classList.add("has-image");
+      setRecognitionVisualPending(true);
+
+      const pendingState = {
+        imageFilter: getComputedStyle(previewImage).filter,
+        spinnerAnimation: getComputedStyle(uploadIcon).animationName,
+        titleDisplay: getComputedStyle(uploadTitle).display,
+        hintDisplay: getComputedStyle(uploadHint).display,
+      };
+      if (
+        !pendingState.imageFilter.includes("grayscale(1)") ||
+        pendingState.spinnerAnimation !== "recognitionSpinner" ||
+        pendingState.titleDisplay !== "none" ||
+        pendingState.hintDisplay !== "none"
+      ) {
+        throw new Error(`recognition pending image state mismatch: ${JSON.stringify(pendingState)}`);
+      }
 
       const topCandidates = [
         {
@@ -384,6 +453,26 @@ async function saveObservationFromInjectedRecognition(cdp) {
         "Browser E2E injected Top 5 result.",
         topCandidates
       );
+
+      const completedState = {
+        isRecognizing: uploadZone.classList.contains("is-recognizing"),
+        imageFilter: getComputedStyle(previewImage).filter,
+        overlayContent: getComputedStyle(uploadZone, "::after").content,
+        iconVisibility: getComputedStyle(uploadIcon).visibility,
+        titleVisibility: getComputedStyle(uploadTitle).visibility,
+        hintVisibility: getComputedStyle(uploadHint).visibility,
+      };
+      if (
+        completedState.isRecognizing ||
+        completedState.imageFilter !== "none" ||
+        completedState.overlayContent !== "none" ||
+        completedState.iconVisibility !== "hidden" ||
+        completedState.titleVisibility !== "hidden" ||
+        completedState.hintVisibility !== "hidden"
+      ) {
+        throw new Error(`recognition completed image state mismatch: ${JSON.stringify(completedState)}`);
+      }
+
       return !document.querySelector("#saveObservation").disabled;
     }),
     "inject recognition result"

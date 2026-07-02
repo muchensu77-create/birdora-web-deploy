@@ -859,6 +859,11 @@ async function scenarioFModelFiles(recorder, validations) {
       endpoint: "GET /assets/vendor/ort-wasm-simd-threaded.wasm",
       responseType: "buffer",
     },
+    {
+      path: "/assets/vendor/ort-wasm-simd-threaded.mjs",
+      endpoint: "GET /assets/vendor/ort-wasm-simd-threaded.mjs",
+      responseType: "text",
+    },
     { path: "/assets/osea/bird_info.json", endpoint: "GET /assets/osea/bird_info.json", responseType: "text" },
   ];
 

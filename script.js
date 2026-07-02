@@ -260,6 +260,7 @@ const postForm = document.querySelector("#postForm");
 const postTitle = document.querySelector("#postTitle");
 const postBody = document.querySelector("#postBody");
 const postImage = document.querySelector("#postImage");
+const postImageName = document.querySelector("#postImageName");
 const postMessage = document.querySelector("#postMessage");
 const useDetected = document.querySelector("#useDetected");
 const communityTabs = document.querySelectorAll("[data-community-tab]");
@@ -3103,6 +3104,7 @@ function setResult(
 ) {
   if (!confidenceText || !resultName || !resultMeta || !resultFeature || !modelDetail) return;
 
+  setRecognitionVisualPending(false);
   detectedBird = bird;
   lastRecognitionStatus = "success";
   currentRecognitionCandidates = candidates;
@@ -3140,9 +3142,21 @@ function setPendingResult(text) {
   updateRecognitionActions();
 }
 
+function setRecognitionVisualPending(isPending) {
+  if (!uploadZone) return;
+
+  uploadZone.classList.toggle("is-recognizing", isPending);
+  if (isPending) {
+    uploadZone.setAttribute("aria-busy", "true");
+  } else {
+    uploadZone.removeAttribute("aria-busy");
+  }
+}
+
 function setUnknownResult(predictions, candidates = []) {
   if (!confidenceText || !resultName || !resultMeta || !resultFeature || !modelDetail) return;
 
+  setRecognitionVisualPending(false);
   lastRecognitionStatus = "unknown";
   currentRecognitionShareKey = "";
   currentRecognitionCandidates = candidates;
@@ -3194,6 +3208,7 @@ function initBirdRecognition() {
     };
 
     uploadZone.classList.remove("has-image");
+    setRecognitionVisualPending(false);
     currentRecognitionImagePayload = null;
     savedObservation = null;
     lastSavedRecognitionKey = "";
@@ -3215,6 +3230,7 @@ function initBirdRecognition() {
       if (runId !== recognitionRunId) return;
 
       uploadZone.classList.add("has-image");
+      setRecognitionVisualPending(true);
       currentRecognitionImagePayload = buildCompressedObservationImage(preview, file);
       const result = await classifyImageElement(preview, reportRecognitionStage);
       if (runId !== recognitionRunId) return;
@@ -3251,6 +3267,7 @@ function initBirdRecognition() {
       currentRecognitionImagePayload = null;
       savedObservation = null;
       lastSavedRecognitionKey = "";
+      setRecognitionVisualPending(false);
       uploadZone.classList.remove("has-image");
       preview.removeAttribute("src");
       confidenceText.textContent = "!";
@@ -3383,6 +3400,14 @@ function initObservationListActions() {
 
 function initPublishing() {
   if (postForm && postTitle && postBody) {
+    const updatePostImageName = () => {
+      if (!postImageName) return;
+
+      const selectedFileName = postImage?.files?.[0]?.name || "";
+      postImageName.textContent = selectedFileName || "未选择图片";
+      postImageName.title = selectedFileName;
+    };
+
     const setPostMessage = (text = "") => {
       if (postMessage) {
         postMessage.textContent = text;
@@ -3399,8 +3424,11 @@ function initPublishing() {
     });
 
     postImage?.addEventListener("change", () => {
+      updatePostImageName();
       setPostMessage("");
     });
+
+    updatePostImageName();
 
     postForm.addEventListener("submit", async (event) => {
       event.preventDefault();
@@ -3433,6 +3461,7 @@ function initPublishing() {
 
         syncCommunityPostState(newPost);
         postForm.reset();
+        updatePostImageName();
         postTitle.setAttribute("aria-invalid", "false");
         postBody.setAttribute("aria-invalid", "false");
         setPostMessage("发布成功，所有社区用户现在都能看到这条笔记。");

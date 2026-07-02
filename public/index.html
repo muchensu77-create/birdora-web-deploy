@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Birdora 观鸟眼镜</title>
-    <link rel="icon" href="data:," />
+    <link rel="icon" type="image/svg+xml" sizes="any" href="./assets/favicon.svg" />
     <link rel="stylesheet" href="./styles.css" />
     <link rel="stylesheet" href="./community-post-card.css" />
   </head>
@@ -142,9 +142,13 @@
           <form class="post-panel" id="postForm" novalidate>
             <input id="postTitle" type="text" aria-label="观鸟笔记标题" placeholder="记录标题，例如：清晨遇到一只翠鸟" required aria-describedby="postMessage" />
             <textarea id="postBody" aria-label="观鸟笔记内容" placeholder="写下地点、行为、天气或你的观察..." required aria-describedby="postMessage"></textarea>
-            <label class="post-image-field">
-              <span>配图</span>
-              <input id="postImage" type="file" accept="image/jpeg,image/png,image/webp" aria-describedby="postMessage" />
+            <label class="post-image-field" for="postImage">
+              <span class="post-image-label">配图</span>
+              <span class="post-image-control">
+                <span class="post-image-action" aria-hidden="true">选择图片</span>
+                <span class="post-image-name" id="postImageName">未选择图片</span>
+              </span>
+              <input id="postImage" type="file" accept="image/jpeg,image/png,image/webp" aria-describedby="postImageName postMessage" />
             </label>
             <p class="form-message post-message" id="postMessage" aria-live="polite" role="alert"></p>
             <div class="post-tools">

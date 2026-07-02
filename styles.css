@@ -555,22 +555,16 @@ main {
 }
 
 .upload-zone.has-image {
-  color: #fff;
+  color: inherit;
   background: #183529;
 }
 
 .upload-zone.has-image::before {
-  inset: 20px;
-  border-color: rgba(255, 255, 255, 0.2);
+  opacity: 0;
 }
 
 .upload-zone.has-image::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background:
-    linear-gradient(180deg, rgba(9, 28, 21, 0.08), rgba(9, 28, 21, 0.78)),
-    radial-gradient(circle at top, rgba(201, 239, 218, 0.18), transparent 38%);
+  content: none;
 }
 
 .upload-zone.has-image > :not(img) {
@@ -580,6 +574,48 @@ main {
 
 .upload-zone.has-image #previewImage {
   opacity: 1;
+  filter: none;
+}
+
+.upload-zone.has-image:not(.is-recognizing) .upload-icon,
+.upload-zone.has-image:not(.is-recognizing) strong,
+.upload-zone.has-image:not(.is-recognizing) small {
+  visibility: hidden;
+  opacity: 0;
+}
+
+.upload-zone.has-image.is-recognizing #previewImage {
+  filter: grayscale(1) brightness(0.72);
+}
+
+.upload-zone.has-image.is-recognizing strong,
+.upload-zone.has-image.is-recognizing small {
+  display: none;
+}
+
+.upload-zone.has-image.is-recognizing .upload-icon {
+  width: 62px;
+  height: 62px;
+  border: 5px solid rgba(255, 255, 255, 0.58);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  color: transparent;
+  background: rgba(20, 57, 41, 0.28);
+  box-shadow: 0 8px 24px rgba(9, 28, 21, 0.18);
+  font-size: 0;
+  animation: recognitionSpinner 0.82s linear infinite;
+}
+
+@keyframes recognitionSpinner {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .upload-zone.has-image.is-recognizing .upload-icon {
+    animation-duration: 1.8s;
+  }
 }
 
 .result-card {
@@ -661,16 +697,69 @@ dd {
 }
 
 .post-image-field {
+  position: relative;
   display: grid;
   gap: 8px;
   color: var(--green);
   font-size: 13px;
   font-weight: 800;
+  cursor: pointer;
 }
 
 .post-image-field input {
-  min-height: 44px;
-  padding: 10px 14px;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  padding: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.post-image-control {
+  display: flex;
+  min-width: 0;
+  min-height: 54px;
+  align-items: center;
+  gap: 14px;
+  padding: 6px 16px 6px 6px;
+  border: 1px solid rgba(60, 105, 82, 0.11);
+  border-radius: 20px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.92);
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.post-image-action {
+  display: inline-flex;
+  min-height: 40px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  padding: 0 18px;
+  border-radius: 15px;
+  color: #ffffff;
+  background: var(--green);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.post-image-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.post-image-field:hover .post-image-control,
+.post-image-field:focus-within .post-image-control {
+  border-color: rgba(31, 111, 75, 0.3);
+  box-shadow: 0 0 0 5px rgba(31, 111, 75, 0.09);
 }
 
 .search-row input:focus,
@@ -2843,7 +2932,8 @@ body {
 }
 
 #community .post-panel {
-  max-height: 520px;
+  min-height: 520px;
+  max-height: none;
   padding: 32px;
   gap: 14px;
   align-content: start;
@@ -2941,6 +3031,7 @@ body {
   }
 
   #community .post-panel {
+    min-height: 0;
     max-height: none;
   }
 
