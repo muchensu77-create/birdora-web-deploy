@@ -13,12 +13,12 @@ const runId = Date.now();
 const author = {
   email: `browser-author-${runId}@example.com`,
   nickname: "Browser Author",
-  password: "123456",
+  password: "12345678",
 };
 const reader = {
   email: `browser-reader-${runId}@example.com`,
   nickname: "Browser Reader",
-  password: "123456",
+  password: "12345678",
 };
 const postTitle = `Browser E2E kingfisher note ${runId}`;
 const postBody =
@@ -247,6 +247,37 @@ async function registerAccount(cdp, account) {
   );
 }
 
+async function assertCachedUserDoesNotAuthenticate(cdp) {
+  const cachedNickname = `Cached User ${runId}`;
+  await navigate(cdp, `${WEB_BASE_URL}/index.html`);
+  await evaluate(
+    cdp,
+    pageScript((nickname) => {
+      localStorage.setItem("birdoraLoggedIn", "true");
+      localStorage.setItem(
+        "birdora-auth-user",
+        JSON.stringify({
+          id: "cached-user",
+          email: "cached-user@example.com",
+          nickname,
+        })
+      );
+      return true;
+    }, cachedNickname),
+    "seed cached auth user"
+  );
+  await navigate(cdp, `${WEB_BASE_URL}/index.html`);
+  await waitFor(
+    cdp,
+    pageScript((nickname) => {
+      const logoutButton = document.querySelector("[data-logout]");
+      const bodyText = document.body.innerText || "";
+      return logoutButton?.textContent.trim() === "登录" && !bodyText.includes(nickname);
+    }, cachedNickname),
+    "cached auth user is not treated as logged in"
+  );
+}
+
 async function loginAccount(cdp, account) {
   await navigate(cdp, `${WEB_BASE_URL}/login.html`);
   await evaluate(
@@ -307,6 +338,135 @@ async function publishPost(cdp) {
   );
 }
 
+async function saveObservationFromInjectedRecognition(cdp) {
+  await navigate(cdp, `${WEB_BASE_URL}/index.html`);
+  await evaluate(
+    cdp,
+    pageScript(() => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 16;
+      canvas.height = 16;
+      const ctx = canvas.getContext("2d");
+      ctx.fillStyle = "#2f6f4d";
+      ctx.fillRect(0, 0, 16, 16);
+      ctx.fillStyle = "#f5f1e8";
+      ctx.fillRect(4, 4, 8, 8);
+
+      const topCandidates = [
+        {
+          index: 3334,
+          cn: "翠鸟",
+          en: "Common Kingfisher",
+          latin: "Alcedo atthis",
+          probability: 0.91,
+          isMapped: true,
+          atlasBird: null,
+        },
+        {
+          index: 3048,
+          cn: "白鹭",
+          en: "Little Egret",
+          latin: "Egretta garzetta",
+          probability: 0.04,
+          isMapped: true,
+          atlasBird: null,
+        },
+      ];
+
+      currentRecognitionImagePayload = {
+        imageDataUrl: canvas.toDataURL("image/jpeg", 0.82),
+        imageName: "browser-observation.jpg",
+      };
+      const top = topCandidates[0];
+      setResult(
+        createCandidateBird(top),
+        displayConfidence(top.probability),
+        "Browser E2E injected Top 5 result.",
+        topCandidates
+      );
+      return !document.querySelector("#saveObservation").disabled;
+    }),
+    "inject recognition result"
+  );
+
+  await evaluate(
+    cdp,
+    `document.querySelector("#saveObservation").click(); true`,
+    "save observation"
+  );
+
+  const observationId = await waitFor(
+    cdp,
+    pageScript(() => {
+      const message = document.querySelector("#observationMessage")?.textContent || "";
+      const card = document.querySelector("[data-observation-id]");
+      return message.includes("已保存") && card ? card.getAttribute("data-observation-id") : "";
+    }),
+    "observation saved"
+  );
+
+  await navigate(cdp, `${WEB_BASE_URL}/index.html`);
+  await waitFor(
+    cdp,
+    pageScript((id) =>
+      Array.from(document.querySelectorAll("[data-observation-id]")).some(
+        (card) => card.getAttribute("data-observation-id") === id
+      ),
+    observationId),
+    "observation visible after refresh"
+  );
+
+  console.log(`observation save/refresh: PASS (${observationId})`);
+  return observationId;
+}
+
+async function publishObservationFromList(cdp, observationId) {
+  await navigate(cdp, `${WEB_BASE_URL}/index.html`);
+  await waitFor(
+    cdp,
+    pageScript((id) => {
+      const card = Array.from(document.querySelectorAll("[data-observation-id]")).find(
+        (nextCard) => nextCard.getAttribute("data-observation-id") === id
+      );
+      return Boolean(card?.querySelector("[data-observation-share]"));
+    }, observationId),
+    "observation share button visible"
+  );
+
+  await evaluate(
+    cdp,
+    pageScript((id) => {
+      const card = Array.from(document.querySelectorAll("[data-observation-id]")).find(
+        (nextCard) => nextCard.getAttribute("data-observation-id") === id
+      );
+      card.querySelector("[data-observation-share]").click();
+      return true;
+    }, observationId),
+    "publish observation"
+  );
+
+  await waitFor(
+    cdp,
+    pageScript(() => document.querySelector("#observationMessage")?.textContent.includes("已从观测记录发布到社区")),
+    "observation publish success"
+  );
+
+  await navigate(cdp, `${WEB_BASE_URL}/community.html`);
+  await waitFor(
+    cdp,
+    pageScript((id) => {
+      const apiBase = String(window.BIRDORA_API_BASE_URL || "").replace(/\/$/, "");
+      return fetch(`${apiBase}/api/community/posts`, { credentials: "include" })
+        .then((response) => response.json())
+        .then((data) => (data.posts || []).some((post) => post.observationId === id))
+        .catch(() => false);
+    }, observationId),
+    "community post keeps observation id"
+  );
+
+  console.log("observation publish: PASS");
+}
+
 async function getPostId(cdp) {
   await navigate(cdp, `${WEB_BASE_URL}/community.html`);
   return waitFor(
@@ -345,15 +505,71 @@ async function readerInteract(cdp, postId) {
     cdp,
     pageScript((id) => {
       const card = document.querySelector(`[data-post-id="${id}"]`);
-      const input = card.querySelector(`[data-comment-input="${id}"]`);
-      input.value = "Browser reader comment: clear location and behavior details.";
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-      card.querySelector(`[data-comment-submit="${id}"]`).click();
+      card.querySelector(`[data-post-detail="${id}"]`).click();
       return true;
     }, postId),
-    "reader comments"
+    "reader opens post detail"
   );
-  await waitFor(cdp, pageScript((id) => document.querySelector(`[data-post-id="${id}"]`)?.innerText.includes("Browser reader comment"), postId), "comment appears");
+  await waitFor(
+    cdp,
+    pageScript((title) => document.querySelector(".post-detail-dialog")?.innerText.includes(title), postTitle),
+    "post detail opens"
+  );
+
+  const deletedCommentText = "Browser reader comment to delete: detail view works.";
+  await evaluate(
+    cdp,
+    pageScript((id, text) => {
+      const input = document.querySelector(`[data-detail-comment-input="${id}"]`);
+      input.value = text;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      document.querySelector(`[data-detail-comment-submit="${id}"]`).click();
+      return true;
+    }, postId, deletedCommentText),
+    "reader comments in detail"
+  );
+  await waitFor(cdp, pageScript((text) => document.querySelector(".post-detail-dialog")?.innerText.includes(text), deletedCommentText), "detail comment appears");
+
+  const deleteDialogPromise = cdp.waitForEvent("Page.javascriptDialogOpening", 3000).catch(() => null);
+  const deleteCommentClick = evaluate(
+    cdp,
+    pageScript((text) => {
+      const comment = Array.from(document.querySelectorAll(".post-detail-dialog .comment-bubble")).find((bubble) =>
+        bubble.innerText.includes(text)
+      );
+      comment.querySelector("[data-comment-delete]").click();
+      return true;
+    }, deletedCommentText),
+    "reader clicks comment delete"
+  );
+  const deleteDialog = await deleteDialogPromise;
+  if (!deleteDialog) throw new Error("comment delete confirmation dialog did not open");
+  await cdp.send("Page.handleJavaScriptDialog", { accept: true });
+  await deleteCommentClick;
+  await waitFor(
+    cdp,
+    pageScript((text) =>
+      !Array.from(document.querySelectorAll(".post-detail-dialog .comment-bubble")).some((bubble) =>
+        bubble.innerText.includes(text)
+      ),
+    deletedCommentText),
+    "deleted detail comment disappears"
+  );
+
+  const retainedCommentText = "Browser reader comment: clear location and behavior details.";
+  await evaluate(
+    cdp,
+    pageScript((id, text) => {
+      const input = document.querySelector(`[data-detail-comment-input="${id}"]`);
+      input.value = text;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      document.querySelector(`[data-detail-comment-submit="${id}"]`).click();
+      return true;
+    }, postId, retainedCommentText),
+    "reader adds retained comment"
+  );
+  await waitFor(cdp, pageScript((text) => document.querySelector(".post-detail-dialog")?.innerText.includes(text), retainedCommentText), "retained comment appears");
+  await evaluate(cdp, `document.querySelector("[data-post-detail-close]")?.click(); true`, "close post detail");
 
   await evaluate(
     cdp,
@@ -462,8 +678,12 @@ async function main() {
 
     console.log(`Browser E2E web: ${WEB_BASE_URL}`);
     console.log(`Browser E2E api: ${API_BASE_URL || "(page default)"}`);
+    await assertCachedUserDoesNotAuthenticate(cdp);
+    console.log("cached localStorage auth state ignored: PASS");
     await registerAccount(cdp, author);
     console.log(`author register/login: PASS (${author.email})`);
+    const observationId = await saveObservationFromInjectedRecognition(cdp);
+    await publishObservationFromList(cdp, observationId);
     await publishPost(cdp);
     console.log("author publish: PASS");
     const postId = await getPostId(cdp);

@@ -90,6 +90,10 @@ function ensureColumns(db, tableName, columns) {
 function migrateCommunityPostColumns(db) {
   ensureColumns(db, "community_posts", [
     {
+      name: "observation_id",
+      definition: "observation_id TEXT DEFAULT NULL",
+    },
+    {
       name: "analysis_summary",
       definition: "analysis_summary TEXT NOT NULL DEFAULT ''",
     },
@@ -140,6 +144,7 @@ function getDatabase() {
     CREATE TABLE IF NOT EXISTS community_posts (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
+      observation_id TEXT DEFAULT NULL,
       title TEXT NOT NULL,
       body TEXT NOT NULL,
       bird TEXT NOT NULL DEFAULT '观鸟笔记',
@@ -197,12 +202,34 @@ function getDatabase() {
       FOREIGN KEY (post_id) REFERENCES community_posts(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS observations (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      image_url TEXT NOT NULL DEFAULT '',
+      image_original_name TEXT NOT NULL DEFAULT '',
+      image_mime_type TEXT NOT NULL DEFAULT '',
+      image_size_bytes INTEGER NOT NULL DEFAULT 0,
+      selected_species_name TEXT NOT NULL,
+      selected_species_scientific_name TEXT NOT NULL DEFAULT '',
+      confidence REAL NOT NULL,
+      top_candidates_json TEXT NOT NULL DEFAULT '[]',
+      location_text TEXT NOT NULL DEFAULT '',
+      notes TEXT NOT NULL DEFAULT '',
+      source TEXT NOT NULL DEFAULT 'osea-browser',
+      observed_at TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
     CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
     CREATE INDEX IF NOT EXISTS idx_revoked_tokens_expires_at ON revoked_tokens(expires_at);
     CREATE INDEX IF NOT EXISTS idx_community_posts_created_at
       ON community_posts(created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_community_posts_user_id_created_at
       ON community_posts(user_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_community_posts_observation_id
+      ON community_posts(observation_id);
     CREATE INDEX IF NOT EXISTS idx_community_post_reactions_post_id
       ON community_post_reactions(post_id);
     CREATE INDEX IF NOT EXISTS idx_community_post_comments_post_id_created_at
@@ -211,6 +238,10 @@ function getDatabase() {
       ON community_post_questions(post_id, created_at ASC);
     CREATE INDEX IF NOT EXISTS idx_community_post_images_post_id
       ON community_post_images(post_id);
+    CREATE INDEX IF NOT EXISTS idx_observations_user_id_created_at
+      ON observations(user_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_observations_created_at
+      ON observations(created_at DESC);
   `);
 
   migrateCommunityPostColumns(database);

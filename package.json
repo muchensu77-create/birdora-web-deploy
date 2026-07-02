@@ -1,6 +1,6 @@
 {
   "name": "birdora-web",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "private": true,
   "description": "Birdora static site with Express JWT auth backend",
   "main": "server.js",
@@ -17,6 +17,7 @@
     "test:auth": "node scripts/test-auth.js",
     "test:browser": "node scripts/test-browser-e2e.js",
     "test:community": "node scripts/test-community.js",
+    "test:observations": "node scripts/test-observations.js",
     "test:peak": "node scripts/test-peak.js",
     "test:prod:readonly": "node scripts/test-production-readonly.js",
     "test:atlas": "node scripts/validate-atlas-data.js",

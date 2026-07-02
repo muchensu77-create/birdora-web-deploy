@@ -3,6 +3,7 @@ const fs = require("fs");
 const path = require("path");
 
 const { getDatabase } = require("../db/database");
+const observationService = require("./observation.service");
 
 const REACTION_TYPES = new Set(["helpful", "curious"]);
 const DEFAULT_DATABASE_FILE = path.join(__dirname, "..", "data", "birdora.sqlite");
@@ -170,21 +171,50 @@ function analyzePostCopy({ title, body, bird, hasImage }) {
   };
 }
 
-function mapInteractionRow(row) {
+function mapInteractionRow(row, viewerId = "") {
   return {
     id: row.id,
     body: row.body,
     author: row.author,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    canManage: Boolean(viewerId && row.user_id === viewerId),
+  };
+}
+
+function mapObservationSummary(row) {
+  if (!row.observation_summary_id) return null;
+
+  return {
+    id: row.observation_summary_id,
+    selectedSpeciesName: row.observation_selected_species_name || "",
+    selectedSpeciesScientificName: row.observation_selected_species_scientific_name || "",
+    confidence: Number(row.observation_confidence) || 0,
+    observedAt: row.observation_observed_at || "",
+    source: row.observation_source || "",
+    createdAt: row.observation_created_at || "",
   };
 }
 
 function mapPostRow(row, viewerId = "", interactions = {}) {
   if (!row) return null;
 
+  const comments = interactions.comments || [];
+  const commentCount = Number(interactions.commentCount ?? comments.length) || 0;
+  const commentsPageInfo = interactions.commentsPageInfo || {
+    limit: comments.length,
+    offset: 0,
+    nextOffset: comments.length,
+    hasMore: commentCount > comments.length,
+    total: commentCount,
+    commentCount,
+  };
+  const questions = interactions.questions || [];
+
   return {
     id: row.id,
+    observationId: row.observation_id || "",
+    observationSummary: mapObservationSummary(row),
     title: row.title,
     body: row.body,
     bird: row.bird,
@@ -200,8 +230,12 @@ function mapPostRow(row, viewerId = "", interactions = {}) {
     updatedAt: row.updated_at,
     canManage: Boolean(viewerId && row.user_id === viewerId),
     feedback: interactions.feedback || createEmptyFeedback(),
-    comments: interactions.comments || [],
-    questions: interactions.questions || [],
+    commentCount,
+    commentPreview: comments,
+    comments,
+    commentsPageInfo,
+    questions,
+    questionCount: Number(interactions.questionCount ?? questions.length) || 0,
     imageUrl: row.image_storage_path ? `/api/community/posts/${encodeURIComponent(row.id)}/image` : "",
     imageAlt: row.image_original_name || "",
   };
@@ -212,6 +246,7 @@ function selectPostById(db, id) {
     SELECT
       posts.id,
       posts.user_id,
+      posts.observation_id,
       posts.title,
       posts.body,
       posts.bird,
@@ -226,16 +261,30 @@ function selectPostById(db, id) {
       images.storage_path AS image_storage_path,
       images.original_name AS image_original_name,
       images.mime_type AS image_mime_type,
-      images.size_bytes AS image_size_bytes
+      images.size_bytes AS image_size_bytes,
+      observations.id AS observation_summary_id,
+      observations.selected_species_name AS observation_selected_species_name,
+      observations.selected_species_scientific_name AS observation_selected_species_scientific_name,
+      observations.confidence AS observation_confidence,
+      observations.observed_at AS observation_observed_at,
+      observations.source AS observation_source,
+      observations.created_at AS observation_created_at
     FROM community_posts AS posts
     JOIN users ON users.id = posts.user_id
     LEFT JOIN community_post_images AS images ON images.post_id = posts.id
+    LEFT JOIN observations ON observations.id = posts.observation_id
     WHERE posts.id = ?
   `).get(id);
 }
 
 function createPostNotFoundError() {
   const error = new Error("post not found");
+  error.statusCode = 404;
+  return error;
+}
+
+function createCommentNotFoundError() {
+  const error = new Error("comment not found");
   error.statusCode = 404;
   return error;
 }
@@ -248,14 +297,17 @@ function ensureReactionType(reactionType) {
   throw error;
 }
 
-function fetchInteractions(db, postIds, viewerId = "") {
+function fetchInteractions(db, postIds, viewerId = "", options = {}) {
+  const commentPreviewLimit = Math.max(0, Math.min(10, Number(options.commentPreviewLimit ?? 3) || 0));
   const detailsByPostId = new Map(
     postIds.map((postId) => [
       postId,
       {
         feedback: createEmptyFeedback(),
         comments: [],
+        commentCount: 0,
         questions: [],
+        questionCount: 0,
       },
     ])
   );
@@ -264,28 +316,75 @@ function fetchInteractions(db, postIds, viewerId = "") {
 
   const placeholders = postIds.map(() => "?").join(", ");
 
-  const commentRows = db.prepare(`
+  const commentCountRows = db.prepare(`
     SELECT
-      comments.id,
-      comments.post_id,
-      comments.body,
-      comments.created_at,
-      comments.updated_at,
-      users.nickname AS author
-    FROM community_post_comments AS comments
-    JOIN users ON users.id = comments.user_id
-    WHERE comments.post_id IN (${placeholders})
-    ORDER BY comments.created_at ASC, comments.id ASC
+      post_id,
+      COUNT(*) AS comment_count
+    FROM community_post_comments
+    WHERE post_id IN (${placeholders})
+    GROUP BY post_id
   `).all(...postIds);
 
-  for (const row of commentRows) {
-    detailsByPostId.get(row.post_id)?.comments.push(mapInteractionRow(row));
+  for (const row of commentCountRows) {
+    const detail = detailsByPostId.get(row.post_id);
+    if (detail) detail.commentCount = Number(row.comment_count) || 0;
+  }
+
+  if (commentPreviewLimit > 0) {
+    const commentRows = db.prepare(`
+      SELECT
+        id,
+        post_id,
+        user_id,
+        body,
+        created_at,
+        updated_at,
+        author
+      FROM (
+        SELECT
+          comments.id,
+          comments.post_id,
+          comments.user_id,
+          comments.body,
+          comments.created_at,
+          comments.updated_at,
+          users.nickname AS author,
+          ROW_NUMBER() OVER (
+            PARTITION BY comments.post_id
+            ORDER BY comments.created_at DESC, comments.id DESC
+          ) AS comment_rank
+        FROM community_post_comments AS comments
+        JOIN users ON users.id = comments.user_id
+        WHERE comments.post_id IN (${placeholders})
+      )
+      WHERE comment_rank <= ?
+      ORDER BY post_id ASC, created_at ASC, id ASC
+    `).all(...postIds, commentPreviewLimit);
+
+    for (const row of commentRows) {
+      detailsByPostId.get(row.post_id)?.comments.push(mapInteractionRow(row, viewerId));
+    }
+  }
+
+  const questionCountRows = db.prepare(`
+    SELECT
+      post_id,
+      COUNT(*) AS question_count
+    FROM community_post_questions
+    WHERE post_id IN (${placeholders})
+    GROUP BY post_id
+  `).all(...postIds);
+
+  for (const row of questionCountRows) {
+    const detail = detailsByPostId.get(row.post_id);
+    if (detail) detail.questionCount = Number(row.question_count) || 0;
   }
 
   const questionRows = db.prepare(`
     SELECT
       questions.id,
       questions.post_id,
+      questions.user_id,
       questions.body,
       questions.created_at,
       questions.updated_at,
@@ -297,7 +396,7 @@ function fetchInteractions(db, postIds, viewerId = "") {
   `).all(...postIds);
 
   for (const row of questionRows) {
-    detailsByPostId.get(row.post_id)?.questions.push(mapInteractionRow(row));
+    detailsByPostId.get(row.post_id)?.questions.push(mapInteractionRow(row, viewerId));
   }
 
   const reactionRows = db.prepare(`
@@ -321,20 +420,31 @@ function fetchInteractions(db, postIds, viewerId = "") {
     };
   }
 
+  for (const detail of detailsByPostId.values()) {
+    detail.commentsPageInfo = {
+      limit: commentPreviewLimit,
+      offset: 0,
+      nextOffset: detail.comments.length,
+      hasMore: detail.commentCount > detail.comments.length,
+      total: detail.commentCount,
+      commentCount: detail.commentCount,
+    };
+  }
+
   return detailsByPostId;
 }
 
-function hydratePostRows(db, rows, viewerId = "") {
+function hydratePostRows(db, rows, viewerId = "", options = {}) {
   const postIds = rows.map((row) => row.id);
-  const interactionsByPostId = fetchInteractions(db, postIds, viewerId);
+  const interactionsByPostId = fetchInteractions(db, postIds, viewerId, options);
   return rows.map((row) => mapPostRow(row, viewerId, interactionsByPostId.get(row.id)));
 }
 
-function getPostForViewer(db, id, viewerId = "") {
+function getPostForViewer(db, id, viewerId = "", options = {}) {
   const row = selectPostById(db, id);
   if (!row) throw createPostNotFoundError();
 
-  return hydratePostRows(db, [row], viewerId)[0];
+  return hydratePostRows(db, [row], viewerId, options)[0];
 }
 
 async function listPosts({ viewerId = "", limit = 50, offset = 0 } = {}) {
@@ -345,6 +455,7 @@ async function listPosts({ viewerId = "", limit = 50, offset = 0 } = {}) {
     SELECT
       posts.id,
       posts.user_id,
+      posts.observation_id,
       posts.title,
       posts.body,
       posts.bird,
@@ -359,10 +470,18 @@ async function listPosts({ viewerId = "", limit = 50, offset = 0 } = {}) {
       images.storage_path AS image_storage_path,
       images.original_name AS image_original_name,
       images.mime_type AS image_mime_type,
-      images.size_bytes AS image_size_bytes
+      images.size_bytes AS image_size_bytes,
+      observations.id AS observation_summary_id,
+      observations.selected_species_name AS observation_selected_species_name,
+      observations.selected_species_scientific_name AS observation_selected_species_scientific_name,
+      observations.confidence AS observation_confidence,
+      observations.observed_at AS observation_observed_at,
+      observations.source AS observation_source,
+      observations.created_at AS observation_created_at
     FROM community_posts AS posts
     JOIN users ON users.id = posts.user_id
     LEFT JOIN community_post_images AS images ON images.post_id = posts.id
+    LEFT JOIN observations ON observations.id = posts.observation_id
     ORDER BY posts.created_at DESC, posts.id DESC
     LIMIT ? OFFSET ?
   `).all(safeLimit + 1, safeOffset);
@@ -371,7 +490,7 @@ async function listPosts({ viewerId = "", limit = 50, offset = 0 } = {}) {
   const pageRows = hasMore ? rows.slice(0, safeLimit) : rows;
 
   return {
-    posts: hydratePostRows(db, pageRows, viewerId),
+    posts: hydratePostRows(db, pageRows, viewerId, { commentPreviewLimit: 3 }),
     pageInfo: {
       limit: safeLimit,
       offset: safeOffset,
@@ -379,6 +498,67 @@ async function listPosts({ viewerId = "", limit = 50, offset = 0 } = {}) {
       hasMore,
     },
   };
+}
+
+function getCommentsPage(db, postId, viewerId = "", limit = 10, offset = 0) {
+  const safeLimit = Math.max(1, Math.min(50, Number(limit) || 10));
+  const safeOffset = Math.max(0, Number(offset) || 0);
+  const countRow = db.prepare(`
+    SELECT COUNT(*) AS comment_count
+    FROM community_post_comments
+    WHERE post_id = ?
+  `).get(postId);
+  const commentCount = Number(countRow?.comment_count) || 0;
+  const rows = db.prepare(`
+    SELECT
+      comments.id,
+      comments.post_id,
+      comments.user_id,
+      comments.body,
+      comments.created_at,
+      comments.updated_at,
+      users.nickname AS author
+    FROM community_post_comments AS comments
+    JOIN users ON users.id = comments.user_id
+    WHERE comments.post_id = ?
+    ORDER BY comments.created_at ASC, comments.id ASC
+    LIMIT ? OFFSET ?
+  `).all(postId, safeLimit + 1, safeOffset);
+  const hasMore = rows.length > safeLimit;
+  const pageRows = hasMore ? rows.slice(0, safeLimit) : rows;
+
+  return {
+    comments: pageRows.map((row) => mapInteractionRow(row, viewerId)),
+    pageInfo: {
+      limit: safeLimit,
+      offset: safeOffset,
+      nextOffset: safeOffset + pageRows.length,
+      hasMore,
+      total: commentCount,
+      commentCount,
+    },
+  };
+}
+
+async function getPostDetails({ id, viewerId = "", commentsLimit = 10, commentsOffset = 0 } = {}) {
+  const db = getDatabase();
+  const row = selectPostById(db, id);
+  if (!row) throw createPostNotFoundError();
+
+  const post = hydratePostRows(db, [row], viewerId, { commentPreviewLimit: 0 })[0];
+  const commentsPage = getCommentsPage(db, id, viewerId, commentsLimit, commentsOffset);
+  post.comments = commentsPage.comments;
+  post.commentPreview = commentsPage.comments;
+  post.commentCount = commentsPage.pageInfo.commentCount;
+  post.commentsPageInfo = commentsPage.pageInfo;
+  return post;
+}
+
+async function listCommentsForPost({ postId, viewerId = "", limit = 10, offset = 0 } = {}) {
+  const db = getDatabase();
+  const row = selectPostById(db, postId);
+  if (!row) throw createPostNotFoundError();
+  return getCommentsPage(db, postId, viewerId, limit, offset);
 }
 
 function savePostImage(db, postId, image) {
@@ -434,7 +614,7 @@ function removeImageFile(storageFile) {
   fs.rmSync(resolvedPath, { force: true });
 }
 
-async function createPost({ userId, title, body, bird, image }) {
+async function createPost({ userId, observationId = "", title, body, bird, image }) {
   const db = getDatabase();
   const now = new Date().toISOString();
   const id = crypto.randomUUID();
@@ -443,10 +623,15 @@ async function createPost({ userId, title, body, bird, image }) {
 
   db.exec("BEGIN");
   try {
+    if (observationId) {
+      observationService.getOwnedObservationRow(db, observationId, userId);
+    }
+
     db.prepare(`
       INSERT INTO community_posts (
         id,
         user_id,
+        observation_id,
         title,
         body,
         bird,
@@ -457,10 +642,11 @@ async function createPost({ userId, title, body, bird, image }) {
         analysis_updated_at,
         created_at,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       userId,
+      observationId || null,
       title,
       body,
       bird,
@@ -590,6 +776,31 @@ async function createComment({ postId, userId, body }) {
   return getPostForViewer(db, postId, userId);
 }
 
+async function deleteComment({ postId, commentId, userId }) {
+  const db = getDatabase();
+  const comment = db.prepare(`
+    SELECT
+      id,
+      post_id,
+      user_id
+    FROM community_post_comments
+    WHERE id = ? AND post_id = ?
+  `).get(commentId, postId);
+
+  if (!comment) throw createCommentNotFoundError();
+
+  if (comment.user_id !== userId) {
+    const error = new Error("you can only delete your own comments");
+    error.statusCode = 403;
+    throw error;
+  }
+
+  db.prepare(`
+    DELETE FROM community_post_comments
+    WHERE id = ? AND post_id = ? AND user_id = ?
+  `).run(commentId, postId, userId);
+}
+
 async function createQuestion({ postId, userId, body }) {
   const db = getDatabase();
   getPostForViewer(db, postId, userId);
@@ -645,8 +856,11 @@ module.exports = {
   createPost,
   createComment,
   createQuestion,
+  deleteComment,
   deletePost,
   getPostImage,
+  getPostDetails,
+  listCommentsForPost,
   listPosts,
   toggleReaction,
   updatePost,

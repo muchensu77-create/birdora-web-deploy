@@ -2,19 +2,22 @@
 
 Before working in this repository, read:
 
-1. `docs/release-handoff-20260702.md`
-2. `docs/launch-readiness-execution-report-20260702.md`
-3. `docs/eight-agent-audit-report-20260701.md`
-4. `docs/peak-readiness-handoff-20260701.md`
-5. `docs/peak-readiness-report-20260701.md`
-6. `docs/backend-handoff.md`
-7. `docs/bird-recognition-handoff.md`
-8. `docs/mobile-web-adaptation-handoff.md`
-9. `docs/production-launch-report-20260629.md`
+1. `docs/release-handoff-20260702-v1.5.0.md`
+2. `docs/release-handoff-20260702.md`
+3. `docs/performance-report.md`
+4. `docs/launch-readiness-execution-report-20260702.md`
+5. `docs/eight-agent-audit-report-20260701.md`
+6. `docs/peak-readiness-handoff-20260701.md`
+7. `docs/peak-readiness-report-20260701.md`
+8. `docs/backend-handoff.md`
+9. `docs/bird-recognition-handoff.md`
+10. `docs/mobile-web-adaptation-handoff.md`
+11. `docs/production-launch-report-20260629.md`
 
 Current caveat:
 
 - "文案分析" now has a lightweight rule-based MVP with persisted score, summary, tags, and suggestions. It has not been connected to an independent AI analysis / rewrite / moderation model.
+- `v1.5.0` adds observation saving and a 50-concurrency load report, but the aggregate API p95 target is still not green because auth register/login tail latency remains high.
 
 Current project path:
 

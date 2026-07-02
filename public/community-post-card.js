@@ -25,17 +25,25 @@
     const analysis = options.analysis || {};
     const analysisTags = Array.isArray(analysis.tags) ? analysis.tags : [];
     const analysisSuggestions = Array.isArray(analysis.suggestions) ? analysis.suggestions : [];
+    const isExample = options.isExample === true;
+    const exampleBadge = isExample ? `<span class="post-badge">Birdora 示例内容</span>` : "";
+    const detailAction =
+      options.canOpenDetails === false
+        ? ""
+        : `<button class="post-action" type="button" data-post-detail="${post.id}">查看详情</button>`;
     const commentToggleLabel = commentsOpen
       ? `收起《${post.title}》的评论`
       : `展开《${post.title}》的评论`;
     const managementActions =
       post.canManage && !previewMode
         ? `
-          <div class="post-management" aria-label="帖子管理">
-            <button class="post-action" type="button" data-post-edit="${post.id}">修改</button>
-            <button class="post-action is-danger" type="button" data-post-delete="${post.id}">删除</button>
-          </div>
+          <button class="post-action" type="button" data-post-edit="${post.id}">修改</button>
+          <button class="post-action is-danger" type="button" data-post-delete="${post.id}">删除</button>
         `
+        : "";
+    const headerActions =
+      detailAction || managementActions
+        ? `<div class="post-management" aria-label="帖子操作">${detailAction}${managementActions}</div>`
         : "";
     const postContent = isEditing
       ? `
@@ -132,11 +140,12 @@
     return `
       <article class="feed-card${previewClass}" data-post-id="${post.id}">
         <div class="feed-card-head">
-          <div class="feed-meta"><span>${escapeHtml(options.author)}</span><span>${escapeHtml(options.time)}</span></div>
-          ${managementActions}
+          <div class="feed-meta"><span>${escapeHtml(options.author)}</span><span>${escapeHtml(options.time)}</span>${exampleBadge}</div>
+          ${headerActions}
         </div>
         ${postImage}
         ${postContent}
+        ${options.observationHtml || ""}
         ${analysisBlock}
         ${engagementActions}
         <div class="comment-box ${commentsOpen ? "is-open" : ""}" ${isEditing ? "hidden" : ""}>

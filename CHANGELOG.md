@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.5.0 - 2026-07-02
+
+- Added authenticated observation records for saved recognition results, including image storage, Top 5 candidate snapshots, owner-only reads, and deletion rules.
+- Added frontend observation history, save-recognition flow, and community posting linked to saved observations.
+- Added `observation-api.js` to the public sync allowlist and wired observation APIs into the Express app.
+- Added Origin write protection, request IDs, structured error logging, and sensitive log redaction.
+- Added comment pagination, comment deletion, detail views, and observation-aware community cards.
+- Raised account password minimum length to 8 characters and updated auth tests accordingly.
+- Added 50-concurrency performance test planning, JSON/Markdown reports, and load-test cleanup tooling.
+- Documented a performance finding: the load test completed without 5xx/timeouts, but the aggregate API p95 threshold is not yet green because auth register/login tail latency remains high.
+
 ## 1.4.0 - 2026-07-02
 
 - Added the 2026-07-02 launch-readiness release handoff with version, collaboration, validation, and remaining-risk notes.

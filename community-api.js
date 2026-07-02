@@ -53,6 +53,10 @@
           pageInfo: data?.pageInfo || { limit: 0, offset: 0, nextOffset: 0, hasMore: false },
         };
       },
+      async get(id, options = {}) {
+        const data = await request(`/${encodeURIComponent(id)}`, { query: options });
+        return normalizePost(data.post);
+      },
       async create(post) {
         const data = await request("", { method: "POST", body: post });
         return normalizePost(data.post);
@@ -73,6 +77,16 @@
           body: { body },
         });
         return normalizePost(data.post);
+      },
+      async listComments(id, options = {}) {
+        const data = await request(`/${encodeURIComponent(id)}/comments`, { query: options });
+        return {
+          comments: Array.isArray(data?.comments) ? data.comments : [],
+          pageInfo: data?.pageInfo || { limit: 0, offset: 0, nextOffset: 0, hasMore: false, total: 0, commentCount: 0 },
+        };
+      },
+      async deleteComment(postId, commentId) {
+        await request(`/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}`, { method: "DELETE" });
       },
       async question(id, body) {
         const data = await request(`/${encodeURIComponent(id)}/questions`, {

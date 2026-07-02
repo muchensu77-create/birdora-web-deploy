@@ -103,9 +103,21 @@
               </div>
               <div><dt>建议</dt><dd>记录地点、保留距离，不干扰栖息。</dd></div>
             </dl>
+            <p class="form-message observation-message" id="observationMessage" aria-live="polite" role="status"></p>
+            <div class="recognition-actions">
+              <button class="secondary-btn full" id="saveObservation" type="button">确认并保存观测记录</button>
+            </div>
             <button class="primary-btn full" id="shareDetected" type="button">发布到社区</button>
           </article>
         </div>
+      </section>
+
+      <section class="observation-section" id="observations">
+        <div class="section-head compact">
+          <p class="eyebrow">我的观测记录</p>
+          <h2>已确认的识别记录</h2>
+        </div>
+        <div class="observation-list" id="observationList" aria-live="polite"></div>
       </section>
 
       <section class="atlas-section" id="atlas">
@@ -173,6 +185,7 @@
 
     <script src="./assets/vendor/ort.min.js"></script>
     <script src="./community-api.js"></script>
+    <script src="./observation-api.js"></script>
     <script src="./community-post-card.js"></script>
     <script src="./script.js"></script>
   </body>

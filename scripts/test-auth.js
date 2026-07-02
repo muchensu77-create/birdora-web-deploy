@@ -1,5 +1,10 @@
 const DEFAULT_PORT = process.env.PORT || "4000";
 const BASE_URL = process.env.AUTH_BASE_URL || `http://127.0.0.1:${DEFAULT_PORT}`;
+const TEST_ORIGIN = process.env.TEST_ORIGIN || "http://127.0.0.1:4174";
+const BAD_TEST_ORIGIN = process.env.BAD_TEST_ORIGIN || "https://evil.example";
+const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+const bcrypt = require("bcryptjs");
+const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
 
 const { getDatabase } = require("../app/db/database");
@@ -16,14 +21,17 @@ const generatedTestEmail = !process.env.AUTH_TEST_EMAIL;
 const testAccount = {
   email: process.env.AUTH_TEST_EMAIL || `auth-test-${Date.now()}@example.com`,
   nickname: "testuser",
+  password: "12345678",
+};
+const legacyAccount = {
+  email: `auth-legacy-${Date.now()}@example.com`,
+  nickname: "legacyuser",
   password: "123456",
 };
 
 let issuedCookieToken = null;
 
 function cleanupTestData() {
-  if (!generatedTestEmail) return;
-
   try {
     const db = getDatabase();
     const payload = issuedCookieToken ? jwt.decode(issuedCookieToken) : null;
@@ -31,11 +39,37 @@ function cleanupTestData() {
       db.prepare("DELETE FROM revoked_tokens WHERE jti = ?").run(payload.jti);
     }
 
-    db.prepare("DELETE FROM users WHERE email = ?").run(testAccount.email);
+    if (generatedTestEmail) {
+      db.prepare("DELETE FROM users WHERE email = ?").run(testAccount.email);
+    }
+    db.prepare("DELETE FROM users WHERE email = ?").run(legacyAccount.email);
     console.log(`Cleaned generated test account: ${testAccount.email}`);
   } catch (error) {
     console.warn(`Could not clean generated test account: ${error.message}`);
   }
+}
+
+async function createLegacyShortPasswordAccount() {
+  const db = getDatabase();
+  const now = new Date().toISOString();
+  const passwordHash = await bcrypt.hash(legacyAccount.password, 10);
+  db.prepare(`
+    INSERT INTO users (
+      id,
+      email,
+      nickname,
+      password_hash,
+      created_at,
+      updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?)
+  `).run(
+    crypto.randomUUID(),
+    legacyAccount.email,
+    legacyAccount.nickname,
+    passwordHash,
+    now,
+    now
+  );
 }
 
 function createCookieJar() {
@@ -88,6 +122,10 @@ function responseOmitsAuthFields(body) {
   return leakedFields.every((field) => !Object.prototype.hasOwnProperty.call(body, field));
 }
 
+function hasSourceHeader(headers) {
+  return Object.keys(headers).some((name) => ["origin", "referer"].includes(name.toLowerCase()));
+}
+
 async function request(path, options = {}) {
   if (typeof fetch !== "function") {
     throw new Error("Current Node.js runtime does not support global fetch.");
@@ -98,7 +136,9 @@ async function request(path, options = {}) {
     json,
     cookieJar,
     headers = {},
+    skipOrigin = false,
   } = options;
+  const methodName = String(method).toUpperCase();
 
   const finalHeaders = {
     Accept: "application/json",
@@ -113,8 +153,12 @@ async function request(path, options = {}) {
     finalHeaders.Cookie = cookieJar.toHeader();
   }
 
+  if (!SAFE_METHODS.has(methodName) && !skipOrigin && !hasSourceHeader(finalHeaders)) {
+    finalHeaders.Origin = TEST_ORIGIN;
+  }
+
   const response = await fetch(`${BASE_URL}${path}`, {
-    method,
+    method: methodName,
     headers: finalHeaders,
     body: json ? JSON.stringify(json) : undefined,
   });
@@ -136,6 +180,7 @@ async function request(path, options = {}) {
     ok: response.ok,
     status: response.status,
     body,
+    requestId: response.headers.get("x-request-id") || "",
   };
 }
 
@@ -154,7 +199,127 @@ async function main() {
   console.log(`Auth API base URL: ${BASE_URL}`);
   console.log(`Testing routes: ${JSON.stringify(routes)}`);
 
+  printStep("0. Request id header");
+  const expectedRequestId = "thread-a1-test-id";
+  const statusWithRequestId = await request(routes.status, {
+    method: "GET",
+    headers: {
+      "X-Request-Id": expectedRequestId,
+    },
+  });
+  const requestIdPassed = statusWithRequestId.requestId === expectedRequestId;
+  printResult("Response echoes safe X-Request-Id", requestIdPassed);
+  if (!requestIdPassed) {
+    summary.push({ step: "request-id", ok: false, detail: statusWithRequestId.requestId });
+    throw new Error("Response should include the request id header.");
+  }
+  summary.push({ step: "request-id", ok: true });
+
+  const healthWithBadOrigin = await request("/api/health", {
+    method: "GET",
+    headers: {
+      Origin: BAD_TEST_ORIGIN,
+    },
+  });
+  const healthPassed = healthWithBadOrigin.status === 200 && healthWithBadOrigin.body?.ok === true;
+  printResult("/api/health is not origin-guarded", healthPassed);
+  if (!healthPassed) {
+    summary.push({ step: "health-origin", ok: false, detail: healthWithBadOrigin.body });
+    throw new Error("/api/health should not be blocked by Origin guard.");
+  }
+  summary.push({ step: "health-origin", ok: true });
+
+  const optionsLogin = await request(routes.login, {
+    method: "OPTIONS",
+    headers: {
+      Origin: TEST_ORIGIN,
+      "Access-Control-Request-Method": "POST",
+    },
+  });
+  const optionsPassed = optionsLogin.status === 204 || optionsLogin.status === 200;
+  printResult("OPTIONS preflight is not origin-guarded", optionsPassed);
+  if (!optionsPassed) {
+    summary.push({ step: "options-origin", ok: false, detail: optionsLogin.status });
+    throw new Error("OPTIONS preflight should not be blocked by Origin guard.");
+  }
+  summary.push({ step: "options-origin", ok: true, status: optionsLogin.status });
+
+  printStep("0b. Origin guard");
+  const badOriginLogin = await request(routes.login, {
+    method: "POST",
+    headers: {
+      Origin: BAD_TEST_ORIGIN,
+    },
+    json: {
+      email: testAccount.email,
+      password: testAccount.password,
+    },
+  });
+  const badOriginBlocked =
+    badOriginLogin.status === 403 && badOriginLogin.body?.message === "Forbidden" && Boolean(badOriginLogin.requestId);
+  printResult("Non-allowlisted Origin login blocked", badOriginBlocked);
+  if (!badOriginBlocked) {
+    summary.push({ step: "bad-origin-login", ok: false, detail: badOriginLogin.body });
+    throw new Error("Login should reject non-allowlisted Origin.");
+  }
+  summary.push({ step: "bad-origin-login", ok: true, status: badOriginLogin.status });
+
+  const missingOriginLogin = await request(routes.login, {
+    method: "POST",
+    skipOrigin: true,
+    json: {
+      email: testAccount.email,
+      password: testAccount.password,
+    },
+  });
+  const missingOriginBlocked =
+    missingOriginLogin.status === 403 &&
+    missingOriginLogin.body?.message === "Forbidden" &&
+    Boolean(missingOriginLogin.requestId);
+  printResult("Missing Origin/Referer login blocked", missingOriginBlocked);
+  if (!missingOriginBlocked) {
+    summary.push({ step: "missing-origin-login", ok: false, detail: missingOriginLogin.body });
+    throw new Error("Login should reject writes without Origin or Referer.");
+  }
+  summary.push({ step: "missing-origin-login", ok: true, status: missingOriginLogin.status });
+
+  const refererFallbackRegister = await request(routes.register, {
+    method: "POST",
+    skipOrigin: true,
+    headers: {
+      Referer: `${TEST_ORIGIN}/login.html`,
+    },
+    json: {
+      email: `referer-fallback-${Date.now()}@example.com`,
+      password: "1234567",
+      nickname: "refererfallback",
+    },
+  });
+  const refererFallbackPassed = refererFallbackRegister.status === 400;
+  printResult("Allowed Referer fallback reaches auth validation", refererFallbackPassed);
+  if (!refererFallbackPassed) {
+    summary.push({ step: "referer-fallback", ok: false, detail: refererFallbackRegister.body });
+    throw new Error("Allowed Referer should pass Origin guard and reach auth validation.");
+  }
+  summary.push({ step: "referer-fallback", ok: true, status: refererFallbackRegister.status });
+
   printStep("1. Register test account");
+  const weakRegisterResult = await request(routes.register, {
+    method: "POST",
+    json: {
+      email: `weak-password-${Date.now()}@example.com`,
+      password: "1234567",
+      nickname: "weakpassword",
+    },
+  });
+  const weakPasswordRejected = weakRegisterResult.status === 400;
+  printResult("Password shorter than 8 characters rejected", weakPasswordRejected);
+  if (!weakPasswordRejected) {
+    summary.push({ step: "weak-password", ok: false, detail: weakRegisterResult.body });
+    throw new Error("Register should reject passwords shorter than 8 characters.");
+  }
+  summary.push({ step: "weak-password", ok: true, status: weakRegisterResult.status });
+
   const registerResult = await request(routes.register, {
     method: "POST",
     json: {
@@ -204,6 +369,26 @@ async function main() {
     throw new Error("Invalid login should be rejected.");
   }
   summary.push({ step: "invalid-login", ok: true, status: invalidLoginResult.status });
+
+  printStep("2b. Existing short-password account can still login");
+  await createLegacyShortPasswordAccount();
+  const legacyJar = createCookieJar();
+  const legacyLoginResult = await request(routes.login, {
+    method: "POST",
+    cookieJar: legacyJar,
+    json: {
+      email: legacyAccount.email,
+      password: legacyAccount.password,
+    },
+  });
+  const legacyLoginPassed = legacyLoginResult.status === 200 && legacyJar.count() > 0;
+  printResult("Legacy short-password login successful", legacyLoginPassed);
+  if (!legacyLoginPassed) {
+    console.log(legacyLoginResult.body);
+    summary.push({ step: "legacy-login", ok: false, detail: legacyLoginResult.body });
+    throw new Error("Existing users with short passwords should still be able to login.");
+  }
+  summary.push({ step: "legacy-login", ok: true, status: legacyLoginResult.status });
 
   printStep("3. Login test account");
   const loginResult = await request(routes.login, {

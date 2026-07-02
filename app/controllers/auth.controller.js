@@ -8,6 +8,7 @@ const tokenService = require("../services/token.service");
 const userService = require("../services/user.service");
 
 const DEFAULT_AUTH_COOKIE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const MIN_PASSWORD_LENGTH = 8;
 
 function isValidEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -80,8 +81,8 @@ async function register(req, res) {
     return;
   }
 
-  if (password.length < 6) {
-    res.status(400).json({ message: "password must be at least 6 characters" });
+  if (password.length < MIN_PASSWORD_LENGTH) {
+    res.status(400).json({ message: `password must be at least ${MIN_PASSWORD_LENGTH} characters` });
     return;
   }
 

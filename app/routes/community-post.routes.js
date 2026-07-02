@@ -32,6 +32,11 @@ router.post(
   asyncHandler(communityPostController.create)
 );
 router.get("/:id/image", asyncHandler(communityPostController.image));
+router.get(
+  "/:id/comments",
+  asyncHandler(authJwt.attachSession),
+  asyncHandler(communityPostController.comments)
+);
 router.post(
   "/:id/comments",
   asyncHandler(authJwt.requireAuth),
@@ -50,6 +55,13 @@ router.post(
   communityWriteLimiter,
   asyncHandler(communityPostController.react)
 );
+router.delete(
+  "/:postId/comments/:commentId",
+  asyncHandler(authJwt.requireAuth),
+  communityWriteLimiter,
+  asyncHandler(communityPostController.removeComment)
+);
+router.get("/:id", asyncHandler(authJwt.attachSession), asyncHandler(communityPostController.detail));
 router.patch(
   "/:id",
   asyncHandler(authJwt.requireAuth),

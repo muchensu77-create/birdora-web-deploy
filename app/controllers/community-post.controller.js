@@ -8,6 +8,8 @@ const QUESTION_MAX_LENGTH = 180;
 const IMAGE_MAX_BYTES = 1024 * 1024;
 const POSTS_DEFAULT_LIMIT = 20;
 const POSTS_MAX_LIMIT = 100;
+const COMMENTS_DEFAULT_LIMIT = 10;
+const COMMENTS_MAX_LIMIT = 50;
 const REACTION_TYPES = new Set(["helpful", "curious"]);
 const SUPPORTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
@@ -17,6 +19,12 @@ function normalizeRequiredText(value, maxLength) {
   const text = String(value || "").trim();
   if (!text || text.length > maxLength) return null;
   return text;
+}
+
+function normalizeOptionalId(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  return text.length <= 120 ? text : null;
 }
 
 function hasBytePrefix(buffer, bytes) {
@@ -119,14 +127,30 @@ async function list(req, res) {
   res.json(result);
 }
 
+async function detail(req, res) {
+  const post = await communityPostService.getPostDetails({
+    id: req.params.id,
+    viewerId: req.user?.id || "",
+    commentsLimit: normalizeNumber(req.query.limit || req.query.commentLimit, COMMENTS_DEFAULT_LIMIT, COMMENTS_MAX_LIMIT),
+    commentsOffset: normalizeNumber(req.query.offset || req.query.commentOffset, 0),
+  });
+  res.json({ post });
+}
+
 async function create(req, res) {
   const postBody = validatePostBody(req, res);
   if (!postBody) return;
+  const observationId = normalizeOptionalId(req.body.observationId);
+  if (observationId === null) {
+    res.status(400).json({ message: "observationId is invalid" });
+    return;
+  }
   const image = validatePostImage(req, res);
   if (image === false) return;
 
   const post = await communityPostService.createPost({
     userId: req.user.id,
+    observationId,
     image,
     ...postBody,
   });
@@ -166,6 +190,25 @@ async function comment(req, res) {
   res.status(201).json({ post });
 }
 
+async function comments(req, res) {
+  const result = await communityPostService.listCommentsForPost({
+    postId: req.params.id,
+    viewerId: req.user?.id || "",
+    limit: normalizeNumber(req.query.limit, COMMENTS_DEFAULT_LIMIT, COMMENTS_MAX_LIMIT),
+    offset: normalizeNumber(req.query.offset, 0),
+  });
+  res.json(result);
+}
+
+async function removeComment(req, res) {
+  await communityPostService.deleteComment({
+    postId: req.params.postId,
+    commentId: req.params.commentId,
+    userId: req.user.id,
+  });
+  res.status(204).end();
+}
+
 async function question(req, res) {
   const body = validateRequiredBody(req, res, QUESTION_MAX_LENGTH, "question");
   if (!body) return;
@@ -202,11 +245,14 @@ async function image(req, res) {
 
 module.exports = {
   comment,
+  comments,
   create,
+  detail,
   image,
   list,
   question,
   react,
   remove,
+  removeComment,
   update,
 };
