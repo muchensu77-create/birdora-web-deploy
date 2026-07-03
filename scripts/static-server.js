@@ -15,6 +15,7 @@ const contentTypes = {
   ".mjs": "application/javascript; charset=utf-8",
   ".onnx": "application/octet-stream",
   ".png": "image/png",
+  ".svg": "image/svg+xml",
   ".wasm": "application/wasm",
 };
 

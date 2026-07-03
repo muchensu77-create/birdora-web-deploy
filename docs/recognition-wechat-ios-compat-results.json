@@ -1,0 +1,326 @@
+{
+  "runId": "browser-recognition-ramp-1783083882157",
+  "startedAt": "2026-07-03T13:04:42.157Z",
+  "webBaseUrl": "http://127.0.0.1:64972",
+  "apiBaseUrl": "http://127.0.0.1:64975",
+  "headless": true,
+  "desktopRamps": [],
+  "mobileRamps": [
+    1
+  ],
+  "recognitionTimeoutMs": 90000,
+  "results": [
+    {
+      "scenarioId": "mobile-390x844-ramp-1-1783083880146",
+      "ramp": 1,
+      "viewport": {
+        "name": "mobile-390x844",
+        "width": 390,
+        "height": 844,
+        "deviceScaleFactor": 3,
+        "mobile": true,
+        "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.49 NetType/WIFI Language/zh_CN"
+      },
+      "sampleImageUrl": "./assets/birds/kingfisher.jpg",
+      "firstResults": [
+        {
+          "label": "mobile-390x844-ramp-1-1783083880146-tab-1-first",
+          "status": "success",
+          "totalMs": 316,
+          "classifyMs": null,
+          "classifierMs": null,
+          "labelMs": null,
+          "terminal": {
+            "status": "success",
+            "t": 1049.7000000476837,
+            "result": {
+              "top": {
+                "index": 3334,
+                "cn": "普通翠鸟",
+                "en": "Common Kingfisher",
+                "latin": "Alcedo atthis",
+                "probability": 0.9530786099589866,
+                "isMapped": true,
+                "hasAtlasBird": true
+              },
+              "outputCount": 11000,
+              "labelCount": 10964,
+              "unmappedOutputCount": 36,
+              "isConfident": true,
+              "candidates": [
+                {
+                  "index": 3334,
+                  "cn": "普通翠鸟",
+                  "en": "Common Kingfisher",
+                  "latin": "Alcedo atthis",
+                  "probability": 0.9530786099589866,
+                  "isMapped": true,
+                  "hasAtlasBird": true
+                },
+                {
+                  "index": 3333,
+                  "cn": "蓝耳翠鸟",
+                  "en": "Blue-eared Kingfisher",
+                  "latin": "Alcedo meninting",
+                  "probability": 0.0036918355695643394,
+                  "isMapped": true,
+                  "hasAtlasBird": false
+                },
+                {
+                  "index": 3330,
+                  "cn": "小蓝翠鸟",
+                  "en": "Cerulean Kingfisher",
+                  "latin": "Alcedo coerulescens",
+                  "probability": 0.0027369484956456564,
+                  "isMapped": true,
+                  "hasAtlasBird": false
+                },
+                {
+                  "index": 3365,
+                  "cn": "棕腹鱼狗",
+                  "en": "Ringed Kingfisher",
+                  "latin": "Megaceryle torquata",
+                  "probability": 0.0021747126087877356,
+                  "isMapped": true,
+                  "hasAtlasBird": false
+                },
+                {
+                  "index": 3335,
+                  "cn": "半领翠鸟",
+                  "en": "Half-collared Kingfisher",
+                  "latin": "Alcedo semitorquata",
+                  "probability": 0.0016331995851726993,
+                  "isMapped": true,
+                  "hasAtlasBird": false
+                }
+              ]
+            }
+          },
+          "classifyResult": null,
+          "classifyError": "",
+          "dom": {
+            "resultName": "翠鸟",
+            "resultMeta": "Alcedo atthis · 河流、湖泊、湿地",
+            "modelDetail": "兼容识别服务 11,000 维输出，已映射 10,964 个标签；36 个输出类仍待补标签映射。Top 1：普通翠鸟 / Common Kingfisher。",
+            "candidateText": [
+              "1. 普通翠鸟\n                Common Kingfisher · Alcedo atthis\n              \n              \n                95%\n                已选择\n              \n            \n            图鉴",
+              "2. 蓝耳翠鸟\n                Blue-eared Kingfisher · Alcedo meninting\n              \n              \n                <1%\n                图鉴待补充\n              \n            \n            图鉴",
+              "3. 小蓝翠鸟\n                Cerulean Kingfisher · Alcedo coerulescens\n              \n              \n                <1%\n                图鉴待补充\n              \n            \n            图鉴",
+              "4. 棕腹鱼狗\n                Ringed Kingfisher · Megaceryle torquata\n              \n              \n                <1%\n                图鉴待补充\n              \n            \n            图鉴",
+              "5. 半领翠鸟\n                Half-collared Kingfisher · Alcedo semitorquata\n              \n              \n                <1%\n                图鉴待补充\n              \n            \n            图鉴"
+            ],
+            "saveDisabled": false,
+            "previewLoaded": true
+          },
+          "events": [
+            {
+              "type": "pending",
+              "offsetMs": 0,
+              "text": "正在读取照片并准备 OSEA 鸟类识别模型..."
+            },
+            {
+              "type": "pending",
+              "offsetMs": 11,
+              "text": "检测到 iPhone 微信环境，正在切换到兼容识别服务..."
+            },
+            {
+              "type": "pending",
+              "offsetMs": 11,
+              "text": "正在使用兼容识别服务分析照片..."
+            }
+          ],
+          "resources": [
+            {
+              "name": "bird_info.json",
+              "duration": 11,
+              "startTime": 192,
+              "responseEnd": 203,
+              "transferSize": 713208,
+              "encodedBodySize": 712908
+            }
+          ],
+          "pageErrors": []
+        }
+      ],
+      "secondResults": [
+        {
+          "label": "mobile-390x844-ramp-1-1783083880146-tab-1-second",
+          "status": "success",
+          "totalMs": 65,
+          "classifyMs": null,
+          "classifierMs": null,
+          "labelMs": null,
+          "terminal": {
+            "status": "success",
+            "t": 1220.5,
+            "result": {
+              "top": {
+                "index": 3334,
+                "cn": "普通翠鸟",
+                "en": "Common Kingfisher",
+                "latin": "Alcedo atthis",
+                "probability": 0.9530786099589866,
+                "isMapped": true,
+                "hasAtlasBird": true
+              },
+              "outputCount": 11000,
+              "labelCount": 10964,
+              "unmappedOutputCount": 36,
+              "isConfident": true,
+              "candidates": [
+                {
+                  "index": 3334,
+                  "cn": "普通翠鸟",
+                  "en": "Common Kingfisher",
+                  "latin": "Alcedo atthis",
+                  "probability": 0.9530786099589866,
+                  "isMapped": true,
+                  "hasAtlasBird": true
+                },
+                {
+                  "index": 3333,
+                  "cn": "蓝耳翠鸟",
+                  "en": "Blue-eared Kingfisher",
+                  "latin": "Alcedo meninting",
+                  "probability": 0.0036918355695643394,
+                  "isMapped": true,
+                  "hasAtlasBird": false
+                },
+                {
+                  "index": 3330,
+                  "cn": "小蓝翠鸟",
+                  "en": "Cerulean Kingfisher",
+                  "latin": "Alcedo coerulescens",
+                  "probability": 0.0027369484956456564,
+                  "isMapped": true,
+                  "hasAtlasBird": false
+                },
+                {
+                  "index": 3365,
+                  "cn": "棕腹鱼狗",
+                  "en": "Ringed Kingfisher",
+                  "latin": "Megaceryle torquata",
+                  "probability": 0.0021747126087877356,
+                  "isMapped": true,
+                  "hasAtlasBird": false
+                },
+                {
+                  "index": 3335,
+                  "cn": "半领翠鸟",
+                  "en": "Half-collared Kingfisher",
+                  "latin": "Alcedo semitorquata",
+                  "probability": 0.0016331995851726993,
+                  "isMapped": true,
+                  "hasAtlasBird": false
+                }
+              ]
+            }
+          },
+          "classifyResult": null,
+          "classifyError": "",
+          "dom": {
+            "resultName": "翠鸟",
+            "resultMeta": "Alcedo atthis · 河流、湖泊、湿地",
+            "modelDetail": "兼容识别服务 11,000 维输出，已映射 10,964 个标签；36 个输出类仍待补标签映射。Top 1：普通翠鸟 / Common Kingfisher。",
+            "candidateText": [
+              "1. 普通翠鸟\n                Common Kingfisher · Alcedo atthis\n              \n              \n                95%\n                已选择\n              \n            \n            图鉴",
+              "2. 蓝耳翠鸟\n                Blue-eared Kingfisher · Alcedo meninting\n              \n              \n                <1%\n                图鉴待补充\n              \n            \n            图鉴",
+              "3. 小蓝翠鸟\n                Cerulean Kingfisher · Alcedo coerulescens\n              \n              \n                <1%\n                图鉴待补充\n              \n            \n            图鉴",
+              "4. 棕腹鱼狗\n                Ringed Kingfisher · Megaceryle torquata\n              \n              \n                <1%\n                图鉴待补充\n              \n            \n            图鉴",
+              "5. 半领翠鸟\n                Half-collared Kingfisher · Alcedo semitorquata\n              \n              \n                <1%\n                图鉴待补充\n              \n            \n            图鉴"
+            ],
+            "saveDisabled": false,
+            "previewLoaded": true
+          },
+          "events": [
+            {
+              "type": "pending",
+              "offsetMs": 0,
+              "text": "正在读取照片并准备 OSEA 鸟类识别模型..."
+            },
+            {
+              "type": "pending",
+              "offsetMs": 5,
+              "text": "检测到 iPhone 微信环境，正在切换到兼容识别服务..."
+            },
+            {
+              "type": "pending",
+              "offsetMs": 5,
+              "text": "正在使用兼容识别服务分析照片..."
+            }
+          ],
+          "resources": [
+            {
+              "name": "bird_info.json",
+              "duration": 11,
+              "startTime": 192,
+              "responseEnd": 203,
+              "transferSize": 713208,
+              "encodedBodySize": 712908
+            }
+          ],
+          "pageErrors": []
+        }
+      ],
+      "firstSummary": {
+        "total": 1,
+        "completed": 1,
+        "failed": 0,
+        "avgMs": 316,
+        "p50Ms": 316,
+        "p95Ms": 316,
+        "maxMs": 316,
+        "classifyAvgMs": null,
+        "classifyP95Ms": null
+      },
+      "secondSummary": {
+        "total": 1,
+        "completed": 1,
+        "failed": 0,
+        "avgMs": 65,
+        "p50Ms": 65,
+        "p95Ms": 65,
+        "maxMs": 65,
+        "classifyAvgMs": null,
+        "classifyP95Ms": null
+      },
+      "diagnostics": [
+        {
+          "label": "mobile-390x844-ramp-1-1783083880146-tab-1",
+          "consoleErrors": [],
+          "consoleWarnings": [],
+          "exceptions": [],
+          "networkFailures": [],
+          "crashed": false,
+          "firstHealth": {
+            "ok": true,
+            "readyState": "complete",
+            "title": "Birdora 观鸟眼镜",
+            "bodyTextLength": 3904,
+            "lastRunStatus": "success"
+          },
+          "secondHealth": {
+            "ok": true,
+            "readyState": "complete",
+            "title": "Birdora 观鸟眼镜",
+            "bodyTextLength": 3904,
+            "lastRunStatus": "success"
+          },
+          "performance": {
+            "jsHeapUsedSize": 5917084,
+            "nodes": 2254,
+            "documents": 4
+          }
+        }
+      ],
+      "diagnosticsSummary": {
+        "consoleErrors": 0,
+        "consoleWarnings": 0,
+        "exceptions": 0,
+        "networkFailures": 0,
+        "crashes": 0,
+        "unhealthyPages": 0
+      }
+    }
+  ]
+}

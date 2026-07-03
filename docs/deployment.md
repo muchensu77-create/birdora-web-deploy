@@ -1,12 +1,12 @@
 # Birdora 服务器部署说明
 
-更新日期：2026-06-29
+更新日期：2026-07-01
 
 本文档用于单机服务器部署。当前推荐形态：
 
 - Nginx 只托管 `public/` 静态前端文件
-- Node.js 运行 Express 认证 API
-- SQLite 保存认证数据
+- Node.js 运行 Express 认证和社区 API
+- SQLite 保存认证和社区数据
 - PM2 管理 Node 进程
 
 如果部署到已经运行 `birdora-api` 和 `zhubao-api` 的服务器，必须先看防冲突计划：
@@ -91,11 +91,13 @@ NODE_ENV=production
 NODE_INTERPRETER=/opt/node-v24/bin/node
 PORT=3003
 CORS_ORIGIN=https://birdora.birdai-glasses.com
+ALLOWED_ORIGINS=https://birdora.birdai-glasses.com
 JWT_SECRET=replace-with-a-long-random-secret-at-least-32-chars
 JWT_EXPIRES_IN=7d
 JWT_COOKIE_NAME=birdora_token
-AUTH_RATE_LIMIT=30
+AUTH_RATE_LIMIT=120
 DATABASE_FILE=/var/lib/birdora/birdora.sqlite
+COMMUNITY_UPLOAD_DIR=/var/lib/birdora/uploads/community
 TRUST_PROXY=1
 ```
 
@@ -104,7 +106,9 @@ TRUST_PROXY=1
 - `JWT_SECRET` 必须是强随机值。
 - 不要使用模板里的 `replace-with-*` 占位值；生产服务和安装脚本都会拒绝它。
 - `CORS_ORIGIN` 必须是前端正式域名。
+- `ALLOWED_ORIGINS` 用于写入接口 Origin / Referer 防护；生产建议与正式前端域名一致，多个前端域名用英文逗号分隔，不能使用 `*`。
 - `DATABASE_FILE` 建议放到 `/var/lib/birdora/` 这类可持久化、可备份的数据目录。
+- `COMMUNITY_UPLOAD_DIR` 可省略；默认会跟随 `DATABASE_FILE` 进入 `/var/lib/birdora/uploads/community`。
 - `TRUST_PROXY=1` 适用于 Nginx 反向代理到 Node.js 的单代理部署。
 
 ## 4. 数据目录
@@ -115,7 +119,7 @@ sudo chown -R root:root /var/lib/birdora
 chmod 700 /var/lib/birdora
 ```
 
-SQLite 数据库会在服务启动时自动创建。
+SQLite 数据库和社区图片目录会在服务启动或首次发帖时自动创建。
 如果 PM2 不是以 `root` 用户运行，需要把 `/var/lib/birdora` 的属主改成实际运行 PM2 的用户。
 
 ## 5. DNS 和 HTTPS 证书
@@ -231,6 +235,7 @@ server {
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
+    # Keep browser Origin/Referer headers unchanged for write-request protection.
   }
 
   location / {
@@ -270,9 +275,10 @@ AUTH_BASE_URL=https://birdora.birdai-glasses.com pnpm test:auth
 /var/lib/birdora/birdora.sqlite
 /var/lib/birdora/birdora.sqlite-wal
 /var/lib/birdora/birdora.sqlite-shm
+/var/lib/birdora/uploads/community/
 ```
 
-建议每天做一次快照，并在升级前手动备份。
+建议每天对 `/var/lib/birdora/` 整目录做一次快照，并在升级前手动备份。
 
 ## 10. 回滚
 
@@ -290,6 +296,6 @@ pm2 start ecosystem.config.cjs
 数据库回滚：
 
 1. 停止 PM2 服务。
-2. 恢复 SQLite 备份文件。
+2. 恢复 SQLite 备份文件和 `uploads/community/` 图片目录。
 3. 启动 PM2 服务。
-4. 重新验证登录注册流程。
+4. 重新验证登录注册和社区带图帖子读取流程。

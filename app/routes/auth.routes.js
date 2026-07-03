@@ -7,7 +7,7 @@ const authJwt = require("../middleware/auth-jwt");
 const router = express.Router();
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: Number(process.env.AUTH_RATE_LIMIT || 30),
+  limit: Number(process.env.AUTH_RATE_LIMIT || 120),
   standardHeaders: "draft-8",
   legacyHeaders: false,
   message: {

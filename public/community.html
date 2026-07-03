@@ -4,8 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>观鸟社区 - Birdora</title>
-    <link rel="icon" href="data:," />
+    <link rel="icon" type="image/svg+xml" sizes="any" href="./assets/favicon.svg" />
     <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./community-post-card.css" />
   </head>
   <body data-page="community">
     <header class="topbar">
@@ -31,7 +32,7 @@
         <div class="section-head">
           <p class="eyebrow">Birdora 社区</p>
           <h1>观鸟社区</h1>
-          <p>在这里浏览推荐观鸟笔记，或查看你自己发布过的全部记录。</p>
+          <p>浏览所有用户公开发布的观鸟笔记，登录后可修改或删除自己的记录。</p>
         </div>
       </section>
 
@@ -50,6 +51,9 @@
     </footer>
 
     <script src="./assets/vendor/ort.min.js"></script>
+    <script src="./community-api.js"></script>
+    <script src="./observation-api.js"></script>
+    <script src="./community-post-card.js"></script>
     <script src="./script.js"></script>
   </body>
 </html>

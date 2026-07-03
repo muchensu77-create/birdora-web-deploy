@@ -1,0 +1,308 @@
+[
+  {
+    "step": 1,
+    "name": "desktop-login",
+    "note": "Desktop login baseline",
+    "screenshot": "audit/ui-a11y-20260630/01-desktop-login.png",
+    "bytes": 384761,
+    "title": "登录 / 注册 - Birdora",
+    "url": "http://127.0.0.1:4175/login.html",
+    "viewport": {
+      "width": 1440,
+      "height": 1000
+    },
+    "scroll": {
+      "width": 1440,
+      "height": 1000,
+      "clientWidth": 1440
+    },
+    "hasHorizontalOverflow": false,
+    "focusableCount": 10,
+    "unlabeledControls": [],
+    "topbar": null,
+    "messageText": "",
+    "activeTab": "",
+    "userBadge": ""
+  },
+  {
+    "step": 2,
+    "name": "mobile-register-empty",
+    "note": "Mobile register state before input",
+    "screenshot": "audit/ui-a11y-20260630/02-mobile-register-empty.png",
+    "bytes": 348099,
+    "title": "登录 / 注册 - Birdora",
+    "url": "http://127.0.0.1:4175/login.html?next=%2Findex.html%23community",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "scroll": {
+      "width": 390,
+      "height": 986,
+      "clientWidth": 390
+    },
+    "hasHorizontalOverflow": false,
+    "focusableCount": 10,
+    "unlabeledControls": [],
+    "topbar": null,
+    "messageText": "",
+    "activeTab": "",
+    "userBadge": ""
+  },
+  {
+    "step": 3,
+    "name": "mobile-after-register-home",
+    "note": "Mobile state after successful register redirect",
+    "screenshot": "audit/ui-a11y-20260630/03-mobile-after-register-home.png",
+    "bytes": 2854685,
+    "title": "Birdora 观鸟眼镜",
+    "url": "http://127.0.0.1:4175/index.html#community",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "scroll": {
+      "width": 390,
+      "height": 7718,
+      "clientWidth": 390
+    },
+    "hasHorizontalOverflow": false,
+    "focusableCount": 60,
+    "unlabeledControls": [
+      {
+        "tag": "input",
+        "id": "birdSearch",
+        "name": null,
+        "placeholder": "搜索中文名、英文名或拉丁名，例如：翠鸟、Kingfisher、Alcedo..."
+      },
+      {
+        "tag": "input",
+        "id": "postTitle",
+        "name": null,
+        "placeholder": "记录标题，例如：清晨遇到一只翠鸟"
+      },
+      {
+        "tag": "textarea",
+        "id": "postBody",
+        "name": null,
+        "placeholder": "写下地点、行为、天气或你的观察..."
+      }
+    ],
+    "topbar": {
+      "width": 374,
+      "height": 66,
+      "scrollWidth": 372,
+      "clientWidth": 372
+    },
+    "messageText": "",
+    "activeTab": "",
+    "userBadge": "移动端长昵称测试用户"
+  },
+  {
+    "step": 4,
+    "name": "mobile-home-hero",
+    "note": "Mobile home hero and topbar",
+    "screenshot": "audit/ui-a11y-20260630/04-mobile-home-hero.png",
+    "bytes": 1713176,
+    "title": "Birdora 观鸟眼镜",
+    "url": "http://127.0.0.1:4175/index.html",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "scroll": {
+      "width": 390,
+      "height": 7718,
+      "clientWidth": 390
+    },
+    "hasHorizontalOverflow": false,
+    "focusableCount": 60,
+    "unlabeledControls": [
+      {
+        "tag": "input",
+        "id": "birdSearch",
+        "name": null,
+        "placeholder": "搜索中文名、英文名或拉丁名，例如：翠鸟、Kingfisher、Alcedo..."
+      },
+      {
+        "tag": "input",
+        "id": "postTitle",
+        "name": null,
+        "placeholder": "记录标题，例如：清晨遇到一只翠鸟"
+      },
+      {
+        "tag": "textarea",
+        "id": "postBody",
+        "name": null,
+        "placeholder": "写下地点、行为、天气或你的观察..."
+      }
+    ],
+    "topbar": {
+      "width": 374,
+      "height": 66,
+      "scrollWidth": 372,
+      "clientWidth": 372
+    },
+    "messageText": "",
+    "activeTab": "",
+    "userBadge": "移动端长昵称测试用户"
+  },
+  {
+    "step": 5,
+    "name": "mobile-identify-initial",
+    "note": "Mobile identify upload/result area before file selection",
+    "screenshot": "audit/ui-a11y-20260630/05-mobile-identify-initial.png",
+    "bytes": 1858748,
+    "title": "Birdora 观鸟眼镜",
+    "url": "http://127.0.0.1:4175/index.html#identify",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "scroll": {
+      "width": 390,
+      "height": 7718,
+      "clientWidth": 390
+    },
+    "hasHorizontalOverflow": false,
+    "focusableCount": 60,
+    "unlabeledControls": [
+      {
+        "tag": "input",
+        "id": "birdSearch",
+        "name": null,
+        "placeholder": "搜索中文名、英文名或拉丁名，例如：翠鸟、Kingfisher、Alcedo..."
+      },
+      {
+        "tag": "input",
+        "id": "postTitle",
+        "name": null,
+        "placeholder": "记录标题，例如：清晨遇到一只翠鸟"
+      },
+      {
+        "tag": "textarea",
+        "id": "postBody",
+        "name": null,
+        "placeholder": "写下地点、行为、天气或你的观察..."
+      }
+    ],
+    "topbar": {
+      "width": 374,
+      "height": 66,
+      "scrollWidth": 372,
+      "clientWidth": 372
+    },
+    "messageText": "",
+    "activeTab": "",
+    "userBadge": "移动端长昵称测试用户"
+  },
+  {
+    "step": 6,
+    "name": "mobile-identify-uploaded",
+    "note": "Mobile identify area after uploading local bird image",
+    "screenshot": "audit/ui-a11y-20260630/06-mobile-identify-uploaded.png",
+    "bytes": 2203539,
+    "title": "Birdora 观鸟眼镜",
+    "url": "http://127.0.0.1:4175/index.html#identify",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "scroll": {
+      "width": 390,
+      "height": 8198,
+      "clientWidth": 390
+    },
+    "hasHorizontalOverflow": false,
+    "focusableCount": 65,
+    "unlabeledControls": [
+      {
+        "tag": "input",
+        "id": "birdSearch",
+        "name": null,
+        "placeholder": "搜索中文名、英文名或拉丁名，例如：翠鸟、Kingfisher、Alcedo..."
+      },
+      {
+        "tag": "input",
+        "id": "postTitle",
+        "name": null,
+        "placeholder": "记录标题，例如：清晨遇到一只翠鸟"
+      },
+      {
+        "tag": "textarea",
+        "id": "postBody",
+        "name": null,
+        "placeholder": "写下地点、行为、天气或你的观察..."
+      }
+    ],
+    "topbar": {
+      "width": 374,
+      "height": 66,
+      "scrollWidth": 372,
+      "clientWidth": 372
+    },
+    "messageText": "",
+    "activeTab": "",
+    "userBadge": "移动端长昵称测试用户"
+  },
+  {
+    "step": 7,
+    "name": "mobile-community-feed",
+    "note": "Mobile community feed baseline",
+    "screenshot": "audit/ui-a11y-20260630/07-mobile-community-feed.png",
+    "bytes": 900290,
+    "title": "观鸟社区 - Birdora",
+    "url": "http://127.0.0.1:4175/community.html",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "scroll": {
+      "width": 390,
+      "height": 2096,
+      "clientWidth": 390
+    },
+    "hasHorizontalOverflow": false,
+    "focusableCount": 25,
+    "unlabeledControls": [],
+    "topbar": {
+      "width": 374,
+      "height": 66,
+      "scrollWidth": 372,
+      "clientWidth": 372
+    },
+    "messageText": "",
+    "activeTab": "推荐",
+    "userBadge": "移动端长昵称测试用户"
+  },
+  {
+    "step": 8,
+    "name": "mobile-community-comments-open",
+    "note": "Mobile community first comment panel open",
+    "screenshot": "audit/ui-a11y-20260630/08-mobile-community-comments-open.png",
+    "bytes": 932564,
+    "title": "观鸟社区 - Birdora",
+    "url": "http://127.0.0.1:4175/community.html",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "scroll": {
+      "width": 390,
+      "height": 2278,
+      "clientWidth": 390
+    },
+    "hasHorizontalOverflow": false,
+    "focusableCount": 25,
+    "unlabeledControls": [],
+    "topbar": {
+      "width": 374,
+      "height": 66,
+      "scrollWidth": 372,
+      "clientWidth": 372
+    },
+    "messageText": "",
+    "activeTab": "推荐",
+    "userBadge": "移动端长昵称测试用户"
+  }
+]

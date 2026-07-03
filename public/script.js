@@ -3,7 +3,6 @@ const page = document.body.dataset.page || "home";
 const STORAGE_KEYS = {
   loggedIn: "birdoraLoggedIn",
   authUser: "birdora-auth-user",
-  userPosts: "birdora-user-posts",
   comments: "birdora-post-comments",
   communityTab: "birdora-community-tab",
   deviceConnected: "birdora-device-connected",
@@ -18,6 +17,18 @@ const AUTH_ROUTES = {
   me: "/api/auth/me",
   status: "/api/auth/status",
 };
+const API_REQUEST_TIMEOUT_MS =
+  Number(window.BIRDORA_API_REQUEST_TIMEOUT_MS) > 0
+    ? Number(window.BIRDORA_API_REQUEST_TIMEOUT_MS)
+    : 15000;
+const communityApi = window.BirdoraCommunityApi.createCommunityApi({
+  baseUrl: AUTH_API_BASE_URL,
+  timeoutMs: API_REQUEST_TIMEOUT_MS,
+});
+const observationApi = window.BirdoraObservationApi?.createObservationApi({
+  baseUrl: AUTH_API_BASE_URL,
+  timeoutMs: API_REQUEST_TIMEOUT_MS,
+});
 const OSEA_LABELS_PATH = "./assets/osea/bird_info.json";
 const OSEA_MODEL_PATH = "./assets/osea/bird_model.onnx";
 const BIRD_PROFILES_PATH = "./assets/atlas/bird-profiles.json";
@@ -25,16 +36,39 @@ const COMMON_BIRD_CANDIDATES_PATH = "./assets/atlas/common-bird-candidates.json"
 const OSEA_TOP_K = 5;
 const OSEA_CONFIDENCE_THRESHOLD = 0.05;
 const OSEA_EXPECTED_OUTPUT_COUNT = 11000;
-const OSEA_MODEL_LOAD_TIMEOUT_MS = 60000;
-const OSEA_LABEL_LOAD_TIMEOUT_MS = 15000;
+const OSEA_MODEL_LOAD_TIMEOUT_MS =
+  Number(window.BIRDORA_OSEA_MODEL_LOAD_TIMEOUT_MS) > 0
+    ? Number(window.BIRDORA_OSEA_MODEL_LOAD_TIMEOUT_MS)
+    : 60000;
+const OSEA_LABEL_LOAD_TIMEOUT_MS =
+  Number(window.BIRDORA_OSEA_LABEL_LOAD_TIMEOUT_MS) > 0
+    ? Number(window.BIRDORA_OSEA_LABEL_LOAD_TIMEOUT_MS)
+    : 15000;
+const RECOGNITION_SERVER_TIMEOUT_MS =
+  Number(window.BIRDORA_RECOGNITION_SERVER_TIMEOUT_MS) > 0
+    ? Number(window.BIRDORA_RECOGNITION_SERVER_TIMEOUT_MS)
+    : 90000;
+const RECOGNITION_IMAGE_LOAD_TIMEOUT_MS = 15000;
+const HEIC_CONVERTER_PATH = "./assets/vendor/heic-to.js";
 const ATLAS_INITIAL_LIMIT = 12;
 const ATLAS_SEARCH_LIMIT = 24;
 const ATLAS_TABLET_INITIAL_LIMIT = 12;
 const ATLAS_MOBILE_INITIAL_LIMIT = 8;
 const ATLAS_MOBILE_SEARCH_LIMIT = 12;
+const ATLAS_DEFAULT_HIDDEN_INDEXES = new Set([3334]);
+const ATLAS_TOUCH_MARQUEE_QUERY = "(max-width: 920px)";
+const ATLAS_TOUCH_MARQUEE_SPEED = 24;
+const ATLAS_TOUCH_MARQUEE_RESUME_DELAY_MS = 1100;
 const POST_TITLE_MAX_LENGTH = 80;
 const POST_BODY_MAX_LENGTH = 600;
 const COMMENT_MAX_LENGTH = 180;
+const COMMENT_PAGE_SIZE = 10;
+const QUESTION_MAX_LENGTH = 180;
+const POST_IMAGE_MAX_BYTES = 1024 * 1024;
+const COMMUNITY_PAGE_SIZE = 20;
+const OBSERVATION_PAGE_SIZE = 20;
+const OBSERVATION_IMAGE_MAX_BYTES = 1024 * 1024;
+const OBSERVATION_IMAGE_MAX_DIMENSION = 1280;
 
 const fallbackBirdProfiles = [
   {
@@ -235,11 +269,16 @@ const resultFeature = document.querySelector("#resultFeature");
 const modelDetail = document.querySelector("#modelDetail");
 const confidenceRing = document.querySelector(".confidence-ring");
 const candidateList = document.querySelector("#candidateList");
+const saveObservationButton = document.querySelector("#saveObservation");
+const observationMessage = document.querySelector("#observationMessage");
+const observationList = document.querySelector("#observationList");
 const feed = document.querySelector("#feed");
 const communityFeed = document.querySelector("#communityFeed");
 const postForm = document.querySelector("#postForm");
 const postTitle = document.querySelector("#postTitle");
 const postBody = document.querySelector("#postBody");
+const postImage = document.querySelector("#postImage");
+const postImageName = document.querySelector("#postImageName");
 const postMessage = document.querySelector("#postMessage");
 const useDetected = document.querySelector("#useDetected");
 const communityTabs = document.querySelectorAll("[data-community-tab]");
@@ -260,7 +299,13 @@ const deviceStorageValue = document.querySelector("#deviceStorageValue");
 const deviceFirmwareValue = document.querySelector("#deviceFirmwareValue");
 const deviceSyncStatus = document.querySelector("#deviceSyncStatus");
 
+window.__birdoraAuthFormsReady = false;
+window.__birdoraLogoutReady = false;
+window.__birdoraRecognitionReady = false;
+window.__birdoraPublishingReady = false;
+
 const expandedComments = new Set();
+const emptyCommentsPageInfo = { limit: COMMENT_PAGE_SIZE, offset: 0, nextOffset: 0, hasMore: false, total: 0, commentCount: 0 };
 
 let detectedBird = birds[0];
 let classifierPromise;
@@ -270,12 +315,24 @@ let commonBirdCandidatesPromise;
 let atlasEntriesPromise;
 let atlasSearchTimer = null;
 let atlasRenderRunId = 0;
+let atlasMarqueeAutoScrollFrame = null;
+let atlasMarqueeAutoScrollLastTime = 0;
+let atlasMarqueeResumeTimer = null;
+let atlasMarqueeUserActive = false;
 let selectedAtlasIndex = null;
 let birdProfilesSource = "fallback";
 let birdProfilesLoadError = "";
+let communityPosts = [];
 let userPosts = [];
-let commentsByPostId = {};
+let observations = [];
+let communityLoadState = "loading";
+let communityLoadMessage = "";
+let communityPageInfo = { limit: COMMUNITY_PAGE_SIZE, offset: 0, nextOffset: 0, hasMore: false };
+let observationsLoadState = "idle";
+let observationsLoadMessage = "";
+let observationsPageInfo = { limit: OBSERVATION_PAGE_SIZE, offset: 0, nextOffset: 0, hasMore: false };
 let activeCommunityTab = "recommended";
+let editingPostId = "";
 let currentUser = null;
 let homeCommunityRevealPlayed = false;
 let homeCommunityRevealObserver = null;
@@ -286,6 +343,20 @@ let recognitionRunId = 0;
 let lastRecognitionStatus = "idle";
 let currentRecognitionShareKey = "";
 let lastSharedRecognitionKey = "";
+let currentRecognitionCandidates = [];
+let selectedRecognitionCandidate = null;
+let currentRecognitionImagePayload = null;
+let currentRecognitionSource = "osea-browser";
+let savedObservation = null;
+let lastSavedRecognitionKey = "";
+let heicConverterPromise = null;
+let activeDetailPostId = "";
+let detailPost = null;
+let detailComments = [];
+let detailCommentsPageInfo = { ...emptyCommentsPageInfo };
+let detailLoadState = "idle";
+let detailLoadMessage = "";
+let detailDialogBound = false;
 
 rebuildLocalAtlasMatches();
 
@@ -533,13 +604,26 @@ function translateAuthMessage(message, fallback = "认证请求失败，请稍�
   const messages = {
     "email and password are required": "请先填写邮箱和密码。",
     "email format is invalid": "邮箱格式不正确，请检查后重试。",
-    "password must be at least 6 characters": "密码至少需要 6 位。",
+    "password must be at least 8 characters": "密码至少需要 8 位。",
     "email is already registered": "这个邮箱已经注册过了，请直接登录。",
     "email or password is incorrect": "邮箱或密码不正确，请检查后重试。",
     Unauthorized: "登录状态已失效，请重新登录。",
   };
 
   return messages[message] || message || fallback;
+}
+
+function withRequestId(message, error) {
+  return error?.requestId ? `${message}（错误编号：${error.requestId}）` : message;
+}
+
+function createApiError(message, details = {}) {
+  const error = new Error(message);
+  if (details.status) error.status = details.status;
+  if (details.code) error.code = details.code;
+  if (details.requestId) error.requestId = details.requestId;
+  if (details.cause) error.cause = details.cause;
+  return error;
 }
 
 async function authRequest(path, options = {}) {
@@ -553,28 +637,55 @@ async function authRequest(path, options = {}) {
   }
 
   let response;
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT_MS);
   try {
     response = await fetch(`${AUTH_API_BASE_URL}${path}`, {
       method,
       credentials: "include",
       headers,
       body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
     });
-  } catch {
-    throw new Error("无法连接后端认证服务，请确认后端已经启动。");
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw createApiError("请求超时，请检查网络后重试。", {
+        code: "REQUEST_TIMEOUT",
+        cause: error,
+      });
+    }
+
+    throw createApiError("网络连接失败，请检查网络后重试。", {
+      code: "NETWORK_ERROR",
+      cause: error,
+    });
+  } finally {
+    window.clearTimeout(timeoutId);
   }
 
   const rawBody = await response.text();
+  const requestId = response.headers.get("X-Request-Id") || "";
   let data = null;
   try {
     data = rawBody ? JSON.parse(rawBody) : null;
-  } catch {
-    data = rawBody;
+  } catch (error) {
+    if (response.ok) {
+      throw createApiError("认证服务返回格式异常，请稍后重试。", {
+        status: response.status,
+        code: "PARSE_ERROR",
+        requestId,
+        cause: error,
+      });
+    }
   }
 
   if (!response.ok) {
     const message = data && typeof data === "object" ? data.message : null;
-    throw new Error(translateAuthMessage(message));
+    throw createApiError(translateAuthMessage(message), {
+      status: response.status,
+      code: data?.code || "HTTP_ERROR",
+      requestId: data?.requestId || requestId,
+    });
   }
 
   return data;
@@ -622,20 +733,13 @@ async function syncAuthState() {
   }
 
   if (status.authUnavailable) {
-    const cachedUser = getValidatedAuthUser();
-    if (cachedUser) {
-      currentUser = cachedUser;
-    }
+    currentUser = null;
     renderUserChrome();
     return status;
   }
 
   clearAuthState();
   return status;
-}
-
-function createPostId() {
-  return `post-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 function escapeHtml(value) {
@@ -659,108 +763,501 @@ function normalizeUserText(value, maxLength) {
   return String(value || "").trim().slice(0, maxLength);
 }
 
-function loadUserPosts() {
-  const allPosts = safeParseStorage(STORAGE_KEYS.userPosts, []);
-  const posts = Array.isArray(allPosts) ? allPosts : [];
-  userPosts = currentUser ? posts.filter((post) => post.ownerEmail === currentUser.email) : [];
-}
+function readPostImageForUpload(file) {
+  if (!file) return Promise.resolve(null);
 
-function saveUserPosts() {
-  const allPosts = safeParseStorage(STORAGE_KEYS.userPosts, []);
-  const posts = Array.isArray(allPosts) ? allPosts : [];
-  const otherPosts = currentUser ? posts.filter((post) => post.ownerEmail !== currentUser.email) : posts;
-  saveStorage(STORAGE_KEYS.userPosts, [...userPosts, ...otherPosts]);
-}
-
-function loadComments() {
-  const comments = safeParseStorage(STORAGE_KEYS.comments, {});
-  commentsByPostId = comments && typeof comments === "object" && !Array.isArray(comments) ? comments : {};
-}
-
-function saveComments() {
-  saveStorage(STORAGE_KEYS.comments, commentsByPostId);
-}
-
-function getAllCommunityPosts() {
-  return [...userPosts, ...recommendedPosts];
-}
-
-function getStoredComments(postId) {
-  const comments = commentsByPostId[postId];
-  return Array.isArray(comments) ? comments : [];
-}
-
-function getComments(postId) {
-  const comments = getStoredComments(postId);
-  if (!currentUser) {
-    return comments.filter((comment) => !comment.ownerEmail);
+  const allowedTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
+  if (!allowedTypes.has(file.type)) {
+    return Promise.reject(new Error("配图仅支持 JPG、PNG 或 WebP。"));
   }
 
-  return comments.filter((comment) => !comment.ownerEmail || comment.ownerEmail === currentUser.email);
-}
-
-function formatComments(postId) {
-  const comments = getComments(postId);
-  if (!comments.length) {
-    return `<p class="comment-empty">还没有评论，来写一句吧。</p>`;
+  if (file.size > POST_IMAGE_MAX_BYTES) {
+    return Promise.reject(new Error("配图请控制在 1MB 以内。"));
   }
 
-  return comments
-    .map(
-      (comment) => `
-        <li class="comment-bubble">
-          <p>${escapeHtml(comment.text)}</p>
-          <span>${escapeHtml(comment.time)}</span>
-        </li>
-      `
-    )
-    .join("");
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      resolve({
+        imageDataUrl: String(reader.result || ""),
+        imageName: file.name || "post-image",
+      });
+    };
+    reader.onerror = () => reject(new Error("配图读取失败，请重新选择。"));
+    reader.readAsDataURL(file);
+  });
 }
 
-function buildFeedCard(post, options = {}) {
-  const previewMode = options.preview === true;
-  const body = previewMode ? truncateText(post.body, 88) : post.body;
-  const authorText = post.author || post.bird;
-  const previewClass = previewMode ? " feed-card-preview" : "";
+function mergeCommunityPosts(nextPosts) {
+  const postsById = new Map(communityPosts.map((post) => [post.id, post]));
+
+  nextPosts.forEach((post) => {
+    postsById.set(post.id, post);
+  });
+
+  communityPosts = Array.from(postsById.values()).sort((a, b) => {
+    const aTime = new Date(a.createdAt || 0).getTime();
+    const bTime = new Date(b.createdAt || 0).getTime();
+    return bTime - aTime;
+  });
+}
+
+async function loadCommunityPosts(options = {}) {
+  const append = options.append === true;
+  if (!append) {
+    communityLoadState = "loading";
+  }
+  communityLoadMessage = "";
+
+  try {
+    const result = await communityApi.list({
+      limit: COMMUNITY_PAGE_SIZE,
+      offset: append ? communityPageInfo.nextOffset : 0,
+    });
+    if (append) {
+      mergeCommunityPosts(result.posts);
+    } else {
+      communityPosts = result.posts;
+    }
+    communityPageInfo = result.pageInfo || {
+      limit: COMMUNITY_PAGE_SIZE,
+      offset: 0,
+      nextOffset: communityPosts.length,
+      hasMore: false,
+    };
+    userPosts = communityPosts.filter((post) => post.canManage);
+    communityLoadState = "ready";
+  } catch (error) {
+    communityLoadState = "error";
+    communityLoadMessage = withRequestId(error.message || "社区内容加载失败，请稍后重试。", error);
+  }
+
+  renderCurrentFeed();
+}
+
+function isExampleCommunityPost(post) {
+  return post?.source === "recommended" || post?.isExample === true;
+}
+
+function getExamplePosts() {
+  return recommendedPosts.map((post) => ({
+    ...post,
+    isExample: true,
+  }));
+}
+
+function getHomePreviewPosts() {
+  const posts = communityPosts.slice(0, 3);
+  if (posts.length >= 3) return posts;
+  return [...posts, ...getExamplePosts().slice(0, 3 - posts.length)];
+}
+
+function formatPostTime(post) {
+  if (!post.createdAt) return post.time || "";
+
+  const createdAt = new Date(post.createdAt);
+  if (Number.isNaN(createdAt.getTime())) return post.time || "";
+
+  return createdAt.toLocaleString("zh-CN", {
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatObservationTime(value) {
+  if (!value) return "";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  return date.toLocaleString("zh-CN", {
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function getObservationMutationMessage(error, fallback) {
+  if (error?.status === 401) return withRequestId("登录状态已失效，请重新登录后再保存。", error);
+  if (error?.status === 403) return withRequestId("只能操作自己的观测记录。", error);
+  if (error?.status === 404) return withRequestId("这条观测记录不存在或已被删除。", error);
+  if (error?.status === 409) return withRequestId("这条观测记录已关联社区帖子，暂时不能删除。", error);
+  return withRequestId(error?.message || fallback, error);
+}
+
+function setObservationMessage(text = "") {
+  if (observationMessage) {
+    observationMessage.textContent = text;
+  }
+}
+
+function dataUrlByteLength(dataUrl) {
+  const base64 = String(dataUrl || "").split(",")[1] || "";
+  return Math.floor((base64.length * 3) / 4);
+}
+
+function canvasToDataUrlUnderLimit(canvas) {
+  const qualities = [0.82, 0.72, 0.62, 0.52, 0.42];
+  for (const quality of qualities) {
+    const dataUrl = canvas.toDataURL("image/jpeg", quality);
+    if (dataUrlByteLength(dataUrl) <= OBSERVATION_IMAGE_MAX_BYTES) {
+      return dataUrl;
+    }
+  }
+
+  throw new Error("压缩后的识别图片仍超过 1MB，请换一张更小的照片。");
+}
+
+function buildCompressedObservationImage(imageElement, file) {
+  const width = imageElement.naturalWidth || imageElement.width;
+  const height = imageElement.naturalHeight || imageElement.height;
+  if (!width || !height) {
+    throw new Error("无法读取识别图片尺寸。");
+  }
+
+  const scale = Math.min(1, OBSERVATION_IMAGE_MAX_DIMENSION / Math.max(width, height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(width * scale));
+  canvas.height = Math.max(1, Math.round(height * scale));
+  const ctx = canvas.getContext("2d", { alpha: false });
+  ctx.drawImage(imageElement, 0, 0, canvas.width, canvas.height);
+
+  const imageDataUrl = canvasToDataUrlUnderLimit(canvas);
+  const baseName = String(file?.name || "observation-image").replace(/\.[^.]+$/, "");
+  return {
+    imageDataUrl,
+    imageName: `${baseName || "observation-image"}.jpg`,
+  };
+}
+
+function buildCandidatePayload(candidate, rank) {
+  return {
+    rank,
+    speciesName: candidate.cn,
+    scientificName: candidate.latin || "",
+    englishName: candidate.en || "",
+    probability: candidate.probability,
+    oseaIndex: candidate.index,
+    isMapped: Boolean(candidate.isMapped),
+  };
+}
+
+function buildRecognitionSaveKey() {
+  const candidate = selectedRecognitionCandidate;
+  if (!candidate || !currentRecognitionImagePayload) return "";
+  return [
+    candidate.index,
+    candidate.cn,
+    candidate.latin || "",
+    Math.round((candidate.probability || 0) * 1000000),
+    currentRecognitionImagePayload.imageName || "",
+  ].join("|");
+}
+
+function normalizeObservationForPost(observation) {
+  return {
+    title: `我记录到了一只 ${observation.selectedSpeciesName}`,
+    body:
+      `${observation.selectedSpeciesName}，识别置信度 ${formatCandidateScore(observation.confidence)}。` +
+      "这条帖子由我的观测记录发布。",
+    bird: observation.selectedSpeciesName,
+    observationId: observation.id,
+  };
+}
+
+function syncObservationState(nextObservation = null, removedObservationId = "") {
+  if (removedObservationId) {
+    observations = observations.filter((observation) => observation.id !== removedObservationId);
+  } else if (nextObservation) {
+    const existingIndex = observations.findIndex((observation) => observation.id === nextObservation.id);
+    if (existingIndex >= 0) {
+      observations.splice(existingIndex, 1, nextObservation);
+    } else {
+      observations.unshift(nextObservation);
+    }
+  }
+
+  observations = observations.sort((a, b) => {
+    const aTime = new Date(a.createdAt || 0).getTime();
+    const bTime = new Date(b.createdAt || 0).getTime();
+    return bTime - aTime;
+  });
+}
+
+function renderObservationCard(observation) {
+  const topCandidates = Array.isArray(observation.topCandidates)
+    ? observation.topCandidates.slice(0, 5)
+    : [];
+  const topCandidateText = topCandidates.length
+    ? topCandidates
+        .map((candidate) => `${candidate.rank || ""}. ${candidate.speciesName} ${formatCandidateScore(candidate.probability)}`)
+        .join(" / ")
+    : "暂无 Top 5 快照";
+  const image = observation.imageUrl
+    ? `<img src="${escapeHtml(observation.imageUrl)}" alt="${escapeHtml(observation.imageAlt || observation.selectedSpeciesName)}" loading="lazy" />`
+    : "";
+  const detail = [observation.locationText, observation.notes].filter(Boolean).join(" · ");
 
   return `
-    <article class="feed-card${previewClass}" data-post-id="${post.id}">
-      <div class="feed-meta"><span>${escapeHtml(authorText)}</span><span>${escapeHtml(post.time)}</span></div>
-      <h3>${escapeHtml(post.title)}</h3>
-      <p class="feed-body">${escapeHtml(body)}</p>
-      <div class="comment-box ${expandedComments.has(post.id) ? "is-open" : ""}">
-        <div class="comment-toolbar">
-          <button class="comment-toggle" type="button" data-comment-toggle="${post.id}">评论</button>
-          <span class="comment-count">评论 ${getComments(post.id).length}</span>
-        </div>
-        <div class="comment-panel">
-          <div class="comment-form">
-            <input
-              class="comment-input"
-              type="text"
-              placeholder="写下你的观察或想法..."
-              aria-label="写下你的观察或想法"
-              aria-invalid="false"
-              data-comment-input="${post.id}"
-            />
-            <button class="comment-send" type="button" data-comment-submit="${post.id}">发送</button>
+    <article class="observation-card" data-observation-id="${escapeHtml(observation.id)}">
+      <figure class="observation-image">${image}</figure>
+      <div class="observation-content">
+        <div class="observation-head">
+          <div>
+            <h3>${escapeHtml(observation.selectedSpeciesName)}</h3>
+            <p class="observation-meta">
+              ${escapeHtml(formatCandidateScore(observation.confidence))} · ${escapeHtml(formatObservationTime(observation.observedAt || observation.createdAt))}
+            </p>
           </div>
-          <ul class="comment-list">${formatComments(post.id)}</ul>
+        </div>
+        <p class="observation-top-candidates">${escapeHtml(topCandidateText)}</p>
+        ${detail ? `<p class="observation-note">${escapeHtml(detail)}</p>` : ""}
+        <div class="observation-actions">
+          <button class="primary-btn" type="button" data-observation-share="${escapeHtml(observation.id)}">发布到社区</button>
         </div>
       </div>
     </article>
   `;
 }
 
+function renderObservationList() {
+  if (!observationList) return;
+
+  if (!observationApi) {
+    observationList.innerHTML = `
+      <article class="observation-empty">
+        <p>观测记录服务暂不可用，请刷新页面后重试。</p>
+      </article>
+    `;
+    return;
+  }
+
+  if (!currentUser) {
+    observationList.innerHTML = `
+      <article class="observation-empty">
+        <p>登录后可以查看你保存过的观测记录。</p>
+        <a class="primary-btn more-link" href="${escapeHtml(getLoginUrl())}">登录</a>
+      </article>
+    `;
+    return;
+  }
+
+  if (observationsLoadState === "loading") {
+    observationList.innerHTML = `
+      <article class="observation-empty" role="status">
+        <p>正在加载你的观测记录...</p>
+      </article>
+    `;
+    return;
+  }
+
+  if (observationsLoadState === "error") {
+    observationList.innerHTML = `
+      <article class="observation-empty">
+        <p>${escapeHtml(observationsLoadMessage)}</p>
+        <button class="primary-btn" type="button" data-observation-retry>重新加载</button>
+      </article>
+    `;
+    return;
+  }
+
+  if (!observations.length) {
+    observationList.innerHTML = `
+      <article class="observation-empty">
+        <p>暂无观测记录。</p>
+      </article>
+    `;
+    return;
+  }
+
+  observationList.innerHTML = observations.map(renderObservationCard).join("");
+}
+
+async function loadMyObservations() {
+  if (!observationList) return;
+
+  if (!currentUser || !observationApi) {
+    renderObservationList();
+    return;
+  }
+
+  observationsLoadState = "loading";
+  observationsLoadMessage = "";
+  renderObservationList();
+
+  try {
+    const result = await observationApi.listMyObservations({
+      limit: OBSERVATION_PAGE_SIZE,
+      offset: 0,
+    });
+    observations = result.observations;
+    observationsPageInfo = result.pageInfo || {
+      limit: OBSERVATION_PAGE_SIZE,
+      offset: 0,
+      nextOffset: observations.length,
+      hasMore: false,
+    };
+    observationsLoadState = "ready";
+  } catch (error) {
+    observationsLoadState = "error";
+    observationsLoadMessage = getObservationMutationMessage(error, "观测记录加载失败，请稍后重试。");
+    if (error?.status === 401) {
+      clearAuthState();
+    }
+  }
+
+  renderObservationList();
+}
+
+function formatInteractionTime(item) {
+  if (!item.createdAt) return item.time || "";
+
+  const createdAt = new Date(item.createdAt);
+  if (Number.isNaN(createdAt.getTime())) return item.time || "";
+
+  return createdAt.toLocaleString("zh-CN", {
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function getPostComments(post) {
+  if (Array.isArray(post.commentPreview)) return post.commentPreview;
+  return Array.isArray(post.comments) ? post.comments : [];
+}
+
+function getPostQuestions(post) {
+  return Array.isArray(post.questions) ? post.questions : [];
+}
+
+function getPostFeedback(post) {
+  return post.feedback && typeof post.feedback === "object" ? post.feedback : {};
+}
+
+function isPersistedCommunityPost(post) {
+  return Boolean(post?.createdAt);
+}
+
+function formatInteractionList(items, emptyText, options = {}) {
+  if (!items.length) {
+    return `<p class="comment-empty">${escapeHtml(emptyText)}</p>`;
+  }
+
+  return items
+    .map(
+      (item) => {
+        const deleteAction =
+          options.canDelete && item.canManage && options.postId
+            ? `<button class="comment-delete" type="button" data-comment-delete="${escapeHtml(item.id)}" data-comment-post="${escapeHtml(options.postId)}">删除</button>`
+            : "";
+        return `
+        <li class="comment-bubble" data-comment-id="${escapeHtml(item.id || "")}">
+          <p>${escapeHtml(item.body || item.text || "")}</p>
+          <div class="comment-meta-row">
+            <span>${escapeHtml(item.author || "社区用户")} · ${escapeHtml(formatInteractionTime(item))}</span>
+            ${deleteAction}
+          </div>
+        </li>
+      `;
+      }
+    )
+    .join("");
+}
+
+function formatComments(post) {
+  return formatInteractionList(getPostComments(post), "还没有评论，来写一句吧。", {
+    postId: post.id,
+    canDelete: true,
+  });
+}
+
+function formatQuestions(post) {
+  return formatInteractionList(getPostQuestions(post), "还没有提问。");
+}
+
+function buildObservationSummaryHtml(post) {
+  const summary = post?.observationSummary;
+  if (!summary) return "";
+
+  const species = summary.selectedSpeciesName || post.bird || "已确认鸟种";
+  const confidence = Number.isFinite(Number(summary.confidence))
+    ? formatCandidateScore(Number(summary.confidence))
+    : "";
+  const observedAt = formatObservationTime(summary.observedAt || summary.createdAt);
+  const details = [species, confidence, observedAt].filter(Boolean).join(" · ");
+
+  return `
+    <section class="post-observation-summary" aria-label="识别记录摘要">
+      <strong>来自识别记录</strong>
+      <span>${escapeHtml(details)}</span>
+    </section>
+  `;
+}
+
+function buildFeedCard(post, options = {}) {
+  const previewMode = options.preview === true;
+  const comments = getPostComments(post);
+  const questions = getPostQuestions(post);
+  const commentCount = Number(post.commentCount ?? comments.length) || 0;
+  const questionCount = Number(post.questionCount ?? questions.length) || questions.length;
+  const isExample = isExampleCommunityPost(post);
+  return window.BirdoraCommunityPostCard.renderPostCard(post, {
+    preview: previewMode,
+    isEditing: editingPostId === post.id,
+    commentsOpen: expandedComments.has(post.id),
+    canInteract: isPersistedCommunityPost(post) && !isExample,
+    canOpenDetails: true,
+    isExample,
+    displayBody: previewMode ? truncateText(post.body, 88) : post.body,
+    author: post.author || post.bird,
+    time: formatPostTime(post),
+    analysis: post.analysis || null,
+    feedback: getPostFeedback(post),
+    commentCount,
+    commentsHtml: formatComments(post),
+    questionCount,
+    questionsHtml: formatQuestions(post),
+    observationHtml: buildObservationSummaryHtml(post),
+    titleMaxLength: POST_TITLE_MAX_LENGTH,
+    bodyMaxLength: POST_BODY_MAX_LENGTH,
+  });
+}
+
 function renderHomeFeed() {
   if (!feed) return;
-  const previewPosts = getAllCommunityPosts().slice(0, 3);
+  const previewPosts = getHomePreviewPosts();
   feed.innerHTML = previewPosts.map((post) => buildFeedCard(post, { preview: true })).join("");
   syncHomeCommunityReveal();
 }
 
 function renderCommunityFeed() {
   if (!communityFeed) return;
+
+  if (communityLoadState === "loading") {
+    communityFeed.innerHTML = `
+      <article class="feed-card empty-feed-card" role="status">
+        <h3>正在加载社区内容</h3>
+        <p>正在同步大家发布的观鸟笔记。</p>
+      </article>
+    `;
+    return;
+  }
+
+  if (communityLoadState === "error") {
+    communityFeed.innerHTML = `
+      <article class="feed-card empty-feed-card">
+        <h3>社区内容暂时无法加载</h3>
+        <p>${escapeHtml(communityLoadMessage)}</p>
+        <button class="primary-btn community-retry" type="button" data-community-retry>重新加载</button>
+      </article>
+    `;
+    return;
+  }
 
   if (activeCommunityTab === "mine" && !currentUser) {
     communityFeed.innerHTML = `
@@ -773,8 +1270,9 @@ function renderCommunityFeed() {
     return;
   }
 
-  const posts = activeCommunityTab === "mine" ? userPosts : recommendedPosts;
-  if (!posts.length) {
+  const posts = activeCommunityTab === "mine" ? userPosts : communityPosts;
+  const examplePosts = activeCommunityTab === "recommended" ? getExamplePosts() : [];
+  if (!posts.length && !examplePosts.length) {
     communityFeed.innerHTML = `
       <article class="feed-card empty-feed-card">
         <h3>${activeCommunityTab === "mine" ? "还没有你发布的帖子" : "暂无推荐帖子"}</h3>
@@ -784,7 +1282,27 @@ function renderCommunityFeed() {
     return;
   }
 
-  communityFeed.innerHTML = posts.map((post) => buildFeedCard(post)).join("");
+  const loadMore = communityPageInfo.hasMore
+    ? `
+      <article class="feed-card empty-feed-card load-more-card">
+        <h3>还有更多观鸟笔记</h3>
+        <p>继续加载下一批社区内容。</p>
+        <button class="primary-btn community-retry" type="button" data-community-load-more>加载更多</button>
+      </article>
+    `
+    : "";
+  const realPostsHtml = posts.map((post) => buildFeedCard(post)).join("");
+  const examplePostsHtml = examplePosts.length
+    ? `
+      <article class="feed-card empty-feed-card sample-feed-card" aria-label="示例推荐说明">
+        <h3>Birdora 示例内容</h3>
+        <p>下面是内置示例推荐，用于展示社区笔记样式，不代表真实用户发布。</p>
+      </article>
+      ${examplePosts.map((post) => buildFeedCard(post)).join("")}
+    `
+    : "";
+
+  communityFeed.innerHTML = `${realPostsHtml}${loadMore}${examplePostsHtml}`;
 }
 
 function renderCurrentFeed() {
@@ -792,6 +1310,121 @@ function renderCurrentFeed() {
     renderCommunityFeed();
   } else {
     renderHomeFeed();
+  }
+}
+
+function syncCommunityPostState(nextPost = null, removedPostId = "") {
+  if (removedPostId) {
+    communityPosts = communityPosts.filter((post) => post.id !== removedPostId);
+    if (activeDetailPostId === removedPostId) {
+      closePostDetail();
+    }
+  } else if (nextPost) {
+    const existingIndex = communityPosts.findIndex((post) => post.id === nextPost.id);
+    if (existingIndex >= 0) {
+      communityPosts.splice(existingIndex, 1, nextPost);
+    } else {
+      communityPosts.unshift(nextPost);
+    }
+    if (detailPost?.id === nextPost.id) {
+      detailPost = {
+        ...detailPost,
+        ...nextPost,
+        comments: detailComments.length ? detailComments : getPostComments(nextPost),
+        commentPreview: detailComments.length ? detailComments : getPostComments(nextPost),
+        commentsPageInfo: detailCommentsPageInfo,
+      };
+    }
+  }
+
+  userPosts = communityPosts.filter((post) => post.canManage);
+}
+
+function getCommunityMutationMessage(error, fallback) {
+  if (error?.status === 401) return withRequestId("登录状态已失效，请重新登录。", error);
+  if (error?.status === 403) return withRequestId("你只能修改或删除自己发布的帖子。", error);
+  if (error?.status === 404) return withRequestId("这条帖子已不存在，请刷新后重试。", error);
+  return withRequestId(error?.message || fallback, error);
+}
+
+function getCommentMutationMessage(error, fallback) {
+  if (error?.status === 401) return withRequestId("登录状态已失效，请重新登录。", error);
+  if (error?.status === 403) return withRequestId("你只能删除自己发布的评论。", error);
+  if (error?.status === 404) return withRequestId("这条评论已不存在，请刷新后重试。", error);
+  return withRequestId(error?.message || fallback, error);
+}
+
+function startEditingPost(postId) {
+  const post = communityPosts.find((item) => item.id === postId);
+  if (!post?.canManage) return;
+  editingPostId = postId;
+  expandedComments.delete(postId);
+  renderCurrentFeed();
+  communityFeed?.querySelector(`[data-post-edit-form="${postId}"] input`)?.focus();
+}
+
+function cancelEditingPost(postId) {
+  if (editingPostId !== postId) return;
+  editingPostId = "";
+  renderCurrentFeed();
+  communityFeed?.querySelector(`[data-post-edit="${postId}"]`)?.focus();
+}
+
+async function submitPostEdit(form) {
+  const postId = form.dataset.postEditForm;
+  const titleField = form.elements.title;
+  const bodyField = form.elements.body;
+  const message = form.querySelector("[data-post-edit-message]");
+  const submitButton = form.querySelector('[type="submit"]');
+  const title = normalizeUserText(titleField.value, POST_TITLE_MAX_LENGTH);
+  const body = normalizeUserText(bodyField.value, POST_BODY_MAX_LENGTH);
+
+  titleField.setAttribute("aria-invalid", String(!title));
+  bodyField.setAttribute("aria-invalid", String(!body));
+  if (!title || !body) {
+    message.textContent = title ? "请填写帖子内容。" : "请填写帖子标题。";
+    (title ? bodyField : titleField).focus();
+    return;
+  }
+
+  message.textContent = "正在保存...";
+  submitButton.disabled = true;
+
+  try {
+    const updatedPost = await communityApi.update(postId, { title, body });
+    syncCommunityPostState(updatedPost);
+    editingPostId = "";
+    renderCurrentFeed();
+    communityFeed?.querySelector(`[data-post-edit="${postId}"]`)?.focus();
+  } catch (error) {
+    message.textContent = getCommunityMutationMessage(error, "保存失败，请稍后重试。");
+    submitButton.disabled = false;
+    if (error?.status === 401) {
+      clearAuthState();
+    }
+  }
+}
+
+async function deleteCommunityPost(postId, button) {
+  const post = communityPosts.find((item) => item.id === postId);
+  if (!post?.canManage) return;
+  if (!window.confirm(`确定删除《${post.title}》吗？删除后无法恢复。`)) return;
+
+  button.disabled = true;
+  button.textContent = "删除中...";
+
+  try {
+    await communityApi.remove(postId);
+    syncCommunityPostState(null, postId);
+    expandedComments.delete(postId);
+    renderCurrentFeed();
+  } catch (error) {
+    button.disabled = false;
+    button.textContent = "删除";
+    window.alert(getCommunityMutationMessage(error, "删除失败，请稍后重试。"));
+    if (error?.status === 401) {
+      clearAuthState();
+    }
   }
 }
 
@@ -804,7 +1437,331 @@ function toggleComments(postId) {
   renderCurrentFeed();
 }
 
-function submitComment(postId) {
+function normalizeCommentsPageInfo(pageInfo = {}, comments = []) {
+  const commentCount = Number(pageInfo.commentCount ?? pageInfo.total ?? comments.length) || 0;
+  return {
+    ...emptyCommentsPageInfo,
+    ...pageInfo,
+    total: commentCount,
+    commentCount,
+  };
+}
+
+function findCommunityPost(postId) {
+  return communityPosts.find((post) => post.id === postId) || getExamplePosts().find((post) => post.id === postId) || null;
+}
+
+function getPostDetailBackdrop() {
+  let backdrop = document.querySelector("[data-post-detail-backdrop]");
+  if (backdrop) return backdrop;
+
+  backdrop = document.createElement("div");
+  backdrop.className = "post-detail-backdrop is-hidden";
+  backdrop.dataset.postDetailBackdrop = "true";
+  document.body.appendChild(backdrop);
+  return backdrop;
+}
+
+function closePostDetail() {
+  activeDetailPostId = "";
+  detailPost = null;
+  detailComments = [];
+  detailCommentsPageInfo = { ...emptyCommentsPageInfo };
+  detailLoadState = "idle";
+  detailLoadMessage = "";
+  const backdrop = getPostDetailBackdrop();
+  backdrop.classList.add("is-hidden");
+  backdrop.innerHTML = "";
+  document.body.classList.remove("has-modal-open");
+}
+
+function renderPostDetail() {
+  const backdrop = getPostDetailBackdrop();
+  if (!activeDetailPostId) {
+    closePostDetail();
+    return;
+  }
+
+  const post = detailPost || findCommunityPost(activeDetailPostId);
+  const isExample = isExampleCommunityPost(post);
+  const canInteract = Boolean(post && isPersistedCommunityPost(post) && !isExample);
+  const loadingOnly = detailLoadState === "loading" && !post;
+  const image = post?.imageUrl
+    ? `
+      <figure class="post-image-frame post-detail-image">
+        <img src="${escapeHtml(post.imageUrl)}" alt="${escapeHtml(post.imageAlt || post.title)}" />
+      </figure>
+    `
+    : "";
+  const commentForm = canInteract
+    ? `
+      <div class="comment-form detail-comment-form">
+        <input
+          class="comment-input"
+          type="text"
+          maxlength="${COMMENT_MAX_LENGTH}"
+          placeholder="写下你的观察或想法..."
+          aria-label="写下你的观察或想法"
+          data-detail-comment-input="${escapeHtml(post.id)}"
+        />
+        <button class="comment-send" type="button" data-detail-comment-submit="${escapeHtml(post.id)}">发送</button>
+      </div>
+    `
+    : `<p class="comment-empty">${isExample ? "示例内容仅供浏览，不能评论或互动。" : "登录后可以参与评论。"}</p>`;
+  const commentsHtml = formatInteractionList(detailComments, "还没有评论，来写一句吧。", {
+    postId: post?.id || "",
+    canDelete: true,
+  });
+  const loadMoreComments = detailCommentsPageInfo.hasMore
+    ? `<button class="comment-load-more" type="button" data-detail-comments-load-more="${escapeHtml(post?.id || "")}">加载更多评论</button>`
+    : "";
+  const statusMessage =
+    detailLoadState === "loading"
+      ? `<p class="post-detail-message" role="status">正在加载详情...</p>`
+      : detailLoadState === "error"
+        ? `
+          <p class="post-detail-message is-error">${escapeHtml(detailLoadMessage || "帖子详情加载失败。")}</p>
+          <button class="post-action" type="button" data-post-detail-retry="${escapeHtml(activeDetailPostId)}">重新加载</button>
+        `
+        : "";
+  const exampleBadge = isExample ? `<span class="post-badge">Birdora 示例内容</span>` : "";
+  const body = loadingOnly
+    ? statusMessage
+    : `
+      <article class="post-detail-card" data-post-detail-card="${escapeHtml(post.id)}">
+        <header class="post-detail-head">
+          <div>
+            <div class="feed-meta"><span>${escapeHtml(post.author || post.bird || "Birdora")}</span><span>${escapeHtml(formatPostTime(post))}</span>${exampleBadge}</div>
+            <h2 id="postDetailTitle">${escapeHtml(post.title)}</h2>
+          </div>
+          <button class="post-detail-close" type="button" aria-label="关闭帖子详情" data-post-detail-close>关闭</button>
+        </header>
+        ${image}
+        <p class="post-detail-body">${escapeHtml(post.body)}</p>
+        ${buildObservationSummaryHtml(post)}
+        ${statusMessage}
+        <section class="post-detail-comments" aria-label="评论">
+          <div class="comment-toolbar">
+            <strong>评论 ${Number(detailCommentsPageInfo.commentCount ?? post.commentCount ?? detailComments.length) || 0}</strong>
+          </div>
+          ${commentForm}
+          <ul class="comment-list">${commentsHtml}</ul>
+          ${loadMoreComments}
+        </section>
+      </article>
+    `;
+
+  backdrop.classList.remove("is-hidden");
+  document.body.classList.add("has-modal-open");
+  backdrop.innerHTML = `
+    <div class="post-detail-dialog" role="dialog" aria-modal="true" aria-labelledby="postDetailTitle">
+      ${body}
+    </div>
+  `;
+}
+
+async function openPostDetail(postId) {
+  const localPost = findCommunityPost(postId);
+  activeDetailPostId = postId;
+  detailPost = localPost;
+  detailComments = getPostComments(localPost || {});
+  detailCommentsPageInfo = normalizeCommentsPageInfo(localPost?.commentsPageInfo, detailComments);
+  detailLoadState = isExampleCommunityPost(localPost) ? "ready" : "loading";
+  detailLoadMessage = "";
+  renderPostDetail();
+
+  if (isExampleCommunityPost(localPost)) return;
+
+  try {
+    const post = await communityApi.get(postId, { limit: COMMENT_PAGE_SIZE, offset: 0 });
+    if (activeDetailPostId !== postId) return;
+    detailPost = post;
+    detailComments = Array.isArray(post.comments) ? post.comments : [];
+    detailCommentsPageInfo = normalizeCommentsPageInfo(post.commentsPageInfo, detailComments);
+    detailLoadState = "ready";
+    syncCommunityPostState(post);
+  } catch (error) {
+    if (activeDetailPostId !== postId) return;
+    detailLoadState = "error";
+    detailLoadMessage = withRequestId(error.message || "帖子详情加载失败，请稍后重试。", error);
+    if (error?.status === 401) {
+      clearAuthState();
+    }
+  }
+
+  renderCurrentFeed();
+  renderPostDetail();
+  window.setTimeout(() => {
+    document.querySelector("[data-post-detail-close]")?.focus();
+  }, 0);
+}
+
+async function loadDetailComments(options = {}) {
+  if (!detailPost || isExampleCommunityPost(detailPost)) return;
+  const append = options.append === true;
+  const offset = append ? detailCommentsPageInfo.nextOffset : 0;
+  detailLoadState = "loading";
+  detailLoadMessage = "";
+  renderPostDetail();
+
+  try {
+    const result = await communityApi.listComments(detailPost.id, {
+      limit: COMMENT_PAGE_SIZE,
+      offset,
+    });
+    const nextComments = Array.isArray(result.comments) ? result.comments : [];
+    if (append) {
+      const commentsById = new Map(detailComments.map((comment) => [comment.id, comment]));
+      nextComments.forEach((comment) => commentsById.set(comment.id, comment));
+      detailComments = Array.from(commentsById.values());
+    } else {
+      detailComments = nextComments;
+    }
+    detailCommentsPageInfo = normalizeCommentsPageInfo(result.pageInfo, detailComments);
+    detailPost = {
+      ...detailPost,
+      comments: detailComments,
+      commentPreview: detailComments,
+      commentCount: detailCommentsPageInfo.commentCount,
+      commentsPageInfo: detailCommentsPageInfo,
+    };
+    syncCommunityPostState(detailPost);
+    detailLoadState = "ready";
+  } catch (error) {
+    detailLoadState = "error";
+    detailLoadMessage = getCommentMutationMessage(error, "评论加载失败，请稍后重试。");
+    if (error?.status === 401) {
+      clearAuthState();
+    }
+  }
+
+  renderCurrentFeed();
+  renderPostDetail();
+}
+
+async function submitDetailComment(postId, trigger = null) {
+  if (!requireLoginForAction()) return;
+  const field = document.querySelector(`[data-detail-comment-input="${postId}"]`);
+  if (!field) return;
+
+  const text = normalizeUserText(field.value, COMMENT_MAX_LENGTH);
+  if (!text) {
+    field.setAttribute("aria-invalid", "true");
+    field.focus();
+    return;
+  }
+
+  field.disabled = true;
+  if (trigger) trigger.disabled = true;
+
+  try {
+    const updatedPost = await communityApi.comment(postId, text);
+    syncCommunityPostState(updatedPost);
+    await loadDetailComments({ append: false });
+    const hasNewComment = detailComments.some((comment) => comment.body === text && comment.canManage);
+    if (!hasNewComment) {
+      const newComment = getPostComments(updatedPost)
+        .slice()
+        .reverse()
+        .find((comment) => comment.body === text && comment.canManage);
+      if (newComment) {
+        detailComments = [...detailComments, newComment];
+        detailCommentsPageInfo = normalizeCommentsPageInfo(
+          {
+            ...detailCommentsPageInfo,
+            nextOffset: detailComments.length,
+            hasMore: false,
+          },
+          detailComments
+        );
+      }
+    }
+    detailPost = {
+      ...(detailPost || updatedPost),
+      ...updatedPost,
+      comments: detailComments,
+      commentPreview: detailComments,
+      commentsPageInfo: detailCommentsPageInfo,
+    };
+    renderCurrentFeed();
+    renderPostDetail();
+  } catch (error) {
+    field.disabled = false;
+    if (trigger) trigger.disabled = false;
+    window.alert(getCommentMutationMessage(error, "评论失败，请稍后重试。"));
+    if (error?.status === 401) {
+      clearAuthState();
+    }
+  }
+}
+
+async function deleteCommunityComment(postId, commentId, button = null) {
+  if (!requireLoginForAction()) return;
+  if (!window.confirm("确定删除这条评论吗？")) return;
+
+  if (button) {
+    button.disabled = true;
+    button.textContent = "删除中...";
+  }
+
+  try {
+    await communityApi.deleteComment(postId, commentId);
+    if (detailPost?.id === postId) {
+      detailComments = detailComments.filter((comment) => comment.id !== commentId);
+      const nextCount = Math.max(0, (Number(detailCommentsPageInfo.commentCount) || detailComments.length + 1) - 1);
+      detailCommentsPageInfo = {
+        ...detailCommentsPageInfo,
+        total: nextCount,
+        commentCount: nextCount,
+        nextOffset: Math.min(detailCommentsPageInfo.nextOffset, detailComments.length),
+        hasMore: detailCommentsPageInfo.hasMore && detailComments.length < nextCount,
+      };
+      detailPost = {
+        ...detailPost,
+        comments: detailComments,
+        commentPreview: detailComments,
+        commentCount: nextCount,
+        commentsPageInfo: detailCommentsPageInfo,
+      };
+    }
+
+    const existingPost = communityPosts.find((post) => post.id === postId);
+    if (existingPost) {
+      const nextComments = getPostComments(existingPost).filter((comment) => comment.id !== commentId);
+      const nextCount = Math.max(0, (Number(existingPost.commentCount) || getPostComments(existingPost).length) - 1);
+      syncCommunityPostState({
+        ...existingPost,
+        comments: nextComments,
+        commentPreview: nextComments,
+        commentCount: nextCount,
+        commentsPageInfo: normalizeCommentsPageInfo(
+          {
+            ...existingPost.commentsPageInfo,
+            nextOffset: nextComments.length,
+            hasMore: nextCount > nextComments.length,
+            total: nextCount,
+            commentCount: nextCount,
+          },
+          nextComments
+        ),
+      });
+    }
+
+    renderCurrentFeed();
+    renderPostDetail();
+  } catch (error) {
+    if (button) {
+      button.disabled = false;
+      button.textContent = "删除";
+    }
+    window.alert(getCommentMutationMessage(error, "删除评论失败，请稍后重试。"));
+    if (error?.status === 401) {
+      clearAuthState();
+    }
+  }
+}
+
+async function submitComment(postId, trigger = null) {
   if (!requireLoginForAction()) return;
 
   const currentFeed = page === "community" ? communityFeed : feed;
@@ -818,28 +1775,126 @@ function submitComment(postId) {
     return;
   }
 
-  const comment = {
-    text,
-    ownerEmail: currentUser?.email || "",
-    author: currentUser?.nickname || currentUser?.email || "我",
-    time: new Date().toLocaleString("zh-CN", {
-      month: "numeric",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    }),
-  };
+  field.disabled = true;
+  if (trigger) trigger.disabled = true;
 
-  commentsByPostId[postId] = [...getStoredComments(postId), comment];
-  saveComments();
-  expandedComments.add(postId);
-  renderCurrentFeed();
+  try {
+    const updatedPost = await communityApi.comment(postId, text);
+    syncCommunityPostState(updatedPost);
+    expandedComments.add(postId);
+    renderCurrentFeed();
+  } catch (error) {
+    field.disabled = false;
+    if (trigger) trigger.disabled = false;
+    window.alert(getCommunityMutationMessage(error, "评论失败，请稍后重试。"));
+    if (error?.status === 401) {
+      clearAuthState();
+    }
+  }
+}
+
+async function submitQuestion(postId, trigger = null) {
+  if (!requireLoginForAction()) return;
+
+  const currentFeed = page === "community" ? communityFeed : feed;
+  const field = currentFeed?.querySelector(`[data-question-input="${postId}"]`);
+  if (!field) return;
+
+  const text = normalizeUserText(field.value, QUESTION_MAX_LENGTH);
+  if (!text) {
+    field.setAttribute("aria-invalid", "true");
+    field.focus();
+    return;
+  }
+
+  field.disabled = true;
+  if (trigger) trigger.disabled = true;
+
+  try {
+    const updatedPost = await communityApi.question(postId, text);
+    syncCommunityPostState(updatedPost);
+    expandedComments.add(postId);
+    renderCurrentFeed();
+  } catch (error) {
+    field.disabled = false;
+    if (trigger) trigger.disabled = false;
+    window.alert(getCommunityMutationMessage(error, "提问失败，请稍后重试。"));
+    if (error?.status === 401) {
+      clearAuthState();
+    }
+  }
+}
+
+async function togglePostReaction(postId, reactionType, trigger = null) {
+  if (!requireLoginForAction()) return;
+
+  if (trigger) trigger.disabled = true;
+
+  try {
+    const updatedPost = await communityApi.react(postId, reactionType);
+    syncCommunityPostState(updatedPost);
+    renderCurrentFeed();
+  } catch (error) {
+    if (trigger) trigger.disabled = false;
+    window.alert(getCommunityMutationMessage(error, "评价失败，请稍后重试。"));
+    if (error?.status === 401) {
+      clearAuthState();
+    }
+  }
 }
 
 function bindCommentFeed(root) {
   if (!root) return;
 
   root.addEventListener("click", (event) => {
+    const retryButton = event.target.closest("[data-community-retry]");
+    if (retryButton) {
+      loadCommunityPosts();
+      return;
+    }
+
+    const loadMoreButton = event.target.closest("[data-community-load-more]");
+    if (loadMoreButton) {
+      loadMoreButton.disabled = true;
+      loadMoreButton.textContent = "加载中...";
+      loadCommunityPosts({ append: true });
+      return;
+    }
+
+    const detailButton = event.target.closest("[data-post-detail]");
+    if (detailButton) {
+      openPostDetail(detailButton.dataset.postDetail);
+      return;
+    }
+
+    const editButton = event.target.closest("[data-post-edit]");
+    if (editButton) {
+      startEditingPost(editButton.dataset.postEdit);
+      return;
+    }
+
+    const cancelEditButton = event.target.closest("[data-post-edit-cancel]");
+    if (cancelEditButton) {
+      cancelEditingPost(cancelEditButton.dataset.postEditCancel);
+      return;
+    }
+
+    const deleteButton = event.target.closest("[data-post-delete]");
+    if (deleteButton) {
+      deleteCommunityPost(deleteButton.dataset.postDelete, deleteButton);
+      return;
+    }
+
+    const reactionButton = event.target.closest("[data-post-reaction]");
+    if (reactionButton) {
+      togglePostReaction(
+        reactionButton.dataset.postReaction,
+        reactionButton.dataset.reactionType,
+        reactionButton
+      );
+      return;
+    }
+
     const toggleButton = event.target.closest("[data-comment-toggle]");
     if (toggleButton) {
       toggleComments(toggleButton.dataset.commentToggle);
@@ -848,21 +1903,99 @@ function bindCommentFeed(root) {
 
     const submitButton = event.target.closest("[data-comment-submit]");
     if (submitButton) {
-      submitComment(submitButton.dataset.commentSubmit);
+      submitComment(submitButton.dataset.commentSubmit, submitButton);
+      return;
     }
+
+    const submitQuestionButton = event.target.closest("[data-question-submit]");
+    if (submitQuestionButton) {
+      submitQuestion(submitQuestionButton.dataset.questionSubmit, submitQuestionButton);
+    }
+  });
+
+  root.addEventListener("submit", (event) => {
+    const editForm = event.target.closest("[data-post-edit-form]");
+    if (!editForm) return;
+    event.preventDefault();
+    submitPostEdit(editForm);
   });
 
   root.addEventListener("keydown", (event) => {
     const input = event.target.closest("[data-comment-input]");
-    if (!input || event.key !== "Enter") return;
+    const questionInput = event.target.closest("[data-question-input]");
+    if ((!input && !questionInput) || event.key !== "Enter") return;
     event.preventDefault();
-    submitComment(input.dataset.commentInput);
+    if (input) {
+      submitComment(input.dataset.commentInput);
+    } else {
+      submitQuestion(questionInput.dataset.questionInput);
+    }
   });
 
   root.addEventListener("input", (event) => {
-    const input = event.target.closest("[data-comment-input]");
+    const input = event.target.closest("[data-comment-input], [data-question-input]");
     if (!input) return;
     input.setAttribute("aria-invalid", "false");
+  });
+}
+
+function initPostDetailDialog() {
+  if (detailDialogBound) return;
+  detailDialogBound = true;
+
+  document.addEventListener("click", (event) => {
+    const closeButton = event.target.closest("[data-post-detail-close]");
+    if (closeButton || event.target.matches("[data-post-detail-backdrop]")) {
+      closePostDetail();
+      return;
+    }
+
+    const retryButton = event.target.closest("[data-post-detail-retry]");
+    if (retryButton) {
+      openPostDetail(retryButton.dataset.postDetailRetry);
+      return;
+    }
+
+    const loadMoreButton = event.target.closest("[data-detail-comments-load-more]");
+    if (loadMoreButton) {
+      loadMoreButton.disabled = true;
+      loadMoreButton.textContent = "加载中...";
+      loadDetailComments({ append: true });
+      return;
+    }
+
+    const detailCommentSubmit = event.target.closest("[data-detail-comment-submit]");
+    if (detailCommentSubmit) {
+      submitDetailComment(detailCommentSubmit.dataset.detailCommentSubmit, detailCommentSubmit);
+      return;
+    }
+
+    const commentDeleteButton = event.target.closest("[data-comment-delete]");
+    if (commentDeleteButton) {
+      deleteCommunityComment(
+        commentDeleteButton.dataset.commentPost,
+        commentDeleteButton.dataset.commentDelete,
+        commentDeleteButton
+      );
+    }
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && activeDetailPostId) {
+      closePostDetail();
+      return;
+    }
+
+    const detailInput = event.target.closest("[data-detail-comment-input]");
+    if (!detailInput || event.key !== "Enter") return;
+    event.preventDefault();
+    submitDetailComment(detailInput.dataset.detailCommentInput);
+  });
+
+  document.addEventListener("input", (event) => {
+    const detailInput = event.target.closest("[data-detail-comment-input]");
+    if (!detailInput) return;
+    detailInput.setAttribute("aria-invalid", "false");
   });
 }
 
@@ -1063,7 +2196,7 @@ function initAuthForms() {
         rememberAuthUser(result.user);
         window.location.replace(getPostLoginUrl());
       } catch (error) {
-        setMessage(error.message || "注册失败，请稍后重试。");
+        setMessage(withRequestId(error.message || "注册失败，请稍后重试。", error));
       } finally {
         setSubmitting(false);
       }
@@ -1080,13 +2213,14 @@ function initAuthForms() {
       rememberAuthUser(result.user);
       window.location.replace(getPostLoginUrl());
     } catch (error) {
-      setMessage(error.message || "登录失败，请稍后重试。");
+      setMessage(withRequestId(error.message || "登录失败，请稍后重试。", error));
     } finally {
       setSubmitting(false);
     }
   });
 
   setAuthMode(form.dataset.authMode || "login");
+  window.__birdoraAuthFormsReady = true;
 }
 
 async function logout() {
@@ -1111,6 +2245,10 @@ function initLogoutButtons() {
       logout();
     });
   });
+
+  if (logoutButtons.length) {
+    window.__birdoraLogoutReady = true;
+  }
 }
 
 function withTimeout(promise, timeoutMs, message) {
@@ -1141,6 +2279,295 @@ function fetchJsonWithTimeout(url, timeoutMs, message) {
 
     throw error;
   });
+}
+
+function createRecognitionError(kind, message, details = {}) {
+  const error = new Error(message);
+  error.recognitionKind = kind;
+  if (details.status) error.status = details.status;
+  if (details.code) error.code = details.code;
+  if (details.requestId) error.requestId = details.requestId;
+  if (details.cause) error.cause = details.cause;
+  return error;
+}
+
+function isIosDevice() {
+  return /iPad|iPhone|iPod/i.test(navigator.userAgent || "");
+}
+
+function isWeChatBrowser() {
+  return /MicroMessenger/i.test(navigator.userAgent || "");
+}
+
+function shouldUseServerRecognitionFirst() {
+  return (
+    window.BIRDORA_FORCE_SERVER_RECOGNITION === true ||
+    String(window.BIRDORA_FORCE_SERVER_RECOGNITION || "").toLowerCase() === "true" ||
+    (isIosDevice() && isWeChatBrowser())
+  );
+}
+
+function isRecognizableImageFile(file) {
+  const name = String(file?.name || "").toLowerCase();
+  return (
+    String(file?.type || "").startsWith("image/") ||
+    /\.(jpe?g|png|webp|heic|heif)$/i.test(name)
+  );
+}
+
+function isHeicMetadata(file) {
+  const type = String(file?.type || "").toLowerCase();
+  const name = String(file?.name || "").toLowerCase();
+  return type === "image/heic" || type === "image/heif" || /\.(heic|heif)$/i.test(name);
+}
+
+function readBlobAsArrayBuffer(blob) {
+  if (blob.arrayBuffer) return blob.arrayBuffer();
+
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("图片文件头读取失败。"));
+    reader.readAsArrayBuffer(blob);
+  });
+}
+
+function isHeicHeader(bytes) {
+  if (!bytes || bytes.length < 12) return false;
+  const header = String.fromCharCode(...bytes.slice(4, Math.min(bytes.length, 32)));
+  return (
+    header.startsWith("ftyp") &&
+    /(heic|heix|hevc|hevx|heim|heis|mif1|msf1)/i.test(header)
+  );
+}
+
+async function isHeicFile(file) {
+  if (isHeicMetadata(file)) return true;
+
+  try {
+    const buffer = await readBlobAsArrayBuffer(file.slice(0, 32));
+    return isHeicHeader(new Uint8Array(buffer));
+  } catch {
+    return false;
+  }
+}
+
+function loadHeicConverter() {
+  if (window.HeicTo) return Promise.resolve(window.HeicTo);
+  if (heicConverterPromise) return heicConverterPromise;
+
+  heicConverterPromise = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = HEIC_CONVERTER_PATH;
+    script.async = true;
+    script.onload = () => {
+      if (window.HeicTo) {
+        resolve(window.HeicTo);
+      } else {
+        reject(new Error("HEIC 转换器加载后没有初始化。"));
+      }
+    };
+    script.onerror = () => reject(new Error("HEIC 转换器加载失败。"));
+    document.head.appendChild(script);
+  }).catch((error) => {
+    heicConverterPromise = null;
+    throw error;
+  });
+
+  return heicConverterPromise;
+}
+
+function makeConvertedImageFile(blob, originalFile) {
+  const baseName = String(originalFile?.name || "iphone-photo").replace(/\.[^.]+$/, "") || "iphone-photo";
+  const fileName = `${baseName}.jpg`;
+
+  try {
+    return new File([blob], fileName, {
+      type: "image/jpeg",
+      lastModified: originalFile?.lastModified || Date.now(),
+    });
+  } catch {
+    blob.name = fileName;
+    return blob;
+  }
+}
+
+async function prepareRecognitionImageFile(file, onStatus) {
+  if (!isRecognizableImageFile(file)) {
+    throw createRecognitionError("image-read", "请选择 JPG、PNG、WebP 或 iPhone HEIC/HEIF 照片。");
+  }
+
+  if (!(await isHeicFile(file))) {
+    return file;
+  }
+
+  onStatus("正在转换 iPhone HEIC 照片为网页可识别的 JPEG...");
+  try {
+    const heicTo = await loadHeicConverter();
+    const converted = await heicTo({
+      blob: file,
+      type: "image/jpeg",
+      quality: 0.86,
+    });
+    const convertedBlob = Array.isArray(converted) ? converted[0] : converted;
+    if (!convertedBlob?.size) {
+      throw new Error("HEIC 转换结果为空。");
+    }
+    return makeConvertedImageFile(convertedBlob, file);
+  } catch (error) {
+    throw createRecognitionError(
+      "heic-conversion",
+      "iPhone 高效率照片转换失败，请换一张截图或 JPG 照片后重试。",
+      { cause: error }
+    );
+  }
+}
+
+function loadPreviewImage(file) {
+  let objectUrl = "";
+
+  return new Promise((resolve, reject) => {
+    objectUrl = URL.createObjectURL(file);
+    let settled = false;
+    const timer = window.setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      preview.onload = null;
+      preview.onerror = null;
+      reject(createRecognitionError("image-read", "图片读取超时，请换一张截图或 JPG 照片后重试。"));
+    }, RECOGNITION_IMAGE_LOAD_TIMEOUT_MS);
+
+    const finish = (fn) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timer);
+      preview.onload = null;
+      preview.onerror = null;
+      fn();
+    };
+
+    preview.onload = () => finish(resolve);
+    preview.onerror = () => finish(() => {
+      reject(createRecognitionError("image-read", "图片读取失败，请换一张截图或 JPG/PNG 照片后重试。"));
+    });
+    preview.src = objectUrl;
+  }).finally(() => {
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+  });
+}
+
+async function recognitionRequest(body) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), RECOGNITION_SERVER_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(`${AUTH_API_BASE_URL}/api/recognition/classify`, {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    const rawBody = await response.text();
+    const requestId = response.headers.get("X-Request-Id") || "";
+    let data = null;
+
+    try {
+      data = rawBody ? JSON.parse(rawBody) : null;
+    } catch (error) {
+      throw createRecognitionError("server", "识别服务返回格式异常，请稍后重试。", {
+        status: response.status,
+        requestId,
+        cause: error,
+      });
+    }
+
+    if (!response.ok) {
+      const message = data && typeof data === "object" ? data.message : "";
+      const translated =
+        response.status === 401
+          ? "登录状态已失效，请重新登录后再识别。"
+          : response.status === 429
+            ? "识别请求太频繁，请稍等后重试。"
+            : message || "识别服务暂时不可用，请稍后重试。";
+      throw createRecognitionError("server", translated, {
+        status: response.status,
+        code: data?.code || "HTTP_ERROR",
+        requestId: data?.requestId || requestId,
+      });
+    }
+
+    return data;
+  } catch (error) {
+    if (error?.recognitionKind) throw error;
+    if (error?.name === "AbortError") {
+      throw createRecognitionError("server", "识别服务响应超时，请检查网络后重试。", { cause: error });
+    }
+    throw createRecognitionError("server", "识别服务连接失败，请检查网络后重试。", { cause: error });
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
+function enrichRecognitionResult(result) {
+  const candidates = Array.isArray(result?.candidates)
+    ? result.candidates.map((candidate) => ({
+        ...candidate,
+        atlasBird: candidate.isMapped ? findAtlasBirdForCandidate(candidate) : null,
+      }))
+    : [];
+
+  return {
+    ...result,
+    candidates,
+    top: candidates[0] || null,
+    isConfident: Boolean(candidates[0] && candidates[0].isMapped && candidates[0].probability >= OSEA_CONFIDENCE_THRESHOLD),
+    source: result?.source || "osea-server",
+  };
+}
+
+async function classifyImageWithServer(imagePayload, onStatus) {
+  if (!imagePayload?.imageDataUrl) {
+    throw createRecognitionError("server", "没有可发送给兼容识别服务的图片。");
+  }
+
+  onStatus("正在使用兼容识别服务分析照片...");
+  const data = await recognitionRequest({
+    imageDataUrl: imagePayload.imageDataUrl,
+    imageName: imagePayload.imageName || "recognition-image.jpg",
+  });
+
+  if (!data?.result) {
+    throw createRecognitionError("server", "识别服务没有返回有效结果。");
+  }
+
+  return enrichRecognitionResult(data.result);
+}
+
+async function classifyImageWithFallback(imageElement, imagePayload, onStatus) {
+  if (shouldUseServerRecognitionFirst()) {
+    onStatus("检测到 iPhone 微信环境，正在切换到兼容识别服务...");
+    return classifyImageWithServer(imagePayload, onStatus);
+  }
+
+  try {
+    const result = await classifyImageElement(imageElement, onStatus);
+    return {
+      ...result,
+      source: "osea-browser",
+    };
+  } catch (browserError) {
+    onStatus("本机模型运行不稳定，正在切换到兼容识别服务...");
+    try {
+      return await classifyImageWithServer(imagePayload, onStatus);
+    } catch (serverError) {
+      if (!serverError.cause) serverError.cause = browserError;
+      throw serverError;
+    }
+  }
 }
 
 function getClassifier(onStatus = () => {}) {
@@ -1341,14 +2768,15 @@ async function classifyImageElement(imageElement, onStatus = () => {}) {
 
   onStatus("正在整理 Top 5 识别候选...");
   const candidates = topOseaCandidates(output.data, birdInfo);
+  const top = candidates[0] || null;
 
   return {
     candidates,
     outputCount: output.data.length,
     labelCount: birdInfo.length,
     unmappedOutputCount: Math.max(0, output.data.length - birdInfo.length),
-    top: candidates[0] || null,
-    isConfident: Boolean(candidates[0] && candidates[0].probability >= OSEA_CONFIDENCE_THRESHOLD),
+    top,
+    isConfident: Boolean(top && top.isMapped && top.probability >= OSEA_CONFIDENCE_THRESHOLD),
   };
 }
 
@@ -1625,11 +3053,18 @@ async function renderBirds(options = {}) {
     const candidateEntries = commonBirdCandidates
       .map((candidate) => entryByIndex.get(candidate.oseaIndex))
       .filter(Boolean);
+    const defaultCandidateEntries = candidateEntries.filter(
+      (entry) => !ATLAS_DEFAULT_HIDDEN_INDEXES.has(entry.index)
+    );
     const candidateEntryIndexSet = new Set(candidateEntries.map((entry) => entry.index));
-    const fallbackEntries = entries.filter((entry) => !candidateEntryIndexSet.has(entry.index));
+    const fallbackEntries = entries.filter(
+      (entry) =>
+        !candidateEntryIndexSet.has(entry.index) &&
+        !ATLAS_DEFAULT_HIDDEN_INDEXES.has(entry.index)
+    );
     const visible = query
       ? matched.slice(0, getAtlasSearchLimit())
-      : [...candidateEntries, ...fallbackEntries].slice(0, initialLimit);
+      : [...defaultCandidateEntries, ...fallbackEntries].slice(0, initialLimit);
     const candidateIndexSet = new Set(commonBirdCandidates.map((candidate) => candidate.oseaIndex));
     const progress = commonBirdCandidates.length
       ? {
@@ -1663,9 +3098,11 @@ async function renderBirds(options = {}) {
         </div>
       `
       : renderAtlasMarquee(visible);
+    syncAtlasMarqueeAutoScroll();
   } catch (error) {
     if (runId !== atlasRenderRunId) return;
 
+    stopAtlasMarqueeAutoScroll();
     birdGrid.classList.add("is-empty");
     birdGrid.classList.remove("is-marquee");
     birdGrid.innerHTML =
@@ -1688,6 +3125,106 @@ function renderAtlasMarquee(entries) {
   `;
 }
 
+function shouldUseTouchAtlasMarquee() {
+  return Boolean(window.matchMedia?.(ATLAS_TOUCH_MARQUEE_QUERY).matches);
+}
+
+function getAtlasMarqueeLoopWidth() {
+  const marquee = birdGrid?.querySelector(".bird-marquee");
+  const firstTrack = marquee?.querySelector(".bird-track:not([aria-hidden='true'])");
+  if (!marquee || !firstTrack) return 0;
+
+  const marqueeStyle = window.getComputedStyle(marquee);
+  const trackGap = Number.parseFloat(marqueeStyle.columnGap || marqueeStyle.gap || "0") || 0;
+  return firstTrack.getBoundingClientRect().width + trackGap;
+}
+
+function stopAtlasMarqueeAutoScroll(options = {}) {
+  if (atlasMarqueeAutoScrollFrame) {
+    window.cancelAnimationFrame(atlasMarqueeAutoScrollFrame);
+    atlasMarqueeAutoScrollFrame = null;
+  }
+
+  atlasMarqueeAutoScrollLastTime = 0;
+  birdGrid?.classList.remove("is-auto-scrolling");
+
+  if (options.clearResumeTimer !== false) {
+    window.clearTimeout(atlasMarqueeResumeTimer);
+    atlasMarqueeResumeTimer = null;
+  }
+}
+
+function startAtlasMarqueeAutoScroll() {
+  if (
+    atlasMarqueeAutoScrollFrame ||
+    atlasMarqueeUserActive ||
+    !birdGrid?.classList.contains("is-marquee") ||
+    !shouldUseTouchAtlasMarquee()
+  ) {
+    return;
+  }
+
+  birdGrid.classList.add("is-auto-scrolling");
+
+  const step = (timestamp) => {
+    if (
+      atlasMarqueeUserActive ||
+      !birdGrid?.classList.contains("is-marquee") ||
+      !shouldUseTouchAtlasMarquee()
+    ) {
+      stopAtlasMarqueeAutoScroll({ clearResumeTimer: false });
+      return;
+    }
+
+    if (!atlasMarqueeAutoScrollLastTime) {
+      atlasMarqueeAutoScrollLastTime = timestamp;
+    }
+
+    const elapsedSeconds = Math.min((timestamp - atlasMarqueeAutoScrollLastTime) / 1000, 0.05);
+    atlasMarqueeAutoScrollLastTime = timestamp;
+
+    const loopWidth = getAtlasMarqueeLoopWidth();
+    if (loopWidth > 0) {
+      if (birdGrid.scrollLeft >= loopWidth) {
+        birdGrid.scrollLeft -= loopWidth;
+      }
+
+      birdGrid.scrollLeft += ATLAS_TOUCH_MARQUEE_SPEED * elapsedSeconds;
+    }
+
+    atlasMarqueeAutoScrollFrame = window.requestAnimationFrame(step);
+  };
+
+  atlasMarqueeAutoScrollFrame = window.requestAnimationFrame(step);
+}
+
+function syncAtlasMarqueeAutoScroll() {
+  stopAtlasMarqueeAutoScroll();
+  atlasMarqueeUserActive = false;
+
+  if (!birdGrid?.classList.contains("is-marquee")) return;
+
+  if (!shouldUseTouchAtlasMarquee()) {
+    birdGrid.scrollLeft = 0;
+    return;
+  }
+
+  startAtlasMarqueeAutoScroll();
+}
+
+function pauseAtlasMarqueeForUser() {
+  atlasMarqueeUserActive = true;
+  stopAtlasMarqueeAutoScroll();
+}
+
+function resumeAtlasMarqueeAfterUser() {
+  window.clearTimeout(atlasMarqueeResumeTimer);
+  atlasMarqueeResumeTimer = window.setTimeout(() => {
+    atlasMarqueeUserActive = false;
+    startAtlasMarqueeAutoScroll();
+  }, ATLAS_TOUCH_MARQUEE_RESUME_DELAY_MS);
+}
+
 function initAtlasSearch() {
   if (!birdSearch) return;
 
@@ -1699,19 +3236,29 @@ function initAtlasSearch() {
   });
 
   if (birdGrid) {
-    const pauseMarquee = () => birdGrid.classList.add("is-paused");
+    const pauseMarquee = () => {
+      birdGrid.classList.add("is-paused");
+      pauseAtlasMarqueeForUser();
+    };
     const resumeMarquee = () => {
       if (birdGrid.contains(document.activeElement)) return;
       birdGrid.classList.remove("is-paused");
+      resumeAtlasMarqueeAfterUser();
     };
 
     birdGrid.addEventListener("pointerenter", pauseMarquee);
     birdGrid.addEventListener("pointerdown", pauseMarquee);
     birdGrid.addEventListener("focusin", pauseMarquee);
     birdGrid.addEventListener("pointerleave", resumeMarquee);
+    birdGrid.addEventListener("pointerup", resumeMarquee);
+    birdGrid.addEventListener("pointercancel", resumeMarquee);
+    birdGrid.addEventListener("touchstart", pauseMarquee, { passive: true });
+    birdGrid.addEventListener("touchend", resumeMarquee);
+    birdGrid.addEventListener("touchcancel", resumeMarquee);
     birdGrid.addEventListener("focusout", () => {
       window.setTimeout(resumeMarquee, 0);
     });
+    window.addEventListener("resize", syncAtlasMarqueeAutoScroll);
 
     birdGrid.addEventListener("click", (event) => {
       const trigger = event.target.closest("[data-atlas-index]");
@@ -1726,14 +3273,23 @@ function initAtlasSearch() {
 
   if (candidateList) {
     candidateList.addEventListener("click", (event) => {
-      const trigger = event.target.closest("[data-candidate-index]");
+      const atlasTrigger = event.target.closest("[data-candidate-atlas]");
+      if (atlasTrigger) {
+        openAtlasDetailByIndex(Number(atlasTrigger.dataset.candidateAtlas), {
+          context: "识别候选详情",
+          syncSearch: true,
+          scroll: true,
+        });
+        return;
+      }
+
+      const trigger = event.target.closest("[data-candidate-select]");
       if (!trigger) return;
 
-      openAtlasDetailByIndex(Number(trigger.dataset.candidateIndex), {
-        context: "识别候选详情",
-        syncSearch: true,
-        scroll: true,
-      });
+      const selected = currentRecognitionCandidates.find(
+        (candidate) => String(candidate.index) === String(trigger.dataset.candidateSelect)
+      );
+      selectRecognitionCandidate(selected);
     });
   }
 }
@@ -1772,18 +3328,32 @@ function setConfidenceRing(confidence, color = "var(--green)") {
 function updateRecognitionActions() {
   const canUseResult = lastRecognitionStatus === "success";
   const shareDetectedButton = document.querySelector("#shareDetected");
+  const recognitionSaved =
+    canUseResult && savedObservation && buildRecognitionSaveKey() === lastSavedRecognitionKey;
   const recognitionAlreadyShared =
-    canUseResult && currentRecognitionShareKey && currentRecognitionShareKey === lastSharedRecognitionKey;
+    recognitionSaved && currentRecognitionShareKey && currentRecognitionShareKey === lastSharedRecognitionKey;
 
   if (useDetected) {
     useDetected.disabled = !canUseResult;
     useDetected.setAttribute("aria-disabled", String(!canUseResult));
   }
 
+  if (saveObservationButton) {
+    const canSave = canUseResult && currentRecognitionImagePayload && !recognitionSaved;
+    saveObservationButton.disabled = !canSave;
+    saveObservationButton.setAttribute("aria-disabled", String(!canSave));
+    saveObservationButton.textContent = recognitionSaved ? "已保存到我的观测记录" : "确认并保存观测记录";
+  }
+
   if (shareDetectedButton) {
-    shareDetectedButton.disabled = !canUseResult || recognitionAlreadyShared;
-    shareDetectedButton.setAttribute("aria-disabled", String(!canUseResult || recognitionAlreadyShared));
-    shareDetectedButton.textContent = recognitionAlreadyShared ? "已发布" : "发布到社区";
+    const canShare = recognitionSaved && !recognitionAlreadyShared;
+    shareDetectedButton.disabled = !canShare;
+    shareDetectedButton.setAttribute("aria-disabled", String(!canShare));
+    shareDetectedButton.textContent = recognitionAlreadyShared
+      ? "已发布"
+      : recognitionSaved
+        ? "发布到社区"
+        : "保存后发布到社区";
   }
 }
 
@@ -1811,19 +3381,23 @@ function renderCandidateList(candidates = []) {
         : candidate.atlasBird
           ? "图鉴已收录"
           : "图鉴待补充";
+      const selectedClass = selectedRecognitionCandidate?.index === candidate.index ? " is-selected" : "";
 
       return `
         <li>
-          <button class="candidate-open" type="button" data-candidate-index="${candidate.index}">
-            <span>
-              <strong>${index + 1}. ${escapeHtml(candidate.cn)}</strong>
-              <small>${escapeHtml(candidate.en || "英文名待补充")}${escapeHtml(latin)}</small>
-            </span>
-            <span>
-              <b>${escapeHtml(formatCandidateScore(candidate.probability))}</b>
-              <em>${escapeHtml(atlasNote)}</em>
-            </span>
-          </button>
+          <div class="candidate-row">
+            <button class="candidate-open${selectedClass}" type="button" data-candidate-select="${candidate.index}">
+              <span>
+                <strong>${index + 1}. ${escapeHtml(candidate.cn)}</strong>
+                <small>${escapeHtml(candidate.en || "英文名待补充")}${escapeHtml(latin)}</small>
+              </span>
+              <span>
+                <b>${escapeHtml(formatCandidateScore(candidate.probability))}</b>
+                <em>${escapeHtml(selectedClass ? "已选择" : atlasNote)}</em>
+              </span>
+            </button>
+            <button class="candidate-atlas" type="button" data-candidate-atlas="${candidate.index}">图鉴</button>
+          </div>
         </li>
       `;
     })
@@ -1843,6 +3417,44 @@ function createCandidateBird(candidate) {
   };
 }
 
+function buildRecognitionShareKey(bird, candidate) {
+  return [
+    bird.name,
+    bird.latin,
+    bird.feature,
+    candidate?.index ?? "",
+    Math.round((candidate?.probability || 0) * 1000000),
+    savedObservation?.id || "",
+  ].join("|");
+}
+
+function selectRecognitionCandidate(candidate) {
+  if (!candidate || !confidenceText || !resultName || !resultMeta || !resultFeature) return;
+
+  const bird = candidate.atlasBird || createCandidateBird(candidate);
+  const confidence = displayConfidence(candidate.probability);
+  const keepSavedObservation =
+    savedObservation &&
+    selectedRecognitionCandidate?.index === candidate.index &&
+    buildRecognitionSaveKey() === lastSavedRecognitionKey;
+  selectedRecognitionCandidate = candidate;
+  detectedBird = bird;
+  if (!keepSavedObservation) {
+    savedObservation = null;
+    lastSavedRecognitionKey = "";
+    lastSharedRecognitionKey = "";
+  }
+  currentRecognitionShareKey = buildRecognitionShareKey(bird, candidate);
+  confidenceText.textContent = `${confidence}%`;
+  resultName.textContent = bird.name;
+  resultMeta.textContent = `${bird.latin} · ${bird.place}`;
+  resultFeature.textContent = bird.feature;
+  renderCandidateList(currentRecognitionCandidates);
+  setConfidenceRing(confidence);
+  setObservationMessage("");
+  updateRecognitionActions();
+}
+
 function setResult(
   bird,
   confidence = 92,
@@ -1851,10 +3463,15 @@ function setResult(
 ) {
   if (!confidenceText || !resultName || !resultMeta || !resultFeature || !modelDetail) return;
 
+  setRecognitionVisualPending(false);
   detectedBird = bird;
   lastRecognitionStatus = "success";
-  currentRecognitionShareKey = `${bird.name}|${bird.latin}|${bird.feature}`;
+  currentRecognitionCandidates = candidates;
+  selectedRecognitionCandidate = candidates[0] || null;
+  savedObservation = null;
+  lastSavedRecognitionKey = "";
   lastSharedRecognitionKey = "";
+  currentRecognitionShareKey = buildRecognitionShareKey(bird, selectedRecognitionCandidate);
   confidenceText.textContent = `${confidence}%`;
   resultName.textContent = bird.name;
   resultMeta.textContent = `${bird.latin} · ${bird.place}`;
@@ -1870,6 +3487,11 @@ function setPendingResult(text) {
 
   lastRecognitionStatus = "pending";
   currentRecognitionShareKey = "";
+  currentRecognitionSource = "osea-browser";
+  currentRecognitionCandidates = [];
+  selectedRecognitionCandidate = null;
+  savedObservation = null;
+  lastSavedRecognitionKey = "";
   confidenceText.textContent = "...";
   resultName.textContent = "正在识别";
   resultMeta.textContent = "AI 模型正在分析这张照片";
@@ -1880,11 +3502,27 @@ function setPendingResult(text) {
   updateRecognitionActions();
 }
 
+function setRecognitionVisualPending(isPending) {
+  if (!uploadZone) return;
+
+  uploadZone.classList.toggle("is-recognizing", isPending);
+  if (isPending) {
+    uploadZone.setAttribute("aria-busy", "true");
+  } else {
+    uploadZone.removeAttribute("aria-busy");
+  }
+}
+
 function setUnknownResult(predictions, candidates = []) {
   if (!confidenceText || !resultName || !resultMeta || !resultFeature || !modelDetail) return;
 
+  setRecognitionVisualPending(false);
   lastRecognitionStatus = "unknown";
   currentRecognitionShareKey = "";
+  currentRecognitionCandidates = candidates;
+  selectedRecognitionCandidate = candidates[0] || null;
+  savedObservation = null;
+  lastSavedRecognitionKey = "";
   confidenceText.textContent = "--";
   resultName.textContent = "未确定鸟种";
   resultMeta.textContent = "建议换一张更清晰、主体更大的鸟类照片";
@@ -1896,6 +3534,7 @@ function setUnknownResult(predictions, candidates = []) {
 }
 
 function setCandidateResult(result) {
+  currentRecognitionSource = result.source || "osea-browser";
   const top = result.top;
   const bird = top.atlasBird || createCandidateBird(top);
   const confidence = displayConfidence(top.probability);
@@ -1905,13 +3544,102 @@ function setCandidateResult(result) {
     ? `；${result.unmappedOutputCount.toLocaleString("zh-CN")} 个输出类仍待补标签映射`
     : "";
   const topLabel = top.en ? `${top.cn} / ${top.en}` : top.cn;
+  const sourceNote = currentRecognitionSource === "osea-server" ? "兼容识别服务" : "OSEA 模型";
   const detail = top.isMapped
     ? top.atlasBird
-      ? `OSEA 模型 ${outputCount.toLocaleString("zh-CN")} 维输出，已映射 ${labelCount.toLocaleString("zh-CN")} 个标签${coverageNote}。Top 1：${topLabel}。`
-      : `OSEA 模型 ${outputCount.toLocaleString("zh-CN")} 维输出，已映射 ${labelCount.toLocaleString("zh-CN")} 个标签${coverageNote}。Top 1：${topLabel}，本地图鉴资料待补充。`
-    : `OSEA 模型 ${outputCount.toLocaleString("zh-CN")} 维输出，Top 1 落在未映射输出类：${topLabel}。需要补齐标签映射后才能给出正式鸟种名。`;
+      ? `${sourceNote} ${outputCount.toLocaleString("zh-CN")} 维输出，已映射 ${labelCount.toLocaleString("zh-CN")} 个标签${coverageNote}。Top 1：${topLabel}。`
+      : `${sourceNote} ${outputCount.toLocaleString("zh-CN")} 维输出，已映射 ${labelCount.toLocaleString("zh-CN")} 个标签${coverageNote}。Top 1：${topLabel}，本地图鉴资料待补充。`
+    : `${sourceNote} ${outputCount.toLocaleString("zh-CN")} 维输出，Top 1 落在未映射输出类：${topLabel}。需要补齐标签映射后才能给出正式鸟种名。`;
 
   setResult(bird, confidence, detail, result.candidates);
+}
+
+function getRecognitionFailureCopy(error) {
+  if (window.location.protocol === "file:") {
+    return {
+      name: "识别失败",
+      meta: "模型资源无法从 file:// 加载",
+      feature: "请使用 http://localhost 或正式网址打开网站，直接 file:// 打开无法加载模型资源。",
+    };
+  }
+
+  if (error?.recognitionKind === "image-read") {
+    return {
+      name: "图片读取失败",
+      meta: "这张图片没有被当前浏览器成功解码",
+      feature: "请换一张 JPG/PNG 截图，或在 iPhone 相册里先截图后再上传。",
+    };
+  }
+
+  if (error?.recognitionKind === "heic-conversion") {
+    return {
+      name: "图片转换失败",
+      meta: "iPhone 高效率照片暂时无法转换",
+      feature: "请上传截图、微信保存后的 JPG，或把相机格式改为“最兼容”后重拍。",
+    };
+  }
+
+  if (error?.recognitionKind === "server") {
+    return {
+      name: "识别服务连接失败",
+      meta: "兼容识别服务没有完成本次分析",
+      feature: "请检查网络后重新选择照片；如果是在微信内打开，也可以点右上角用 Safari 打开。",
+    };
+  }
+
+  return {
+    name: "识别失败",
+    meta: "浏览器模型运行失败",
+    feature: "请重新选择照片；如果在 iPhone 微信内打开，系统会自动尝试兼容识别服务。",
+  };
+}
+
+function setRecognitionFailure(error) {
+  if (!confidenceText || !resultName || !resultMeta || !resultFeature || !modelDetail) return;
+
+  const copy = getRecognitionFailureCopy(error);
+  lastRecognitionStatus = "failed";
+  currentRecognitionShareKey = "";
+  currentRecognitionImagePayload = null;
+  currentRecognitionSource = "osea-browser";
+  savedObservation = null;
+  lastSavedRecognitionKey = "";
+  setRecognitionVisualPending(false);
+  uploadZone.classList.remove("has-image");
+  preview.removeAttribute("src");
+  confidenceText.textContent = "!";
+  resultName.textContent = copy.name;
+  resultMeta.textContent = copy.meta;
+  resultFeature.textContent = copy.feature;
+  modelDetail.textContent = withRequestId(error?.message || "未知错误", error);
+  setCandidateListMessage("识别失败，暂无候选结果。");
+  setConfidenceRing(100, "#b36b5e");
+  updateRecognitionActions();
+}
+
+function showRecognitionResult(result) {
+  if (!result.top) {
+    setUnknownResult("模型没有返回可用候选。", result.candidates || []);
+    return;
+  }
+
+  if (!result.top.isMapped) {
+    setUnknownResult(
+      `Top 1 落在未映射 OSEA 输出类：${result.top.cn}。需要补齐标签映射后才能给出正式鸟种名。`,
+      result.candidates
+    );
+    return;
+  }
+
+  if (!result.isConfident) {
+    setUnknownResult(
+      `Top 1 为 ${result.top.cn}，置信度 ${formatCandidateScore(result.top.probability)}，低于上线阈值。`,
+      result.candidates
+    );
+    return;
+  }
+
+  setCandidateResult(result);
 }
 
 function initBirdRecognition() {
@@ -1930,65 +3658,159 @@ function initBirdRecognition() {
     };
 
     uploadZone.classList.remove("has-image");
+    setRecognitionVisualPending(false);
+    currentRecognitionImagePayload = null;
+    savedObservation = null;
+    lastSavedRecognitionKey = "";
+    lastSharedRecognitionKey = "";
+    currentRecognitionSource = "osea-browser";
+    setObservationMessage("");
     reportRecognitionStage("正在读取照片并准备 OSEA 鸟类识别模型...");
 
-    let objectUrl = "";
     try {
-      objectUrl = URL.createObjectURL(file);
-      await new Promise((resolve, reject) => {
-        preview.onload = resolve;
-        preview.onerror = reject;
-        preview.src = objectUrl;
-      });
-
-      URL.revokeObjectURL(objectUrl);
-      objectUrl = "";
+      const recognitionFile = await prepareRecognitionImageFile(file, reportRecognitionStage);
+      await loadPreviewImage(recognitionFile);
       if (runId !== recognitionRunId) return;
 
       uploadZone.classList.add("has-image");
-      const result = await classifyImageElement(preview, reportRecognitionStage);
+      setRecognitionVisualPending(true);
+      currentRecognitionImagePayload = buildCompressedObservationImage(preview, recognitionFile);
+      const result = await classifyImageWithFallback(preview, currentRecognitionImagePayload, reportRecognitionStage);
       if (runId !== recognitionRunId) return;
 
-      if (!result.top) {
-        setUnknownResult("模型没有返回可用候选。");
-        return;
-      }
-
-      if (!result.isConfident) {
-        setUnknownResult(
-          `Top 1 为 ${result.top.cn}，置信度 ${formatCandidateScore(result.top.probability)}，低于上线阈值。`,
-          result.candidates
-        );
-        return;
-      }
-
-      setCandidateResult(result);
+      showRecognitionResult(result);
     } catch (error) {
-      if (objectUrl) {
-        URL.revokeObjectURL(objectUrl);
-      }
       if (runId !== recognitionRunId) return;
-      lastRecognitionStatus = "failed";
-      currentRecognitionShareKey = "";
-      uploadZone.classList.remove("has-image");
-      preview.removeAttribute("src");
-      confidenceText.textContent = "!";
-      resultName.textContent = "识别失败";
-      resultMeta.textContent = "模型加载或图片读取失败";
-      resultFeature.textContent =
-        window.location.protocol === "file:"
-          ? "请使用 http://localhost 或正式网址打开网站，直接 file:// 打开无法加载模型资源。"
-          : "请检查网络和模型资源是否可访问，重新选择照片即可重试。";
-      modelDetail.textContent = error.message || "未知错误";
-      setCandidateListMessage("识别失败，暂无候选结果。");
-      setConfidenceRing(100, "#b36b5e");
-      updateRecognitionActions();
+      setRecognitionFailure(error);
     }
+  });
+
+  window.__birdoraRecognitionReady = true;
+}
+
+function buildCurrentObservationPayload() {
+  const candidate = selectedRecognitionCandidate;
+  if (!candidate || !currentRecognitionImagePayload) return null;
+
+  return {
+    selectedSpeciesName: candidate.cn,
+    selectedSpeciesScientificName: candidate.latin || "",
+    confidence: candidate.probability,
+    topCandidates: currentRecognitionCandidates.map((item, index) => buildCandidatePayload(item, index + 1)),
+    source: currentRecognitionSource || "osea-browser",
+    observedAt: new Date().toISOString(),
+    ...currentRecognitionImagePayload,
+  };
+}
+
+async function saveCurrentObservation() {
+  if (!observationApi) {
+    setObservationMessage("观测记录服务暂不可用，请刷新页面后重试。");
+    return;
+  }
+
+  if (!requireLoginForAction()) return;
+
+  if (lastRecognitionStatus !== "success" || !selectedRecognitionCandidate) {
+    upload?.focus();
+    return;
+  }
+
+  const payload = buildCurrentObservationPayload();
+  if (!payload) {
+    setObservationMessage("识别图片还没有准备好，请重新选择照片后再保存。");
+    return;
+  }
+
+  const saveKey = buildRecognitionSaveKey();
+  if (savedObservation && saveKey && saveKey === lastSavedRecognitionKey) {
+    setObservationMessage("已保存到我的观测记录。");
+    return;
+  }
+
+  saveObservationButton.disabled = true;
+  setObservationMessage("正在保存观测记录...");
+
+  try {
+    const observation = await observationApi.createObservation(payload);
+    savedObservation = observation;
+    lastSavedRecognitionKey = saveKey;
+    currentRecognitionShareKey = buildRecognitionShareKey(detectedBird, selectedRecognitionCandidate);
+    syncObservationState(observation);
+    observationsLoadState = "ready";
+    setObservationMessage("已保存到我的观测记录。");
+    renderObservationList();
+    updateRecognitionActions();
+  } catch (error) {
+    setObservationMessage(getObservationMutationMessage(error, "保存失败，请稍后重试。"));
+    if (error?.status === 401) {
+      clearAuthState();
+      renderObservationList();
+    }
+  } finally {
+    updateRecognitionActions();
+  }
+}
+
+async function publishObservationToCommunity(observation, trigger = null) {
+  if (!observation) return;
+  if (!requireLoginForAction()) return;
+
+  const button = trigger || null;
+  if (button) {
+    button.disabled = true;
+    button.textContent = "正在发布...";
+  }
+
+  try {
+    const newPost = await communityApi.create(normalizeObservationForPost(observation));
+    syncCommunityPostState(newPost);
+    renderCurrentFeed();
+    setObservationMessage("已从观测记录发布到社区。");
+    if (button) {
+      button.textContent = "已发布";
+    }
+  } catch (error) {
+    setObservationMessage(getCommunityMutationMessage(error, "发布失败，请稍后重试。"));
+    if (error?.status === 401) {
+      clearAuthState();
+      renderObservationList();
+    }
+    if (button) {
+      button.disabled = false;
+      button.textContent = "发布到社区";
+    }
+  }
+}
+
+function initObservationListActions() {
+  if (!observationList) return;
+
+  observationList.addEventListener("click", async (event) => {
+    const retry = event.target.closest("[data-observation-retry]");
+    if (retry) {
+      await loadMyObservations();
+      return;
+    }
+
+    const trigger = event.target.closest("[data-observation-share]");
+    if (!trigger) return;
+
+    const observation = observations.find((item) => item.id === trigger.dataset.observationShare);
+    await publishObservationToCommunity(observation, trigger);
   });
 }
 
 function initPublishing() {
   if (postForm && postTitle && postBody) {
+    const updatePostImageName = () => {
+      if (!postImageName) return;
+
+      const selectedFileName = postImage?.files?.[0]?.name || "";
+      postImageName.textContent = selectedFileName || "未选择图片";
+      postImageName.title = selectedFileName;
+    };
+
     const setPostMessage = (text = "") => {
       if (postMessage) {
         postMessage.textContent = text;
@@ -2004,7 +3826,14 @@ function initPublishing() {
       });
     });
 
-    postForm.addEventListener("submit", (event) => {
+    postImage?.addEventListener("change", () => {
+      updatePostImageName();
+      setPostMessage("");
+    });
+
+    updatePostImageName();
+
+    postForm.addEventListener("submit", async (event) => {
       event.preventDefault();
 
       if (!requireLoginForAction()) return;
@@ -2020,25 +3849,34 @@ function initPublishing() {
         return;
       }
 
-      setPostMessage("");
+      const submitButton = postForm.querySelector('[type="submit"]');
+      setPostMessage("正在发布...");
+      submitButton.disabled = true;
 
-      const newPost = {
-        id: createPostId(),
-        title,
-        body,
-        bird: lastRecognitionStatus === "success" ? detectedBird.name : "观鸟笔记",
-        time: "刚刚",
-        author: currentUser?.nickname || "我",
-        ownerEmail: currentUser?.email || "",
-        source: "mine",
-      };
+      try {
+        const imagePayload = await readPostImageForUpload(postImage?.files?.[0]);
+        const newPost = await communityApi.create({
+          title,
+          body,
+          bird: lastRecognitionStatus === "success" ? detectedBird.name : "观鸟笔记",
+          ...(imagePayload || {}),
+        });
 
-      userPosts.unshift(newPost);
-      saveUserPosts();
-      postForm.reset();
-      postTitle.setAttribute("aria-invalid", "false");
-      postBody.setAttribute("aria-invalid", "false");
-      renderCurrentFeed();
+        syncCommunityPostState(newPost);
+        postForm.reset();
+        updatePostImageName();
+        postTitle.setAttribute("aria-invalid", "false");
+        postBody.setAttribute("aria-invalid", "false");
+        setPostMessage("发布成功，所有社区用户现在都能看到这条笔记。");
+        renderCurrentFeed();
+      } catch (error) {
+        setPostMessage(getCommunityMutationMessage(error, "发布失败，请稍后重试。"));
+        if (error?.status === 401) {
+          clearAuthState();
+        }
+      } finally {
+        submitButton.disabled = false;
+      }
     });
   }
 
@@ -2060,14 +3898,25 @@ function initPublishing() {
     });
   }
 
+  if (saveObservationButton) {
+    updateRecognitionActions();
+    saveObservationButton.addEventListener("click", saveCurrentObservation);
+  }
+
   const shareDetectedButton = document.querySelector("#shareDetected");
   if (shareDetectedButton) {
     updateRecognitionActions();
-    shareDetectedButton.addEventListener("click", () => {
+    shareDetectedButton.addEventListener("click", async () => {
       if (!requireLoginForAction()) return;
 
       if (lastRecognitionStatus !== "success") {
         upload?.focus();
+        return;
+      }
+
+      if (!savedObservation || buildRecognitionSaveKey() !== lastSavedRecognitionKey) {
+        setObservationMessage("请先确认并保存观测记录，再发布到社区。");
+        saveObservationButton?.focus();
         return;
       }
 
@@ -2076,23 +3925,28 @@ function initPublishing() {
         return;
       }
 
-      userPosts.unshift({
-        id: createPostId(),
-        title: `我识别到了一只 ${detectedBird.name}`,
-        body: `${detectedBird.feature} 这条记录已从 AI 识别结果生成。`,
-        bird: detectedBird.name,
-        time: "刚刚",
-        author: currentUser?.nickname || "我",
-        ownerEmail: currentUser?.email || "",
-        source: "mine",
-      });
-      lastSharedRecognitionKey = currentRecognitionShareKey;
-      saveUserPosts();
-      updateRecognitionActions();
-      renderCurrentFeed();
-      document.querySelector("#community")?.scrollIntoView({ behavior: "smooth" });
+      shareDetectedButton.disabled = true;
+      try {
+        const newPost = await communityApi.create(normalizeObservationForPost(savedObservation));
+        syncCommunityPostState(newPost);
+        lastSharedRecognitionKey = currentRecognitionShareKey;
+        setObservationMessage("已从观测记录发布到社区。");
+        updateRecognitionActions();
+        renderCurrentFeed();
+        document.querySelector("#community")?.scrollIntoView({ behavior: "smooth" });
+      } catch (error) {
+        setObservationMessage(getCommunityMutationMessage(error, "发布失败，请稍后重试。"));
+        if (error?.status === 401) {
+          clearAuthState();
+        }
+      } finally {
+        updateRecognitionActions();
+      }
     });
   }
+
+  initObservationListActions();
+  window.__birdoraPublishingReady = true;
 }
 
 function initScrollButtons() {
@@ -2282,17 +4136,13 @@ async function initLoginPage() {
 }
 
 async function initAuthenticatedPage() {
-  const cachedUser = getValidatedAuthUser();
-  if (cachedUser) {
-    currentUser = cachedUser;
-  }
+  currentUser = null;
   renderUserChrome();
 
-  loadUserPosts();
-  loadComments();
   initAtlasSearch();
   bindCommentFeed(feed);
   bindCommentFeed(communityFeed);
+  initPostDetailDialog();
   initCommunityTabs();
   initLogoutButtons();
   initBirdRecognition();
@@ -2300,21 +4150,23 @@ async function initAuthenticatedPage() {
   initScrollButtons();
   initDeviceConnection();
   renderCurrentFeed();
+  renderObservationList();
   updateModelReadiness();
   renderBirds();
   initHomeCommunityReveal();
   initSoftReveal();
 
   syncAuthState()
-    .then(() => {
-      loadUserPosts();
-      loadComments();
+    .then(async () => {
+      await loadCommunityPosts();
+      await loadMyObservations();
       syncCommunityTabs();
       renderCurrentFeed();
       syncHomeCommunityReveal();
     })
     .catch(() => {
       renderUserChrome();
+      renderObservationList();
     });
 
   if (new URLSearchParams(window.location.search).has("selftest")) {
@@ -2329,6 +4181,9 @@ async function initAuthenticatedPage() {
         });
         const result = await classifyImageElement(testImage);
         if (!result.top) throw new Error("自测没有返回候选结果。");
+        if (!result.top.isMapped) {
+          throw new Error(`自测 Top 1 为未映射输出类：${result.top.cn}。`);
+        }
         if (!result.isConfident) {
           throw new Error(`自测 Top 1 为 ${result.top.cn}，但置信度低于上线阈值。`);
         }

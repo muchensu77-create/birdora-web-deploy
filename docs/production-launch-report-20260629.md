@@ -133,9 +133,10 @@ curl -I https://jewelry-api.birdai-glasses.com
 /var/lib/birdora/birdora.sqlite
 /var/lib/birdora/birdora.sqlite-wal
 /var/lib/birdora/birdora.sqlite-shm
+/var/lib/birdora/uploads/community/
 ```
 
-建议至少每日备份 `/var/lib/birdora/`。
+建议至少每日备份 `/var/lib/birdora/` 整目录，确保 SQLite 和社区图片一起恢复。
 
 升级前先手动备份：
 
