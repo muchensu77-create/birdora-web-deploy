@@ -7,6 +7,7 @@ const cookieParser = require("cookie-parser");
 const authRoutes = require("./app/routes/auth.routes");
 const communityPostRoutes = require("./app/routes/community-post.routes");
 const observationRoutes = require("./app/routes/observation.routes");
+const recognitionRoutes = require("./app/routes/recognition.routes");
 const { createOriginGuard, resolveAllowedOrigins } = require("./app/middleware/origin-guard");
 const { requestIdMiddleware } = require("./app/middleware/request-id");
 
@@ -44,6 +45,21 @@ if (trustProxy !== false) {
 }
 
 app.use(requestIdMiddleware);
+app.use((req, res, next) => {
+  const originalJson = res.json.bind(res);
+  res.json = (body) => {
+    if (res.statusCode >= 400 && body && typeof body === "object" && !Array.isArray(body)) {
+      return originalJson({
+        ...body,
+        code: body.code || (res.statusCode >= 500 ? "INTERNAL_ERROR" : "REQUEST_ERROR"),
+        requestId: body.requestId || req.requestId || "",
+      });
+    }
+
+    return originalJson(body);
+  };
+  next();
+});
 
 app.use(
   cors({
@@ -74,6 +90,7 @@ app.get("/api/health", (_req, res) => {
 });
 
 app.use("/api/auth", authRoutes);
+app.use("/api/recognition", recognitionRoutes);
 app.use("/api/observations", observationRoutes);
 app.use("/api/community/posts", communityPostRoutes);
 
@@ -99,12 +116,22 @@ function sanitizeLogPath(value) {
   }
 }
 
+function isJsonParseError(err) {
+  return err?.type === "entity.parse.failed" || (err instanceof SyntaxError && err.status === 400 && "body" in err);
+}
+
 app.use((err, req, res, _next) => {
-  const statusCode = err.statusCode || 500;
+  const parseError = isJsonParseError(err);
+  const statusCode = parseError ? 400 : err.statusCode || err.status || 500;
   const message =
-    isProduction && statusCode >= 500
+    parseError
+      ? "Invalid JSON body"
+      : isProduction && statusCode >= 500
       ? "Internal server error"
       : err.message || "Internal server error";
+  const code = parseError
+    ? "INVALID_JSON_BODY"
+    : err.code || err.name || (statusCode >= 500 ? "INTERNAL_ERROR" : "REQUEST_ERROR");
 
   console.error(JSON.stringify({
     timestamp: new Date().toISOString(),
@@ -113,12 +140,14 @@ app.use((err, req, res, _next) => {
     method: req.method,
     path: sanitizeLogPath(req.originalUrl || req.url),
     status: statusCode,
-    errorCode: err.code || err.name || "Error",
+    errorCode: code,
     message: sanitizeLogMessage(err.message || message),
   }));
 
   res.status(statusCode).json({
     message,
+    code,
+    requestId: req.requestId || "",
   });
 });
 

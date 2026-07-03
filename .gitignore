@@ -3,6 +3,7 @@ node_modules/
 deploy/env/*.env
 npm-debug.log*
 logs/
+docs/browser-50-agent-results/
 app/data/*.sqlite
 app/data/*.sqlite-shm
 app/data/*.sqlite-wal

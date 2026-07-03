@@ -143,6 +143,27 @@ function average(values) {
   return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length);
 }
 
+function parseServerTiming(value) {
+  const timings = {};
+  if (!value) return timings;
+
+  for (const metric of String(value).split(",")) {
+    const parts = metric.split(";").map((part) => part.trim()).filter(Boolean);
+    const name = parts[0];
+    if (!name) continue;
+
+    const durationPart = parts.find((part) => part.toLowerCase().startsWith("dur="));
+    if (!durationPart) continue;
+
+    const duration = Number(durationPart.slice(4));
+    if (Number.isFinite(duration)) {
+      timings[name] = duration;
+    }
+  }
+
+  return timings;
+}
+
 function compactBody(body) {
   if (body === null || body === undefined) return "";
   const text = typeof body === "string" ? body : JSON.stringify(body);
@@ -211,6 +232,7 @@ class LoadRecorder {
       const ms = Date.now() - start;
       const status = response.status;
       const expected = isExpectedStatus(status, expectedStatuses, parsed.body);
+      const serverTiming = response.headers.get("server-timing") || "";
       const result = {
         scenario,
         endpoint,
@@ -223,6 +245,7 @@ class LoadRecorder {
         ms,
         bytes: parsed.bytes,
         requestId: response.headers.get("x-request-id") || "",
+        serverTiming,
         businessCategory,
         body: responseType === "json" ? parsed.body : null,
         bodySample: compactBody(parsed.body),
@@ -416,9 +439,15 @@ function makeObservationPayload(index, overrides = {}) {
   };
 }
 
+function makePostTitle(index) {
+  const suffix = `community post ${String(index).slice(0, 24)}`;
+  const runIdBudget = Math.max(8, 80 - suffix.length - 3);
+  return `[${RUN_ID.slice(0, runIdBudget)}] ${suffix}`.slice(0, 80);
+}
+
 function makePostPayload(index, observationId = "", withImage = false, overrides = {}) {
   return {
-    title: `[${RUN_ID}] community post ${index}`,
+    title: makePostTitle(index),
     body:
       `[${RUN_ID}] Load test post ${index}. A bird was observed near a wetland trail in clear weather, ` +
       "with location, behavior, and context included for copy analysis.",
@@ -738,7 +767,7 @@ async function scenarioECommunityWrite(recorder, state, validations) {
       pathname: `/api/community/posts/${encodeURIComponent(post.id)}`,
       cookieJar: user.cookieJar,
       json: {
-        title: `[${RUN_ID}] edited community post ${index}`,
+        title: makePostTitle(`edited-${index}`),
         body:
           `[${RUN_ID}] Edited load test post ${index}. The observer added weather, distance, behavior, ` +
           "and habitat details to keep the copy analysis stable.",
@@ -1013,6 +1042,43 @@ function endpointSummaries(results) {
   return summarizeBy(results, (result) => `${result.scenario} ${result.method} ${result.endpoint}`);
 }
 
+function timingSummary(values) {
+  return {
+    count: values.length,
+    average: average(values),
+    p50: percentile(values, 50),
+    p90: percentile(values, 90),
+    p95: percentile(values, 95),
+    p99: percentile(values, 99),
+    max: values.length ? Math.max(...values) : 0,
+  };
+}
+
+function getAuthTimingBreakdown(results) {
+  const grouped = new Map();
+
+  for (const result of results) {
+    if (!result.serverTiming || !result.endpoint.includes("/api/auth/")) continue;
+
+    const timings = parseServerTiming(result.serverTiming);
+    for (const [name, duration] of Object.entries(timings)) {
+      const key = `${result.endpoint} ${name}`;
+      if (!grouped.has(key)) grouped.set(key, []);
+      grouped.get(key).push(duration);
+    }
+  }
+
+  return Array.from(grouped.entries())
+    .map(([key, values]) => ({
+      key,
+      ...timingSummary(values),
+    }))
+    .sort((a, b) => {
+      const p95Delta = b.p95 - a.p95;
+      return p95Delta || a.key.localeCompare(b.key);
+    });
+}
+
 function getBottleneckJudgment(results, sqliteInfo) {
   const endpoints = endpointSummaries(results);
   const slowest = [...endpoints].sort((a, b) => b.p95 - a.p95).slice(0, 5);
@@ -1020,14 +1086,24 @@ function getBottleneckJudgment(results, sqliteInfo) {
   const imageWrite = endpoints.find((item) => item.key.includes("POST /api/observations")) ||
     endpoints.find((item) => item.key.includes("POST /api/community/posts"));
   const staticModel = endpoints.find((item) => item.key.includes("bird_model.onnx"));
+  const authTimings = getAuthTimingBreakdown(results);
+  const passwordTiming = authTimings.find((item) => /password_(hash|compare)$/.test(item.key));
+  const authRateLimits = results.filter((result) => result.endpoint.includes("/api/auth/") && result.status === 429);
 
   return {
     sqliteWalEnabled: /^wal$/i.test(sqliteInfo.journalMode),
     sqliteBusyTimeoutConfigured: sqliteInfo.busyTimeoutMs > 0,
     explicitSqliteBusyErrors: busyErrors.length,
+    authRateLimit429: authRateLimits.length,
     lockWaitJudgment: busyErrors.length
       ? "SQLite lock errors were observed."
       : "No explicit SQLITE_BUSY/database locked errors were observed.",
+    authPasswordJudgment: passwordTiming
+      ? `Password KDF timing is visible in auth headers; slowest password timing p95=${passwordTiming.p95}ms.`
+      : "Auth password timing headers were not captured; enable AUTH_TIMING_HEADERS=1 for phase breakdown.",
+    authRateLimitJudgment: authRateLimits.length
+      ? "Auth rate limiting affected this run."
+      : "Auth rate limiting did not affect this run.",
     imageTailLatencyJudgment:
       imageWrite && imageWrite.p95 > 1000
         ? "Image-related writes are among the slower API paths and should be watched."
@@ -1085,6 +1161,7 @@ function buildReportPayload(recorder, validations, startedAt, finishedAt, runErr
     summary: allSummary,
     scenarioSummaries,
     endpointSummaries: endpoints,
+    authTimingBreakdown: getAuthTimingBreakdown(allResults),
     validations,
     requestIdSamples: allSummary.requestIdSamples,
     errorSamples: allSummary.errorSamples,
@@ -1159,12 +1236,22 @@ function toMarkdown(report) {
   lines.push(`- SQLite WAL enabled: ${report.bottleneck.sqliteWalEnabled}`);
   lines.push(`- SQLite busy_timeout configured: ${report.bottleneck.sqliteBusyTimeoutConfigured}`);
   lines.push(`- SQLite lock wait judgment: ${report.bottleneck.lockWaitJudgment}`);
+  lines.push(`- Auth password KDF judgment: ${report.bottleneck.authPasswordJudgment}`);
+  lines.push(`- Auth rate-limit judgment: ${report.bottleneck.authRateLimitJudgment}`);
   lines.push(`- Image tail latency: ${report.bottleneck.imageTailLatencyJudgment}`);
   lines.push(`- Static/model bandwidth: ${report.bottleneck.staticBandwidthJudgment}`);
   lines.push("");
   lines.push("Slowest endpoints by p95:");
   lines.push("");
   lines.push(summaryTable(report.bottleneck.slowestEndpoints.map((item) => [item.key, item])));
+  lines.push("");
+  lines.push("## Auth Timing Breakdown");
+  lines.push("");
+  if (report.authTimingBreakdown.length) {
+    lines.push(timingTable(report.authTimingBreakdown));
+  } else {
+    lines.push("No auth timing headers captured.");
+  }
   lines.push("");
   lines.push("## Next Steps");
   lines.push("");
@@ -1182,6 +1269,20 @@ function toMarkdown(report) {
   lines.push("");
   lines.push(codeBlock(report.generatedData.cleanupCommand));
   lines.push("");
+  return lines.join("\n");
+}
+
+function timingTable(entries) {
+  const lines = [
+    "| Name | Count | Avg | p50 | p90 | p95 | p99 | Max |",
+    "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+  ];
+  for (const entry of entries) {
+    lines.push(
+      `| ${escapeMd(entry.key)} | ${entry.count} | ${entry.average}ms | ${entry.p50}ms | ` +
+        `${entry.p90}ms | ${entry.p95}ms | ${entry.p99}ms | ${entry.max}ms |`
+    );
+  }
   return lines.join("\n");
 }
 

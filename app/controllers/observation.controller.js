@@ -13,13 +13,16 @@ const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 const JPEG_SIGNATURE = [0xff, 0xd8, 0xff];
 
 function normalizeRequiredText(value, maxLength) {
-  const text = String(value || "").trim();
+  if (typeof value !== "string") return null;
+  const text = value.trim();
   if (!text || text.length > maxLength) return null;
   return text;
 }
 
 function normalizeOptionalText(value, maxLength) {
-  const text = String(value || "").trim();
+  if (value === undefined || value === null) return "";
+  if (typeof value !== "string") return null;
+  const text = value.trim();
   return text.length > maxLength ? null : text;
 }
 
@@ -101,7 +104,9 @@ function validateTopCandidates(value) {
     );
     if (!speciesName) return null;
 
-    const probability = Number(candidate.probability ?? candidate.confidence ?? 0);
+    const rawProbability = candidate.probability ?? candidate.confidence;
+    if (typeof rawProbability !== "number") return null;
+    const probability = rawProbability;
     if (!Number.isFinite(probability) || probability < 0 || probability > 1) return null;
 
     const rank = normalizeNumber(candidate.rank, index + 1, 5) || index + 1;
@@ -113,15 +118,17 @@ function validateTopCandidates(value) {
 
     if (scientificName === null || englishName === null) return null;
 
+    const rawOseaIndex = candidate.oseaIndex ?? candidate.index;
+    if (rawOseaIndex !== undefined && rawOseaIndex !== null && !Number.isInteger(rawOseaIndex)) return null;
+    if (candidate.isMapped !== undefined && typeof candidate.isMapped !== "boolean") return null;
+
     return {
       rank,
       speciesName,
       scientificName,
       englishName,
       probability,
-      oseaIndex: Number.isInteger(Number(candidate.oseaIndex ?? candidate.index))
-        ? Number(candidate.oseaIndex ?? candidate.index)
-        : null,
+      oseaIndex: Number.isInteger(rawOseaIndex) ? rawOseaIndex : null,
       isMapped: Boolean(candidate.isMapped),
     };
   });
@@ -130,7 +137,8 @@ function validateTopCandidates(value) {
 }
 
 function validateObservedAt(value) {
-  if (!value) return "";
+  if (value === undefined || value === null || value === "") return "";
+  if (typeof value !== "string") return null;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
   return date.toISOString();
@@ -144,8 +152,8 @@ function validateCreateBody(req, res) {
   );
   const locationText = normalizeOptionalText(req.body.locationText, LOCATION_MAX_LENGTH);
   const notes = normalizeOptionalText(req.body.notes, NOTES_MAX_LENGTH);
-  const source = normalizeOptionalText(req.body.source || "osea-browser", SOURCE_MAX_LENGTH);
-  const confidence = Number(req.body.confidence);
+  const source = normalizeOptionalText(req.body.source ?? "osea-browser", SOURCE_MAX_LENGTH);
+  const confidence = req.body.confidence;
   const topCandidates = validateTopCandidates(req.body.topCandidates);
   const observedAt = validateObservedAt(req.body.observedAt);
   const image = validateObservationImage(req, res);
@@ -158,6 +166,7 @@ function validateCreateBody(req, res) {
     locationText === null ||
     notes === null ||
     source === null ||
+    typeof confidence !== "number" ||
     !Number.isFinite(confidence) ||
     confidence < 0 ||
     confidence > 1 ||

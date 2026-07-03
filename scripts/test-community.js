@@ -7,6 +7,7 @@ const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 const fs = require("fs");
 const path = require("path");
 const { getDatabase } = require("../app/db/database");
+const { assertApiWriteTargetSafety } = require("./test-safety");
 
 const suffix = Date.now();
 const defaultDatabaseFile = path.join(__dirname, "..", "app", "data", "birdora.sqlite");
@@ -220,6 +221,18 @@ function cleanupTestData() {
       WHERE users.email IN (?, ?)
     `).all(accounts.author.email, accounts.reader.email);
 
+    db.prepare(`
+      DELETE FROM community_posts
+      WHERE user_id IN (
+        SELECT id FROM users WHERE email IN (?, ?)
+      )
+    `).run(accounts.author.email, accounts.reader.email);
+    db.prepare(`
+      DELETE FROM observations
+      WHERE user_id IN (
+        SELECT id FROM users WHERE email IN (?, ?)
+      )
+    `).run(accounts.author.email, accounts.reader.email);
     db.prepare("DELETE FROM users WHERE email IN (?, ?)").run(
       accounts.author.email,
       accounts.reader.email
@@ -234,6 +247,11 @@ function cleanupTestData() {
 
 async function main() {
   console.log(`Community API base URL: ${BASE_URL}`);
+  assertApiWriteTargetSafety({
+    scriptName: "test-community",
+    baseUrl: BASE_URL,
+    requireDatabaseFile: true,
+  });
 
   const listWithBadOrigin = await request("/api/community/posts", {
     headers: {
@@ -540,6 +558,14 @@ async function main() {
     questioned.status === 201 && questioned.body?.post?.questions?.length === 1,
     `HTTP ${questioned.status}`
   );
+
+  const questionPage = await request(`/api/community/posts/${postId}/questions?limit=1&offset=0`, {
+    method: "GET",
+    cookieJar: readerJar,
+  });
+  assertStep("question pagination returns page info", questionPage.status === 200 && questionPage.body?.pageInfo, `HTTP ${questionPage.status}`);
+  assertStep("question pagination respects limit", questionPage.body?.questions?.length === 1);
+  assertStep("question pagination count", questionPage.body?.pageInfo?.questionCount >= 1 || questionPage.body?.pageInfo?.total >= 1);
 
   const blockedEdit = await request(`/api/community/posts/${postId}`, {
     method: "PATCH",

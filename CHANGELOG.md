@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.6.0 - 2026-07-03
+
+- Added server-side OSEA recognition with `onnxruntime-node`, JPEG preprocessing, Top 5 output mapping, and `/api/recognition/classify`.
+- Added HEIC conversion support and browser recognition compatibility assets for public/static delivery.
+- Added password hashing/verification worker pooling to reduce auth register/login tail latency under concurrent tests.
+- Added large-image upload validation and reporting for 50 community plus 50 observation uploads, with image-write metric hooks.
+- Added 50-sub-agent browser flow reports and recognition ramp reports covering desktop and mobile real-browser recognition.
+- Added safety tooling for write tests, browser flow harnesses, recognition server tests, and large-image tests.
+- Updated performance reporting to `passed`: 1514/1514 requests succeeded, 0 5xx, 0 429, 0 timeouts, and API p95 threshold passed.
+- Ignored raw per-agent browser result directories while keeping summary reports in version control.
+
+## 1.5.1 - 2026-07-02
+
+- Fixed production `.mjs` MIME handling for ONNX Runtime dynamic imports and added no-cache/stale request regression checks.
+- Added Birdora favicon coverage across root and public pages, plus SVG MIME support for local static and Nginx delivery.
+- Improved recognition loading visuals and community publish image-picker responsiveness across mobile, tablet, and desktop.
+- Added `docs/release-handoff-20260702-v1.5.1.md` with validation, deployment boundary, and production-readonly notes.
+
 ## 1.5.0 - 2026-07-02
 
 - Added authenticated observation records for saved recognition results, including image storage, Top 5 candidate snapshots, owner-only reads, and deletion rules.

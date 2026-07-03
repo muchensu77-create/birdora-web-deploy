@@ -7,6 +7,7 @@ const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 const fs = require("fs");
 const path = require("path");
 const { getDatabase } = require("../app/db/database");
+const { assertApiWriteTargetSafety } = require("./test-safety");
 
 const suffix = Date.now();
 const defaultDatabaseFile = path.join(__dirname, "..", "app", "data", "birdora.sqlite");
@@ -202,6 +203,18 @@ function cleanupTestData() {
       WHERE users.email IN (?, ?)
     `).all(accounts.author.email, accounts.reader.email);
 
+    db.prepare(`
+      DELETE FROM community_posts
+      WHERE user_id IN (
+        SELECT id FROM users WHERE email IN (?, ?)
+      )
+    `).run(accounts.author.email, accounts.reader.email);
+    db.prepare(`
+      DELETE FROM observations
+      WHERE user_id IN (
+        SELECT id FROM users WHERE email IN (?, ?)
+      )
+    `).run(accounts.author.email, accounts.reader.email);
     db.prepare("DELETE FROM users WHERE email IN (?, ?)").run(
       accounts.author.email,
       accounts.reader.email
@@ -215,6 +228,11 @@ function cleanupTestData() {
 
 async function main() {
   console.log(`Observation API base URL: ${BASE_URL}`);
+  assertApiWriteTargetSafety({
+    scriptName: "test-observations",
+    baseUrl: BASE_URL,
+    requireDatabaseFile: true,
+  });
 
   const badOriginCreate = await request("/api/observations", {
     method: "POST",

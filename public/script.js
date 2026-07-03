@@ -17,11 +17,17 @@ const AUTH_ROUTES = {
   me: "/api/auth/me",
   status: "/api/auth/status",
 };
+const API_REQUEST_TIMEOUT_MS =
+  Number(window.BIRDORA_API_REQUEST_TIMEOUT_MS) > 0
+    ? Number(window.BIRDORA_API_REQUEST_TIMEOUT_MS)
+    : 15000;
 const communityApi = window.BirdoraCommunityApi.createCommunityApi({
   baseUrl: AUTH_API_BASE_URL,
+  timeoutMs: API_REQUEST_TIMEOUT_MS,
 });
 const observationApi = window.BirdoraObservationApi?.createObservationApi({
   baseUrl: AUTH_API_BASE_URL,
+  timeoutMs: API_REQUEST_TIMEOUT_MS,
 });
 const OSEA_LABELS_PATH = "./assets/osea/bird_info.json";
 const OSEA_MODEL_PATH = "./assets/osea/bird_model.onnx";
@@ -30,8 +36,20 @@ const COMMON_BIRD_CANDIDATES_PATH = "./assets/atlas/common-bird-candidates.json"
 const OSEA_TOP_K = 5;
 const OSEA_CONFIDENCE_THRESHOLD = 0.05;
 const OSEA_EXPECTED_OUTPUT_COUNT = 11000;
-const OSEA_MODEL_LOAD_TIMEOUT_MS = 60000;
-const OSEA_LABEL_LOAD_TIMEOUT_MS = 15000;
+const OSEA_MODEL_LOAD_TIMEOUT_MS =
+  Number(window.BIRDORA_OSEA_MODEL_LOAD_TIMEOUT_MS) > 0
+    ? Number(window.BIRDORA_OSEA_MODEL_LOAD_TIMEOUT_MS)
+    : 60000;
+const OSEA_LABEL_LOAD_TIMEOUT_MS =
+  Number(window.BIRDORA_OSEA_LABEL_LOAD_TIMEOUT_MS) > 0
+    ? Number(window.BIRDORA_OSEA_LABEL_LOAD_TIMEOUT_MS)
+    : 15000;
+const RECOGNITION_SERVER_TIMEOUT_MS =
+  Number(window.BIRDORA_RECOGNITION_SERVER_TIMEOUT_MS) > 0
+    ? Number(window.BIRDORA_RECOGNITION_SERVER_TIMEOUT_MS)
+    : 90000;
+const RECOGNITION_IMAGE_LOAD_TIMEOUT_MS = 15000;
+const HEIC_CONVERTER_PATH = "./assets/vendor/heic-to.js";
 const ATLAS_INITIAL_LIMIT = 12;
 const ATLAS_SEARCH_LIMIT = 24;
 const ATLAS_TABLET_INITIAL_LIMIT = 12;
@@ -281,6 +299,11 @@ const deviceStorageValue = document.querySelector("#deviceStorageValue");
 const deviceFirmwareValue = document.querySelector("#deviceFirmwareValue");
 const deviceSyncStatus = document.querySelector("#deviceSyncStatus");
 
+window.__birdoraAuthFormsReady = false;
+window.__birdoraLogoutReady = false;
+window.__birdoraRecognitionReady = false;
+window.__birdoraPublishingReady = false;
+
 const expandedComments = new Set();
 const emptyCommentsPageInfo = { limit: COMMENT_PAGE_SIZE, offset: 0, nextOffset: 0, hasMore: false, total: 0, commentCount: 0 };
 
@@ -323,8 +346,10 @@ let lastSharedRecognitionKey = "";
 let currentRecognitionCandidates = [];
 let selectedRecognitionCandidate = null;
 let currentRecognitionImagePayload = null;
+let currentRecognitionSource = "osea-browser";
 let savedObservation = null;
 let lastSavedRecognitionKey = "";
+let heicConverterPromise = null;
 let activeDetailPostId = "";
 let detailPost = null;
 let detailComments = [];
@@ -588,6 +613,19 @@ function translateAuthMessage(message, fallback = "认证请求失败，请稍�
   return messages[message] || message || fallback;
 }
 
+function withRequestId(message, error) {
+  return error?.requestId ? `${message}（错误编号：${error.requestId}）` : message;
+}
+
+function createApiError(message, details = {}) {
+  const error = new Error(message);
+  if (details.status) error.status = details.status;
+  if (details.code) error.code = details.code;
+  if (details.requestId) error.requestId = details.requestId;
+  if (details.cause) error.cause = details.cause;
+  return error;
+}
+
 async function authRequest(path, options = {}) {
   const { method = "GET", body } = options;
   const headers = {
@@ -599,28 +637,55 @@ async function authRequest(path, options = {}) {
   }
 
   let response;
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT_MS);
   try {
     response = await fetch(`${AUTH_API_BASE_URL}${path}`, {
       method,
       credentials: "include",
       headers,
       body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
     });
-  } catch {
-    throw new Error("无法连接后端认证服务，请确认后端已经启动。");
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw createApiError("请求超时，请检查网络后重试。", {
+        code: "REQUEST_TIMEOUT",
+        cause: error,
+      });
+    }
+
+    throw createApiError("网络连接失败，请检查网络后重试。", {
+      code: "NETWORK_ERROR",
+      cause: error,
+    });
+  } finally {
+    window.clearTimeout(timeoutId);
   }
 
   const rawBody = await response.text();
+  const requestId = response.headers.get("X-Request-Id") || "";
   let data = null;
   try {
     data = rawBody ? JSON.parse(rawBody) : null;
-  } catch {
-    data = rawBody;
+  } catch (error) {
+    if (response.ok) {
+      throw createApiError("认证服务返回格式异常，请稍后重试。", {
+        status: response.status,
+        code: "PARSE_ERROR",
+        requestId,
+        cause: error,
+      });
+    }
   }
 
   if (!response.ok) {
     const message = data && typeof data === "object" ? data.message : null;
-    throw new Error(translateAuthMessage(message));
+    throw createApiError(translateAuthMessage(message), {
+      status: response.status,
+      code: data?.code || "HTTP_ERROR",
+      requestId: data?.requestId || requestId,
+    });
   }
 
   return data;
@@ -764,7 +829,7 @@ async function loadCommunityPosts(options = {}) {
     communityLoadState = "ready";
   } catch (error) {
     communityLoadState = "error";
-    communityLoadMessage = error.message || "社区内容加载失败，请稍后重试。";
+    communityLoadMessage = withRequestId(error.message || "社区内容加载失败，请稍后重试。", error);
   }
 
   renderCurrentFeed();
@@ -816,11 +881,11 @@ function formatObservationTime(value) {
 }
 
 function getObservationMutationMessage(error, fallback) {
-  if (error?.status === 401) return "登录状态已失效，请重新登录后再保存。";
-  if (error?.status === 403) return "只能操作自己的观测记录。";
-  if (error?.status === 404) return "这条观测记录不存在或已被删除。";
-  if (error?.status === 409) return "这条观测记录已关联社区帖子，暂时不能删除。";
-  return error?.message || fallback;
+  if (error?.status === 401) return withRequestId("登录状态已失效，请重新登录后再保存。", error);
+  if (error?.status === 403) return withRequestId("只能操作自己的观测记录。", error);
+  if (error?.status === 404) return withRequestId("这条观测记录不存在或已被删除。", error);
+  if (error?.status === 409) return withRequestId("这条观测记录已关联社区帖子，暂时不能删除。", error);
+  return withRequestId(error?.message || fallback, error);
 }
 
 function setObservationMessage(text = "") {
@@ -1276,17 +1341,17 @@ function syncCommunityPostState(nextPost = null, removedPostId = "") {
 }
 
 function getCommunityMutationMessage(error, fallback) {
-  if (error?.status === 401) return "登录状态已失效，请重新登录。";
-  if (error?.status === 403) return "你只能修改或删除自己发布的帖子。";
-  if (error?.status === 404) return "这条帖子已不存在，请刷新后重试。";
-  return error?.message || fallback;
+  if (error?.status === 401) return withRequestId("登录状态已失效，请重新登录。", error);
+  if (error?.status === 403) return withRequestId("你只能修改或删除自己发布的帖子。", error);
+  if (error?.status === 404) return withRequestId("这条帖子已不存在，请刷新后重试。", error);
+  return withRequestId(error?.message || fallback, error);
 }
 
 function getCommentMutationMessage(error, fallback) {
-  if (error?.status === 401) return "登录状态已失效，请重新登录。";
-  if (error?.status === 403) return "你只能删除自己发布的评论。";
-  if (error?.status === 404) return "这条评论已不存在，请刷新后重试。";
-  return error?.message || fallback;
+  if (error?.status === 401) return withRequestId("登录状态已失效，请重新登录。", error);
+  if (error?.status === 403) return withRequestId("你只能删除自己发布的评论。", error);
+  if (error?.status === 404) return withRequestId("这条评论已不存在，请刷新后重试。", error);
+  return withRequestId(error?.message || fallback, error);
 }
 
 function startEditingPost(postId) {
@@ -1518,7 +1583,7 @@ async function openPostDetail(postId) {
   } catch (error) {
     if (activeDetailPostId !== postId) return;
     detailLoadState = "error";
-    detailLoadMessage = error.message || "帖子详情加载失败，请稍后重试。";
+    detailLoadMessage = withRequestId(error.message || "帖子详情加载失败，请稍后重试。", error);
     if (error?.status === 401) {
       clearAuthState();
     }
@@ -2131,7 +2196,7 @@ function initAuthForms() {
         rememberAuthUser(result.user);
         window.location.replace(getPostLoginUrl());
       } catch (error) {
-        setMessage(error.message || "注册失败，请稍后重试。");
+        setMessage(withRequestId(error.message || "注册失败，请稍后重试。", error));
       } finally {
         setSubmitting(false);
       }
@@ -2148,13 +2213,14 @@ function initAuthForms() {
       rememberAuthUser(result.user);
       window.location.replace(getPostLoginUrl());
     } catch (error) {
-      setMessage(error.message || "登录失败，请稍后重试。");
+      setMessage(withRequestId(error.message || "登录失败，请稍后重试。", error));
     } finally {
       setSubmitting(false);
     }
   });
 
   setAuthMode(form.dataset.authMode || "login");
+  window.__birdoraAuthFormsReady = true;
 }
 
 async function logout() {
@@ -2179,6 +2245,10 @@ function initLogoutButtons() {
       logout();
     });
   });
+
+  if (logoutButtons.length) {
+    window.__birdoraLogoutReady = true;
+  }
 }
 
 function withTimeout(promise, timeoutMs, message) {
@@ -2209,6 +2279,295 @@ function fetchJsonWithTimeout(url, timeoutMs, message) {
 
     throw error;
   });
+}
+
+function createRecognitionError(kind, message, details = {}) {
+  const error = new Error(message);
+  error.recognitionKind = kind;
+  if (details.status) error.status = details.status;
+  if (details.code) error.code = details.code;
+  if (details.requestId) error.requestId = details.requestId;
+  if (details.cause) error.cause = details.cause;
+  return error;
+}
+
+function isIosDevice() {
+  return /iPad|iPhone|iPod/i.test(navigator.userAgent || "");
+}
+
+function isWeChatBrowser() {
+  return /MicroMessenger/i.test(navigator.userAgent || "");
+}
+
+function shouldUseServerRecognitionFirst() {
+  return (
+    window.BIRDORA_FORCE_SERVER_RECOGNITION === true ||
+    String(window.BIRDORA_FORCE_SERVER_RECOGNITION || "").toLowerCase() === "true" ||
+    (isIosDevice() && isWeChatBrowser())
+  );
+}
+
+function isRecognizableImageFile(file) {
+  const name = String(file?.name || "").toLowerCase();
+  return (
+    String(file?.type || "").startsWith("image/") ||
+    /\.(jpe?g|png|webp|heic|heif)$/i.test(name)
+  );
+}
+
+function isHeicMetadata(file) {
+  const type = String(file?.type || "").toLowerCase();
+  const name = String(file?.name || "").toLowerCase();
+  return type === "image/heic" || type === "image/heif" || /\.(heic|heif)$/i.test(name);
+}
+
+function readBlobAsArrayBuffer(blob) {
+  if (blob.arrayBuffer) return blob.arrayBuffer();
+
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("图片文件头读取失败。"));
+    reader.readAsArrayBuffer(blob);
+  });
+}
+
+function isHeicHeader(bytes) {
+  if (!bytes || bytes.length < 12) return false;
+  const header = String.fromCharCode(...bytes.slice(4, Math.min(bytes.length, 32)));
+  return (
+    header.startsWith("ftyp") &&
+    /(heic|heix|hevc|hevx|heim|heis|mif1|msf1)/i.test(header)
+  );
+}
+
+async function isHeicFile(file) {
+  if (isHeicMetadata(file)) return true;
+
+  try {
+    const buffer = await readBlobAsArrayBuffer(file.slice(0, 32));
+    return isHeicHeader(new Uint8Array(buffer));
+  } catch {
+    return false;
+  }
+}
+
+function loadHeicConverter() {
+  if (window.HeicTo) return Promise.resolve(window.HeicTo);
+  if (heicConverterPromise) return heicConverterPromise;
+
+  heicConverterPromise = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = HEIC_CONVERTER_PATH;
+    script.async = true;
+    script.onload = () => {
+      if (window.HeicTo) {
+        resolve(window.HeicTo);
+      } else {
+        reject(new Error("HEIC 转换器加载后没有初始化。"));
+      }
+    };
+    script.onerror = () => reject(new Error("HEIC 转换器加载失败。"));
+    document.head.appendChild(script);
+  }).catch((error) => {
+    heicConverterPromise = null;
+    throw error;
+  });
+
+  return heicConverterPromise;
+}
+
+function makeConvertedImageFile(blob, originalFile) {
+  const baseName = String(originalFile?.name || "iphone-photo").replace(/\.[^.]+$/, "") || "iphone-photo";
+  const fileName = `${baseName}.jpg`;
+
+  try {
+    return new File([blob], fileName, {
+      type: "image/jpeg",
+      lastModified: originalFile?.lastModified || Date.now(),
+    });
+  } catch {
+    blob.name = fileName;
+    return blob;
+  }
+}
+
+async function prepareRecognitionImageFile(file, onStatus) {
+  if (!isRecognizableImageFile(file)) {
+    throw createRecognitionError("image-read", "请选择 JPG、PNG、WebP 或 iPhone HEIC/HEIF 照片。");
+  }
+
+  if (!(await isHeicFile(file))) {
+    return file;
+  }
+
+  onStatus("正在转换 iPhone HEIC 照片为网页可识别的 JPEG...");
+  try {
+    const heicTo = await loadHeicConverter();
+    const converted = await heicTo({
+      blob: file,
+      type: "image/jpeg",
+      quality: 0.86,
+    });
+    const convertedBlob = Array.isArray(converted) ? converted[0] : converted;
+    if (!convertedBlob?.size) {
+      throw new Error("HEIC 转换结果为空。");
+    }
+    return makeConvertedImageFile(convertedBlob, file);
+  } catch (error) {
+    throw createRecognitionError(
+      "heic-conversion",
+      "iPhone 高效率照片转换失败，请换一张截图或 JPG 照片后重试。",
+      { cause: error }
+    );
+  }
+}
+
+function loadPreviewImage(file) {
+  let objectUrl = "";
+
+  return new Promise((resolve, reject) => {
+    objectUrl = URL.createObjectURL(file);
+    let settled = false;
+    const timer = window.setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      preview.onload = null;
+      preview.onerror = null;
+      reject(createRecognitionError("image-read", "图片读取超时，请换一张截图或 JPG 照片后重试。"));
+    }, RECOGNITION_IMAGE_LOAD_TIMEOUT_MS);
+
+    const finish = (fn) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timer);
+      preview.onload = null;
+      preview.onerror = null;
+      fn();
+    };
+
+    preview.onload = () => finish(resolve);
+    preview.onerror = () => finish(() => {
+      reject(createRecognitionError("image-read", "图片读取失败，请换一张截图或 JPG/PNG 照片后重试。"));
+    });
+    preview.src = objectUrl;
+  }).finally(() => {
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+  });
+}
+
+async function recognitionRequest(body) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), RECOGNITION_SERVER_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(`${AUTH_API_BASE_URL}/api/recognition/classify`, {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    const rawBody = await response.text();
+    const requestId = response.headers.get("X-Request-Id") || "";
+    let data = null;
+
+    try {
+      data = rawBody ? JSON.parse(rawBody) : null;
+    } catch (error) {
+      throw createRecognitionError("server", "识别服务返回格式异常，请稍后重试。", {
+        status: response.status,
+        requestId,
+        cause: error,
+      });
+    }
+
+    if (!response.ok) {
+      const message = data && typeof data === "object" ? data.message : "";
+      const translated =
+        response.status === 401
+          ? "登录状态已失效，请重新登录后再识别。"
+          : response.status === 429
+            ? "识别请求太频繁，请稍等后重试。"
+            : message || "识别服务暂时不可用，请稍后重试。";
+      throw createRecognitionError("server", translated, {
+        status: response.status,
+        code: data?.code || "HTTP_ERROR",
+        requestId: data?.requestId || requestId,
+      });
+    }
+
+    return data;
+  } catch (error) {
+    if (error?.recognitionKind) throw error;
+    if (error?.name === "AbortError") {
+      throw createRecognitionError("server", "识别服务响应超时，请检查网络后重试。", { cause: error });
+    }
+    throw createRecognitionError("server", "识别服务连接失败，请检查网络后重试。", { cause: error });
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
+function enrichRecognitionResult(result) {
+  const candidates = Array.isArray(result?.candidates)
+    ? result.candidates.map((candidate) => ({
+        ...candidate,
+        atlasBird: candidate.isMapped ? findAtlasBirdForCandidate(candidate) : null,
+      }))
+    : [];
+
+  return {
+    ...result,
+    candidates,
+    top: candidates[0] || null,
+    isConfident: Boolean(candidates[0] && candidates[0].isMapped && candidates[0].probability >= OSEA_CONFIDENCE_THRESHOLD),
+    source: result?.source || "osea-server",
+  };
+}
+
+async function classifyImageWithServer(imagePayload, onStatus) {
+  if (!imagePayload?.imageDataUrl) {
+    throw createRecognitionError("server", "没有可发送给兼容识别服务的图片。");
+  }
+
+  onStatus("正在使用兼容识别服务分析照片...");
+  const data = await recognitionRequest({
+    imageDataUrl: imagePayload.imageDataUrl,
+    imageName: imagePayload.imageName || "recognition-image.jpg",
+  });
+
+  if (!data?.result) {
+    throw createRecognitionError("server", "识别服务没有返回有效结果。");
+  }
+
+  return enrichRecognitionResult(data.result);
+}
+
+async function classifyImageWithFallback(imageElement, imagePayload, onStatus) {
+  if (shouldUseServerRecognitionFirst()) {
+    onStatus("检测到 iPhone 微信环境，正在切换到兼容识别服务...");
+    return classifyImageWithServer(imagePayload, onStatus);
+  }
+
+  try {
+    const result = await classifyImageElement(imageElement, onStatus);
+    return {
+      ...result,
+      source: "osea-browser",
+    };
+  } catch (browserError) {
+    onStatus("本机模型运行不稳定，正在切换到兼容识别服务...");
+    try {
+      return await classifyImageWithServer(imagePayload, onStatus);
+    } catch (serverError) {
+      if (!serverError.cause) serverError.cause = browserError;
+      throw serverError;
+    }
+  }
 }
 
 function getClassifier(onStatus = () => {}) {
@@ -3128,6 +3487,7 @@ function setPendingResult(text) {
 
   lastRecognitionStatus = "pending";
   currentRecognitionShareKey = "";
+  currentRecognitionSource = "osea-browser";
   currentRecognitionCandidates = [];
   selectedRecognitionCandidate = null;
   savedObservation = null;
@@ -3174,6 +3534,7 @@ function setUnknownResult(predictions, candidates = []) {
 }
 
 function setCandidateResult(result) {
+  currentRecognitionSource = result.source || "osea-browser";
   const top = result.top;
   const bird = top.atlasBird || createCandidateBird(top);
   const confidence = displayConfidence(top.probability);
@@ -3183,13 +3544,102 @@ function setCandidateResult(result) {
     ? `；${result.unmappedOutputCount.toLocaleString("zh-CN")} 个输出类仍待补标签映射`
     : "";
   const topLabel = top.en ? `${top.cn} / ${top.en}` : top.cn;
+  const sourceNote = currentRecognitionSource === "osea-server" ? "兼容识别服务" : "OSEA 模型";
   const detail = top.isMapped
     ? top.atlasBird
-      ? `OSEA 模型 ${outputCount.toLocaleString("zh-CN")} 维输出，已映射 ${labelCount.toLocaleString("zh-CN")} 个标签${coverageNote}。Top 1：${topLabel}。`
-      : `OSEA 模型 ${outputCount.toLocaleString("zh-CN")} 维输出，已映射 ${labelCount.toLocaleString("zh-CN")} 个标签${coverageNote}。Top 1：${topLabel}，本地图鉴资料待补充。`
-    : `OSEA 模型 ${outputCount.toLocaleString("zh-CN")} 维输出，Top 1 落在未映射输出类：${topLabel}。需要补齐标签映射后才能给出正式鸟种名。`;
+      ? `${sourceNote} ${outputCount.toLocaleString("zh-CN")} 维输出，已映射 ${labelCount.toLocaleString("zh-CN")} 个标签${coverageNote}。Top 1：${topLabel}。`
+      : `${sourceNote} ${outputCount.toLocaleString("zh-CN")} 维输出，已映射 ${labelCount.toLocaleString("zh-CN")} 个标签${coverageNote}。Top 1：${topLabel}，本地图鉴资料待补充。`
+    : `${sourceNote} ${outputCount.toLocaleString("zh-CN")} 维输出，Top 1 落在未映射输出类：${topLabel}。需要补齐标签映射后才能给出正式鸟种名。`;
 
   setResult(bird, confidence, detail, result.candidates);
+}
+
+function getRecognitionFailureCopy(error) {
+  if (window.location.protocol === "file:") {
+    return {
+      name: "识别失败",
+      meta: "模型资源无法从 file:// 加载",
+      feature: "请使用 http://localhost 或正式网址打开网站，直接 file:// 打开无法加载模型资源。",
+    };
+  }
+
+  if (error?.recognitionKind === "image-read") {
+    return {
+      name: "图片读取失败",
+      meta: "这张图片没有被当前浏览器成功解码",
+      feature: "请换一张 JPG/PNG 截图，或在 iPhone 相册里先截图后再上传。",
+    };
+  }
+
+  if (error?.recognitionKind === "heic-conversion") {
+    return {
+      name: "图片转换失败",
+      meta: "iPhone 高效率照片暂时无法转换",
+      feature: "请上传截图、微信保存后的 JPG，或把相机格式改为“最兼容”后重拍。",
+    };
+  }
+
+  if (error?.recognitionKind === "server") {
+    return {
+      name: "识别服务连接失败",
+      meta: "兼容识别服务没有完成本次分析",
+      feature: "请检查网络后重新选择照片；如果是在微信内打开，也可以点右上角用 Safari 打开。",
+    };
+  }
+
+  return {
+    name: "识别失败",
+    meta: "浏览器模型运行失败",
+    feature: "请重新选择照片；如果在 iPhone 微信内打开，系统会自动尝试兼容识别服务。",
+  };
+}
+
+function setRecognitionFailure(error) {
+  if (!confidenceText || !resultName || !resultMeta || !resultFeature || !modelDetail) return;
+
+  const copy = getRecognitionFailureCopy(error);
+  lastRecognitionStatus = "failed";
+  currentRecognitionShareKey = "";
+  currentRecognitionImagePayload = null;
+  currentRecognitionSource = "osea-browser";
+  savedObservation = null;
+  lastSavedRecognitionKey = "";
+  setRecognitionVisualPending(false);
+  uploadZone.classList.remove("has-image");
+  preview.removeAttribute("src");
+  confidenceText.textContent = "!";
+  resultName.textContent = copy.name;
+  resultMeta.textContent = copy.meta;
+  resultFeature.textContent = copy.feature;
+  modelDetail.textContent = withRequestId(error?.message || "未知错误", error);
+  setCandidateListMessage("识别失败，暂无候选结果。");
+  setConfidenceRing(100, "#b36b5e");
+  updateRecognitionActions();
+}
+
+function showRecognitionResult(result) {
+  if (!result.top) {
+    setUnknownResult("模型没有返回可用候选。", result.candidates || []);
+    return;
+  }
+
+  if (!result.top.isMapped) {
+    setUnknownResult(
+      `Top 1 落在未映射 OSEA 输出类：${result.top.cn}。需要补齐标签映射后才能给出正式鸟种名。`,
+      result.candidates
+    );
+    return;
+  }
+
+  if (!result.isConfident) {
+    setUnknownResult(
+      `Top 1 为 ${result.top.cn}，置信度 ${formatCandidateScore(result.top.probability)}，低于上线阈值。`,
+      result.candidates
+    );
+    return;
+  }
+
+  setCandidateResult(result);
 }
 
 function initBirdRecognition() {
@@ -3213,76 +3663,29 @@ function initBirdRecognition() {
     savedObservation = null;
     lastSavedRecognitionKey = "";
     lastSharedRecognitionKey = "";
+    currentRecognitionSource = "osea-browser";
     setObservationMessage("");
     reportRecognitionStage("正在读取照片并准备 OSEA 鸟类识别模型...");
 
-    let objectUrl = "";
     try {
-      objectUrl = URL.createObjectURL(file);
-      await new Promise((resolve, reject) => {
-        preview.onload = resolve;
-        preview.onerror = reject;
-        preview.src = objectUrl;
-      });
-
-      URL.revokeObjectURL(objectUrl);
-      objectUrl = "";
+      const recognitionFile = await prepareRecognitionImageFile(file, reportRecognitionStage);
+      await loadPreviewImage(recognitionFile);
       if (runId !== recognitionRunId) return;
 
       uploadZone.classList.add("has-image");
       setRecognitionVisualPending(true);
-      currentRecognitionImagePayload = buildCompressedObservationImage(preview, file);
-      const result = await classifyImageElement(preview, reportRecognitionStage);
+      currentRecognitionImagePayload = buildCompressedObservationImage(preview, recognitionFile);
+      const result = await classifyImageWithFallback(preview, currentRecognitionImagePayload, reportRecognitionStage);
       if (runId !== recognitionRunId) return;
 
-      if (!result.top) {
-        setUnknownResult("模型没有返回可用候选。");
-        return;
-      }
-
-      if (!result.top.isMapped) {
-        setUnknownResult(
-          `Top 1 落在未映射 OSEA 输出类：${result.top.cn}。需要补齐标签映射后才能给出正式鸟种名。`,
-          result.candidates
-        );
-        return;
-      }
-
-      if (!result.isConfident) {
-        setUnknownResult(
-          `Top 1 为 ${result.top.cn}，置信度 ${formatCandidateScore(result.top.probability)}，低于上线阈值。`,
-          result.candidates
-        );
-        return;
-      }
-
-      setCandidateResult(result);
+      showRecognitionResult(result);
     } catch (error) {
-      if (objectUrl) {
-        URL.revokeObjectURL(objectUrl);
-      }
       if (runId !== recognitionRunId) return;
-      lastRecognitionStatus = "failed";
-      currentRecognitionShareKey = "";
-      currentRecognitionImagePayload = null;
-      savedObservation = null;
-      lastSavedRecognitionKey = "";
-      setRecognitionVisualPending(false);
-      uploadZone.classList.remove("has-image");
-      preview.removeAttribute("src");
-      confidenceText.textContent = "!";
-      resultName.textContent = "识别失败";
-      resultMeta.textContent = "模型加载或图片读取失败";
-      resultFeature.textContent =
-        window.location.protocol === "file:"
-          ? "请使用 http://localhost 或正式网址打开网站，直接 file:// 打开无法加载模型资源。"
-          : "请检查网络和模型资源是否可访问，重新选择照片即可重试。";
-      modelDetail.textContent = error.message || "未知错误";
-      setCandidateListMessage("识别失败，暂无候选结果。");
-      setConfidenceRing(100, "#b36b5e");
-      updateRecognitionActions();
+      setRecognitionFailure(error);
     }
   });
+
+  window.__birdoraRecognitionReady = true;
 }
 
 function buildCurrentObservationPayload() {
@@ -3294,7 +3697,7 @@ function buildCurrentObservationPayload() {
     selectedSpeciesScientificName: candidate.latin || "",
     confidence: candidate.probability,
     topCandidates: currentRecognitionCandidates.map((item, index) => buildCandidatePayload(item, index + 1)),
-    source: "osea-browser",
+    source: currentRecognitionSource || "osea-browser",
     observedAt: new Date().toISOString(),
     ...currentRecognitionImagePayload,
   };
@@ -3543,6 +3946,7 @@ function initPublishing() {
   }
 
   initObservationListActions();
+  window.__birdoraPublishingReady = true;
 }
 
 function initScrollButtons() {

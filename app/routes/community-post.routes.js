@@ -49,6 +49,11 @@ router.post(
   communityWriteLimiter,
   asyncHandler(communityPostController.question)
 );
+router.get(
+  "/:id/questions",
+  asyncHandler(authJwt.attachSession),
+  asyncHandler(communityPostController.questions)
+);
 router.post(
   "/:id/reactions",
   asyncHandler(authJwt.requireAuth),

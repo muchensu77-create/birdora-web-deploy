@@ -10,19 +10,24 @@ const POSTS_DEFAULT_LIMIT = 20;
 const POSTS_MAX_LIMIT = 100;
 const COMMENTS_DEFAULT_LIMIT = 10;
 const COMMENTS_MAX_LIMIT = 50;
+const QUESTIONS_DEFAULT_LIMIT = 10;
+const QUESTIONS_MAX_LIMIT = 50;
 const REACTION_TYPES = new Set(["helpful", "curious"]);
 const SUPPORTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 const JPEG_SIGNATURE = [0xff, 0xd8, 0xff];
 
 function normalizeRequiredText(value, maxLength) {
-  const text = String(value || "").trim();
+  if (typeof value !== "string") return null;
+  const text = value.trim();
   if (!text || text.length > maxLength) return null;
   return text;
 }
 
 function normalizeOptionalId(value) {
-  const text = String(value || "").trim();
+  if (value === undefined || value === null || value === "") return "";
+  if (typeof value !== "string") return null;
+  const text = value.trim();
   if (!text) return "";
   return text.length <= 120 ? text : null;
 }
@@ -54,7 +59,7 @@ function imageMatchesMimeType(buffer, mimeType) {
 function validatePostBody(req, res, options = {}) {
   const title = normalizeRequiredText(req.body.title, TITLE_MAX_LENGTH);
   const body = normalizeRequiredText(req.body.body, BODY_MAX_LENGTH);
-  const bird = normalizeRequiredText(req.body.bird || "观鸟笔记", BIRD_MAX_LENGTH);
+  const bird = normalizeRequiredText(req.body.bird ?? "观鸟笔记", BIRD_MAX_LENGTH);
 
   if (!title || !body || (!options.ignoreBird && !bird)) {
     res.status(400).json({
@@ -133,6 +138,8 @@ async function detail(req, res) {
     viewerId: req.user?.id || "",
     commentsLimit: normalizeNumber(req.query.limit || req.query.commentLimit, COMMENTS_DEFAULT_LIMIT, COMMENTS_MAX_LIMIT),
     commentsOffset: normalizeNumber(req.query.offset || req.query.commentOffset, 0),
+    questionsLimit: normalizeNumber(req.query.questionLimit, QUESTIONS_DEFAULT_LIMIT, QUESTIONS_MAX_LIMIT),
+    questionsOffset: normalizeNumber(req.query.questionOffset, 0),
   });
   res.json({ post });
 }
@@ -200,6 +207,16 @@ async function comments(req, res) {
   res.json(result);
 }
 
+async function questions(req, res) {
+  const result = await communityPostService.listQuestionsForPost({
+    postId: req.params.id,
+    viewerId: req.user?.id || "",
+    limit: normalizeNumber(req.query.limit, QUESTIONS_DEFAULT_LIMIT, QUESTIONS_MAX_LIMIT),
+    offset: normalizeNumber(req.query.offset, 0),
+  });
+  res.json(result);
+}
+
 async function removeComment(req, res) {
   await communityPostService.deleteComment({
     postId: req.params.postId,
@@ -251,6 +268,7 @@ module.exports = {
   image,
   list,
   question,
+  questions,
   react,
   remove,
   removeComment,

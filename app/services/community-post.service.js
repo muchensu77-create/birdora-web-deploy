@@ -3,6 +3,7 @@ const fs = require("fs");
 const path = require("path");
 
 const { getDatabase } = require("../db/database");
+const { recordImageWriteMetric } = require("./image-write-metrics");
 const observationService = require("./observation.service");
 
 const REACTION_TYPES = new Set(["helpful", "curious"]);
@@ -210,6 +211,15 @@ function mapPostRow(row, viewerId = "", interactions = {}) {
     commentCount,
   };
   const questions = interactions.questions || [];
+  const questionCount = Number(interactions.questionCount ?? questions.length) || 0;
+  const questionsPageInfo = interactions.questionsPageInfo || {
+    limit: questions.length,
+    offset: 0,
+    nextOffset: questions.length,
+    hasMore: questionCount > questions.length,
+    total: questionCount,
+    questionCount,
+  };
 
   return {
     id: row.id,
@@ -234,8 +244,10 @@ function mapPostRow(row, viewerId = "", interactions = {}) {
     commentPreview: comments,
     comments,
     commentsPageInfo,
+    questionPreview: questions,
     questions,
-    questionCount: Number(interactions.questionCount ?? questions.length) || 0,
+    questionsPageInfo,
+    questionCount,
     imageUrl: row.image_storage_path ? `/api/community/posts/${encodeURIComponent(row.id)}/image` : "",
     imageAlt: row.image_original_name || "",
   };
@@ -289,6 +301,16 @@ function createCommentNotFoundError() {
   return error;
 }
 
+function isMissingObservationConstraintError(error) {
+  return /observation_id references missing observation/i.test(error?.message || "");
+}
+
+function createObservationLinkConflictError() {
+  const error = new Error("linked observation changed before the community post was saved");
+  error.statusCode = 409;
+  return error;
+}
+
 function ensureReactionType(reactionType) {
   if (REACTION_TYPES.has(reactionType)) return;
 
@@ -299,6 +321,7 @@ function ensureReactionType(reactionType) {
 
 function fetchInteractions(db, postIds, viewerId = "", options = {}) {
   const commentPreviewLimit = Math.max(0, Math.min(10, Number(options.commentPreviewLimit ?? 3) || 0));
+  const questionPreviewLimit = Math.max(0, Math.min(10, Number(options.questionPreviewLimit ?? 3) || 0));
   const detailsByPostId = new Map(
     postIds.map((postId) => [
       postId,
@@ -380,23 +403,40 @@ function fetchInteractions(db, postIds, viewerId = "", options = {}) {
     if (detail) detail.questionCount = Number(row.question_count) || 0;
   }
 
-  const questionRows = db.prepare(`
-    SELECT
-      questions.id,
-      questions.post_id,
-      questions.user_id,
-      questions.body,
-      questions.created_at,
-      questions.updated_at,
-      users.nickname AS author
-    FROM community_post_questions AS questions
-    JOIN users ON users.id = questions.user_id
-    WHERE questions.post_id IN (${placeholders})
-    ORDER BY questions.created_at ASC, questions.id ASC
-  `).all(...postIds);
+  if (questionPreviewLimit > 0) {
+    const questionRows = db.prepare(`
+      SELECT
+        id,
+        post_id,
+        user_id,
+        body,
+        created_at,
+        updated_at,
+        author
+      FROM (
+        SELECT
+          questions.id,
+          questions.post_id,
+          questions.user_id,
+          questions.body,
+          questions.created_at,
+          questions.updated_at,
+          users.nickname AS author,
+          ROW_NUMBER() OVER (
+            PARTITION BY questions.post_id
+            ORDER BY questions.created_at DESC, questions.id DESC
+          ) AS question_rank
+        FROM community_post_questions AS questions
+        JOIN users ON users.id = questions.user_id
+        WHERE questions.post_id IN (${placeholders})
+      )
+      WHERE question_rank <= ?
+      ORDER BY post_id ASC, created_at ASC, id ASC
+    `).all(...postIds, questionPreviewLimit);
 
-  for (const row of questionRows) {
-    detailsByPostId.get(row.post_id)?.questions.push(mapInteractionRow(row, viewerId));
+    for (const row of questionRows) {
+      detailsByPostId.get(row.post_id)?.questions.push(mapInteractionRow(row, viewerId));
+    }
   }
 
   const reactionRows = db.prepare(`
@@ -428,6 +468,14 @@ function fetchInteractions(db, postIds, viewerId = "", options = {}) {
       hasMore: detail.commentCount > detail.comments.length,
       total: detail.commentCount,
       commentCount: detail.commentCount,
+    };
+    detail.questionsPageInfo = {
+      limit: questionPreviewLimit,
+      offset: 0,
+      nextOffset: detail.questions.length,
+      hasMore: detail.questionCount > detail.questions.length,
+      total: detail.questionCount,
+      questionCount: detail.questionCount,
     };
   }
 
@@ -540,17 +588,69 @@ function getCommentsPage(db, postId, viewerId = "", limit = 10, offset = 0) {
   };
 }
 
-async function getPostDetails({ id, viewerId = "", commentsLimit = 10, commentsOffset = 0 } = {}) {
+function getQuestionsPage(db, postId, viewerId = "", limit = 10, offset = 0) {
+  const safeLimit = Math.max(1, Math.min(50, Number(limit) || 10));
+  const safeOffset = Math.max(0, Number(offset) || 0);
+  const countRow = db.prepare(`
+    SELECT COUNT(*) AS question_count
+    FROM community_post_questions
+    WHERE post_id = ?
+  `).get(postId);
+  const questionCount = Number(countRow?.question_count) || 0;
+  const rows = db.prepare(`
+    SELECT
+      questions.id,
+      questions.post_id,
+      questions.user_id,
+      questions.body,
+      questions.created_at,
+      questions.updated_at,
+      users.nickname AS author
+    FROM community_post_questions AS questions
+    JOIN users ON users.id = questions.user_id
+    WHERE questions.post_id = ?
+    ORDER BY questions.created_at ASC, questions.id ASC
+    LIMIT ? OFFSET ?
+  `).all(postId, safeLimit + 1, safeOffset);
+  const hasMore = rows.length > safeLimit;
+  const pageRows = hasMore ? rows.slice(0, safeLimit) : rows;
+
+  return {
+    questions: pageRows.map((row) => mapInteractionRow(row, viewerId)),
+    pageInfo: {
+      limit: safeLimit,
+      offset: safeOffset,
+      nextOffset: safeOffset + pageRows.length,
+      hasMore,
+      total: questionCount,
+      questionCount,
+    },
+  };
+}
+
+async function getPostDetails({
+  id,
+  viewerId = "",
+  commentsLimit = 10,
+  commentsOffset = 0,
+  questionsLimit = 10,
+  questionsOffset = 0,
+} = {}) {
   const db = getDatabase();
   const row = selectPostById(db, id);
   if (!row) throw createPostNotFoundError();
 
-  const post = hydratePostRows(db, [row], viewerId, { commentPreviewLimit: 0 })[0];
+  const post = hydratePostRows(db, [row], viewerId, { commentPreviewLimit: 0, questionPreviewLimit: 0 })[0];
   const commentsPage = getCommentsPage(db, id, viewerId, commentsLimit, commentsOffset);
+  const questionsPage = getQuestionsPage(db, id, viewerId, questionsLimit, questionsOffset);
   post.comments = commentsPage.comments;
   post.commentPreview = commentsPage.comments;
   post.commentCount = commentsPage.pageInfo.commentCount;
   post.commentsPageInfo = commentsPage.pageInfo;
+  post.questions = questionsPage.questions;
+  post.questionPreview = questionsPage.questions;
+  post.questionCount = questionsPage.pageInfo.questionCount;
+  post.questionsPageInfo = questionsPage.pageInfo;
   return post;
 }
 
@@ -561,8 +661,15 @@ async function listCommentsForPost({ postId, viewerId = "", limit = 10, offset =
   return getCommentsPage(db, postId, viewerId, limit, offset);
 }
 
-function savePostImage(db, postId, image) {
-  if (!image) return "";
+async function listQuestionsForPost({ postId, viewerId = "", limit = 10, offset = 0 } = {}) {
+  const db = getDatabase();
+  const row = selectPostById(db, postId);
+  if (!row) throw createPostNotFoundError();
+  return getQuestionsPage(db, postId, viewerId, limit, offset);
+}
+
+function preparePostImage(image) {
+  if (!image) return null;
 
   const extension = IMAGE_EXTENSIONS[image.mimeType];
   if (!extension) {
@@ -575,35 +682,65 @@ function savePostImage(db, postId, image) {
   const id = crypto.randomUUID();
   const storageFile = `${id}.${extension}`;
   const storagePath = path.join(UPLOAD_DIR, storageFile);
+  const startedAt = Date.now();
 
   try {
     fs.writeFileSync(storagePath, image.buffer);
-
-    db.prepare(`
-      INSERT INTO community_post_images (
-        id,
-        post_id,
-        storage_path,
-        original_name,
-        mime_type,
-        size_bytes,
-        created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      id,
-      postId,
+    recordImageWriteMetric({
+      kind: "community",
       storageFile,
-      image.originalName || `post-image.${extension}`,
-      image.mimeType,
-      image.buffer.length,
-      new Date().toISOString()
-    );
-
-    return storageFile;
+      mimeType: image.mimeType,
+      bytes: image.buffer.length,
+      durationMs: Date.now() - startedAt,
+      ok: true,
+    });
   } catch (error) {
+    recordImageWriteMetric({
+      kind: "community",
+      storageFile,
+      mimeType: image.mimeType,
+      bytes: image.buffer.length,
+      durationMs: Date.now() - startedAt,
+      ok: false,
+      error: error.message,
+    });
     removeImageFile(storageFile);
     throw error;
   }
+
+  return {
+    id,
+    storageFile,
+    originalName: image.originalName || `post-image.${extension}`,
+    mimeType: image.mimeType,
+    sizeBytes: image.buffer.length,
+  };
+}
+
+function insertPostImage(db, postId, preparedImage) {
+  if (!preparedImage) return "";
+
+  db.prepare(`
+    INSERT INTO community_post_images (
+      id,
+      post_id,
+      storage_path,
+      original_name,
+      mime_type,
+      size_bytes,
+      created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    preparedImage.id,
+    postId,
+    preparedImage.storageFile,
+    preparedImage.originalName,
+    preparedImage.mimeType,
+    preparedImage.sizeBytes,
+    new Date().toISOString()
+  );
+
+  return preparedImage.storageFile;
 }
 
 function removeImageFile(storageFile) {
@@ -619,13 +756,17 @@ async function createPost({ userId, observationId = "", title, body, bird, image
   const now = new Date().toISOString();
   const id = crypto.randomUUID();
   const analysis = analyzePostCopy({ title, body, bird, hasImage: Boolean(image) });
-  let savedImageFile = "";
+  let preparedImage = null;
+  let transactionStarted = false;
 
-  db.exec("BEGIN");
   try {
     if (observationId) {
       observationService.getOwnedObservationRow(db, observationId, userId);
     }
+
+    preparedImage = preparePostImage(image);
+    db.exec("BEGIN");
+    transactionStarted = true;
 
     db.prepare(`
       INSERT INTO community_posts (
@@ -659,11 +800,15 @@ async function createPost({ userId, observationId = "", title, body, bird, image
       now
     );
 
-    savedImageFile = savePostImage(db, id, image);
+    insertPostImage(db, id, preparedImage);
     db.exec("COMMIT");
+    transactionStarted = false;
   } catch (error) {
-    db.exec("ROLLBACK");
-    removeImageFile(savedImageFile);
+    if (transactionStarted) db.exec("ROLLBACK");
+    removeImageFile(preparedImage?.storageFile);
+    if (isMissingObservationConstraintError(error)) {
+      throw createObservationLinkConflictError();
+    }
     throw error;
   }
 
@@ -861,6 +1006,7 @@ module.exports = {
   getPostImage,
   getPostDetails,
   listCommentsForPost,
+  listQuestionsForPost,
   listPosts,
   toggleReaction,
   updatePost,

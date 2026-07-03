@@ -1,6 +1,6 @@
 {
   "name": "birdora-web",
-  "version": "1.5.1",
+  "version": "1.6.0",
   "private": true,
   "description": "Birdora static site with Express JWT auth backend",
   "main": "server.js",
@@ -16,8 +16,14 @@
     "dev": "node --watch server.js",
     "test:auth": "node scripts/test-auth.js",
     "test:browser": "node scripts/test-browser-e2e.js",
+    "test:browser:50-pages": "node scripts/run-browser-50-page-flow.js",
+    "test:browser:agents:report": "node scripts/summarize-browser-agent-results.js",
+    "test:browser:user-flow": "node scripts/test-browser-user-flow-worker.js",
+    "test:browser:recognition": "node scripts/test-browser-recognition-ramp.js",
+    "test:recognition:server": "node scripts/test-recognition-server.js",
     "test:community": "node scripts/test-community.js",
     "test:observations": "node scripts/test-observations.js",
+    "test:large-images": "node scripts/test-large-image-upload.js",
     "test:peak": "node scripts/test-peak.js",
     "test:prod:readonly": "node scripts/test-production-readonly.js",
     "test:atlas": "node scripts/validate-atlas-data.js",
@@ -30,6 +36,9 @@
     "dotenv": "^17.4.2",
     "express": "^4.21.2",
     "express-rate-limit": "^8.5.2",
-    "jsonwebtoken": "^9.0.2"
+    "heic-to": "^1.5.2",
+    "jpeg-js": "^0.4.4",
+    "jsonwebtoken": "^9.0.2",
+    "onnxruntime-node": "^1.27.0"
   }
 }

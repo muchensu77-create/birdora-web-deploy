@@ -3,6 +3,7 @@ const fs = require("fs");
 const path = require("path");
 
 const { getDatabase } = require("../db/database");
+const { recordImageWriteMetric } = require("./image-write-metrics");
 
 const DEFAULT_DATABASE_FILE = path.join(__dirname, "..", "data", "birdora.sqlite");
 const databaseFile = path.resolve(process.env.DATABASE_FILE || DEFAULT_DATABASE_FILE);
@@ -26,6 +27,16 @@ function createForbiddenError() {
   const error = new Error("you can only access your own observations");
   error.statusCode = 403;
   return error;
+}
+
+function createLinkedPostConflictError() {
+  const error = new Error("observation is linked to a community post");
+  error.statusCode = 409;
+  return error;
+}
+
+function isLinkedObservationConstraintError(error) {
+  return /observation is linked to a community post/i.test(error?.message || "");
 }
 
 function parseJsonArray(value) {
@@ -102,8 +113,8 @@ function removeImageFile(storageFile) {
   fs.rmSync(resolvedPath, { force: true });
 }
 
-function saveObservationImage(db, observationId, image) {
-  if (!image) return "";
+function prepareObservationImage(image) {
+  if (!image) return null;
 
   const extension = IMAGE_EXTENSIONS[image.mimeType];
   if (!extension) {
@@ -115,31 +126,38 @@ function saveObservationImage(db, observationId, image) {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
   const storageFile = `${crypto.randomUUID()}.${extension}`;
   const storagePath = path.join(UPLOAD_DIR, storageFile);
+  const startedAt = Date.now();
 
   try {
     fs.writeFileSync(storagePath, image.buffer);
-    db.prepare(`
-      UPDATE observations
-      SET
-        image_url = ?,
-        image_original_name = ?,
-        image_mime_type = ?,
-        image_size_bytes = ?,
-        updated_at = ?
-      WHERE id = ?
-    `).run(
+    recordImageWriteMetric({
+      kind: "observation",
       storageFile,
-      image.originalName || `observation-image.${extension}`,
-      image.mimeType,
-      image.buffer.length,
-      new Date().toISOString(),
-      observationId
-    );
-    return storageFile;
+      mimeType: image.mimeType,
+      bytes: image.buffer.length,
+      durationMs: Date.now() - startedAt,
+      ok: true,
+    });
   } catch (error) {
+    recordImageWriteMetric({
+      kind: "observation",
+      storageFile,
+      mimeType: image.mimeType,
+      bytes: image.buffer.length,
+      durationMs: Date.now() - startedAt,
+      ok: false,
+      error: error.message,
+    });
     removeImageFile(storageFile);
     throw error;
   }
+
+  return {
+    storageFile,
+    originalName: image.originalName || `observation-image.${extension}`,
+    mimeType: image.mimeType,
+    sizeBytes: image.buffer.length,
+  };
 }
 
 async function createObservation({
@@ -158,14 +176,21 @@ async function createObservation({
   const now = new Date().toISOString();
   const id = crypto.randomUUID();
   const finalObservedAt = observedAt || now;
-  let savedImageFile = "";
+  const preparedImage = prepareObservationImage(image);
+  let transactionStarted = false;
 
-  db.exec("BEGIN");
   try {
+    db.exec("BEGIN");
+    transactionStarted = true;
+
     db.prepare(`
       INSERT INTO observations (
         id,
         user_id,
+        image_url,
+        image_original_name,
+        image_mime_type,
+        image_size_bytes,
         selected_species_name,
         selected_species_scientific_name,
         confidence,
@@ -176,10 +201,14 @@ async function createObservation({
         observed_at,
         created_at,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       userId,
+      preparedImage?.storageFile || "",
+      preparedImage?.originalName || "",
+      preparedImage?.mimeType || "",
+      preparedImage?.sizeBytes || 0,
       selectedSpeciesName,
       selectedSpeciesScientificName,
       confidence,
@@ -192,11 +221,11 @@ async function createObservation({
       now
     );
 
-    savedImageFile = saveObservationImage(db, id, image);
     db.exec("COMMIT");
+    transactionStarted = false;
   } catch (error) {
-    db.exec("ROLLBACK");
-    removeImageFile(savedImageFile);
+    if (transactionStarted) db.exec("ROLLBACK");
+    removeImageFile(preparedImage?.storageFile);
     throw error;
   }
 
@@ -279,12 +308,17 @@ async function deleteObservation({ id, userId }) {
   `).get(id);
 
   if (linkedPost) {
-    const error = new Error("observation is linked to a community post");
-    error.statusCode = 409;
-    throw error;
+    throw createLinkedPostConflictError();
   }
 
-  db.prepare("DELETE FROM observations WHERE id = ? AND user_id = ?").run(id, userId);
+  try {
+    db.prepare("DELETE FROM observations WHERE id = ? AND user_id = ?").run(id, userId);
+  } catch (error) {
+    if (isLinkedObservationConstraintError(error)) {
+      throw createLinkedPostConflictError();
+    }
+    throw error;
+  }
   removeImageFile(row.image_url);
 }
 
