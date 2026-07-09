@@ -34,33 +34,34 @@ body {
     margin: 0;
     font-family: "Avenir Next", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
     color: var(--ink);
-    background: radial-gradient(circle at top left, rgba(220, 239, 229, 0.9), transparent 30%), radial-gradient(circle at top right, rgba(241, 223, 184, 0.3), transparent 24%), linear-gradient(180deg, #f5fbf8 0%, #f8fbf7 45%, #f3f8f4 100%);
+    background-color: #eaf4ed;
+    background-image:
+        radial-gradient(circle at top left, rgba(220, 239, 229, 0.9), transparent 30%),
+        radial-gradient(circle at top right, rgba(241, 223, 184, 0.3), transparent 24%),
+        linear-gradient(180deg, #f5fbf8 0%, #f8fbf7 45%, #f3f8f4 100%);
+    background-attachment: fixed;
 }
 
-body::before,
+/* Blurred eagle background — full-page backdrop behind all content */
+body::before {
+    content: "";
+    position: fixed;
+    z-index: -2;
+    inset: -10%;
+    background: url("./assets/roadmap-eagle-dive.png") center 30% / cover no-repeat;
+    filter: blur(36px) saturate(1.15);
+    opacity: 0.42;
+    pointer-events: none;
+}
+
+/* Soft green tint overlay — keeps text readable while eagle shows through */
 body::after {
     content: "";
     position: fixed;
     z-index: -1;
-    border-radius: 999px;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(245, 251, 248, 0.35) 0%, rgba(234, 244, 237, 0.15) 50%, rgba(243, 248, 244, 0.4) 100%);
     pointer-events: none;
-    filter: blur(10px);
-}
-
-body::before {
-    top: 80px;
-    left: -120px;
-    width: 320px;
-    height: 320px;
-    background: rgba(201, 231, 214, 0.35);
-}
-
-body::after {
-    top: 520px;
-    right: -80px;
-    width: 260px;
-    height: 260px;
-    background: rgba(241, 223, 184, 0.22);
 }
 
 button,
@@ -232,7 +233,7 @@ textarea {
 }
 
 main {
-    overflow: hidden;
+    overflow: visible;
 }
 
 .hero {
@@ -2356,13 +2357,13 @@ body {
 .hero-card {
     position: relative;
     border-radius: 64px;
-    clip-path: inset(0 round 64px);
-    overflow: hidden;
+    overflow: visible;
     isolation: isolate;
 }
 
 .hero {
     margin: 24px;
+    margin-bottom: 0;
 }
 
 .hero::before,
@@ -2374,8 +2375,27 @@ body {
 .hero-visual,
 .hero img {
     border-radius: inherit;
-    clip-path: inherit;
     overflow: hidden;
+}
+
+/* Blur transition zone — frosted fade from hero into roadmap below */
+.hero::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -80px;
+    height: 100px;
+    background: linear-gradient(to bottom,
+        rgba(49, 95, 77, 0.55) 0%,
+        rgba(49, 95, 77, 0.3) 35%,
+        rgba(220, 239, 229, 0.12) 70%,
+        transparent 100%);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: 0 0 64px 64px;
+    z-index: 0;
+    pointer-events: none;
 }
 
 .hero-media,
@@ -2389,8 +2409,13 @@ body {
     .hero-section,
     .hero-card {
         border-radius: 40px;
-        clip-path: inset(0 round 40px);
         margin: 16px;
+        margin-bottom: 0;
+    }
+    .hero::after {
+        bottom: -60px;
+        height: 80px;
+        border-radius: 0 0 40px 40px;
     }
 }
 
@@ -3954,14 +3979,12 @@ body[data-home-view="community"] .feature-community.reveal-on-scroll {
 
 .learning-roadmap {
     position: relative;
-    width: min(1200px, calc(100% - 40px));
-    min-height: 960px;
-    margin: clamp(44px, 6vw, 78px) auto;
-    overflow: hidden;
-    border: 1px solid rgba(73, 112, 92, 0.14);
-    border-radius: 34px;
-    background: #dfeee4;
-    box-shadow: 0 30px 70px rgba(17, 47, 36, 0.14);
+    width: 100%;
+    min-height: 100vh;
+    margin: 0;
+    padding: clamp(60px, 8vw, 120px) 0;
+    overflow: visible;
+    background: transparent;
     isolation: isolate;
 }
 
@@ -3975,17 +3998,22 @@ body[data-home-view="community"] .feature-community.reveal-on-scroll {
 .roadmap-bg {
     z-index: -3;
     background-image: url("./assets/roadmap-eagle-dive.png");
-    background-position: right -150px top -120px;
+    background-position: center 20%;
     background-repeat: no-repeat;
-    background-size: 150% auto;
-    transform: scale(1.5) translate(7%, -7%);
-    transform-origin: right top;
+    background-size: 90% auto;
+    opacity: 0.85;
+    /* Fade at the bottom to blend with page background */
+    -webkit-mask-image: linear-gradient(to bottom, black 0%, black 60%, rgba(0,0,0,0.2) 85%, transparent 100%);
+    mask-image: linear-gradient(to bottom, black 0%, black 60%, rgba(0,0,0,0.2) 85%, transparent 100%);
 }
 
 .roadmap-overlay {
     z-index: -2;
-    background: linear-gradient(105deg, rgba(255, 255, 255, 0.88) 0%, rgba(255, 255, 255, 0.72) 43%, rgba(235, 247, 239, 0.42) 70%, rgba(21, 55, 39, 0.2) 100%), radial-gradient(circle at 78% 16%, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.72) 42%, rgba(255, 255, 255, 0.82) 100%);
-    backdrop-filter: blur(2px);
+    background: linear-gradient(105deg, rgba(255, 255, 255, 0.62) 0%, rgba(255, 255, 255, 0.42) 43%, rgba(235, 247, 239, 0.22) 70%, rgba(21, 55, 39, 0.1) 100%), radial-gradient(circle at 78% 16%, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.42) 42%, rgba(255, 255, 255, 0.58) 100%);
+    backdrop-filter: blur(4px);
+    /* Let the page-level eagle show through at the bottom */
+    -webkit-mask-image: linear-gradient(to bottom, black 0%, black 55%, rgba(0,0,0,0.4) 80%, rgba(0,0,0,0.05) 100%);
+    mask-image: linear-gradient(to bottom, black 0%, black 55%, rgba(0,0,0,0.4) 80%, rgba(0,0,0,0.05) 100%);
 }
 
 .roadmap-path {
@@ -4016,17 +4044,19 @@ body[data-home-view="community"] .feature-community.reveal-on-scroll {
 
 .roadmap-content {
     position: relative;
-    min-height: 760px;
-    padding: clamp(28px, 4vw, 50px);
+    min-height: 860px;
+    padding: clamp(40px, 6vw, 80px);
+    max-width: 1400px;
+    margin: 0 auto;
 }
 
 .roadmap-intro {
-    width: min(940px, 48%);
+    width: min(1000px, 55%);
 }
 
 .roadmap-intro h2 {
     margin: 0;
-    font-size: clamp(32px, 4vw, 52px);
+    font-size: clamp(36px, 4.6vw, 60px);
     line-height: 1.08;
     letter-spacing: 0;
     overflow-wrap: anywhere;
@@ -4041,11 +4071,11 @@ body[data-home-view="community"] .feature-community.reveal-on-scroll {
 .roadmap-node {
     position: absolute;
     display: grid;
-    gap: 10px;
-    width: min(310px, 28vw);
-    padding: 22px;
+    gap: 14px;
+    width: min(380px, 30vw);
+    padding: 28px;
     border: 1px solid rgba(255, 255, 255, 0.7);
-    border-radius: 22px;
+    border-radius: 26px;
     background: rgba(255, 255, 255, 0.72);
     box-shadow: 0 18px 38px rgba(17, 47, 36, 0.14);
     backdrop-filter: blur(18px);
@@ -4057,82 +4087,83 @@ body[data-home-view="community"] .feature-community.reveal-on-scroll {
 
 .roadmap-index {
     color: #14763d;
-    font-size: 28px;
+    font-size: 32px;
     font-weight: 900;
     line-height: 1;
 }
 
 .roadmap-tag {
     justify-self: start;
-    padding: 6px 11px;
+    padding: 7px 13px;
     border: 1px solid rgba(22, 163, 74, 0.14);
     border-radius: 999px;
     color: #21613e;
     background: rgba(220, 239, 229, 0.74);
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 800;
 }
 
 .roadmap-node h3 {
     margin: 0;
-    font-size: clamp(22px, 2vw, 28px);
+    font-size: clamp(24px, 2.4vw, 32px);
     letter-spacing: 0;
 }
 
 .roadmap-node p {
     margin: 0;
     color: #4b6258;
-    line-height: 1.75;
+    font-size: 16px;
+    line-height: 1.8;
     overflow-wrap: anywhere;
 }
 
 .roadmap-link {
     justify-self: start;
-    margin-top: 4px;
-    min-height: 44px;
+    margin-top: 6px;
+    min-height: 46px;
 }
 
 .node-1 {
-    left: clamp(34px, 5vw, 82px);
-    top: 330px;
+    left: clamp(40px, 5vw, 100px);
+    top: 340px;
 }
 
 .node-2 {
-    left: 37%;
-    top: 390px;
+    left: 36%;
+    top: 470px;
 }
 
 .node-3 {
-    right: clamp(34px, 4vw, 64px);
-    bottom: 92px;
+    right: clamp(40px, 5vw, 100px);
+    bottom: 40px;
 }
 
 @media (min-width: 768px) and (max-width: 1024px) {
     .learning-roadmap {
-        width: min(900px, calc(100% - 32px));
-        min-height: 780px;
+        width: 100%;
+        min-height: 900px;
     }
     .roadmap-bg {
-        background-position: right -170px top -90px;
-        background-size: 170% auto;
+        background-position: center 20%;
+        background-size: 100% auto;
     }
     .roadmap-intro {
-        width: min(520px, 72%);
+        width: min(600px, 72%);
     }
     .roadmap-node {
-        width: min(292px, 34vw);
+        width: min(340px, 38vw);
     }
     .node-1 {
-        left: 34px;
-        top: 330px;
+        left: 40px;
+        top: 340px;
     }
     .node-2 {
-        left: 34%;
-        top: 405px;
+        left: 33%;
+        top: 475px;
     }
     .node-3 {
-        right: 30px;
-        bottom: 86px;
+        right: 40px;
+        bottom: 40px;
     }
 }
 
@@ -4162,20 +4193,23 @@ body[data-home-view="community"] .feature-community.reveal-on-scroll {
         width: 100%;
     }
     .learning-roadmap {
-        width: calc(100% - 32px);
+        width: 100%;
         min-height: 0;
-        margin: 34px auto;
-        border-radius: 26px;
+        margin: 0;
+        padding: 40px 0 60px;
     }
     .roadmap-bg {
-        opacity: 0.36;
-        background-position: right top;
-        background-size: 180% auto;
-        transform: scale(1.18) translate(6%, -4%);
+        opacity: 0.65;
+        background-position: center 20%;
+        background-size: 140% auto;
+        -webkit-mask-image: linear-gradient(to bottom, black 0%, black 55%, transparent 100%);
+        mask-image: linear-gradient(to bottom, black 0%, black 55%, transparent 100%);
     }
     .roadmap-overlay {
-        background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(246, 251, 247, 0.86));
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.6), rgba(246, 251, 247, 0.4));
         backdrop-filter: blur(3px);
+        -webkit-mask-image: linear-gradient(to bottom, black 0%, black 50%, rgba(0,0,0,0.2) 80%, transparent 100%);
+        mask-image: linear-gradient(to bottom, black 0%, black 50%, rgba(0,0,0,0.2) 80%, transparent 100%);
     }
     .desktop-path {
         display: none;
@@ -4192,17 +4226,17 @@ body[data-home-view="community"] .feature-community.reveal-on-scroll {
     .roadmap-content {
         display: grid;
         grid-template-columns: minmax(0, 1fr);
-        gap: 22px;
+        gap: 26px;
         min-height: 0;
         overflow: hidden;
-        padding: 24px 18px 30px 56px;
+        padding: 30px 24px 36px 62px;
     }
     .roadmap-intro {
         width: 100%;
-        max-width: min(100%, calc(100vw - 104px));
+        max-width: 100%;
     }
     .roadmap-intro h2 {
-        font-size: clamp(28px, 9vw, 36px);
+        font-size: clamp(30px, 9vw, 40px);
     }
     .roadmap-node {
         position: relative;
@@ -4211,21 +4245,21 @@ body[data-home-view="community"] .feature-community.reveal-on-scroll {
         top: auto;
         bottom: auto;
         width: auto;
-        max-width: min(100%, calc(100vw - 104px));
+        max-width: 100%;
         min-width: 0;
-        padding: 20px;
-        border-radius: 20px;
+        padding: 26px;
+        border-radius: 22px;
     }
 }
 
 @media (max-width: 380px) {
     .learning-roadmap {
-        width: calc(100% - 24px);
+        width: 100%;
     }
     .roadmap-content {
-        padding-inline: 50px 14px;
+        padding-inline: 54px 18px;
     }
     .roadmap-node {
-        padding: 18px;
+        padding: 22px;
     }
 }
