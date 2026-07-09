@@ -1,0 +1,125 @@
+{
+  "generatedAt": "2026-07-03T13:10:29.371Z",
+  "resultDir": "C:\\Users\\Administrator\\Documents\\逸轩_开发\\website\\birdora-web\\docs\\browser-50-agent-results\\browser50-agents-1783083887487",
+  "expectedCount": 50,
+  "observedCount": 50,
+  "missing": [],
+  "passed": 50,
+  "failed": 0,
+  "allPassed": true,
+  "phases": {
+    "register": {
+      "total": 50,
+      "completed": 50,
+      "passed": 50,
+      "failed": 0,
+      "durations": {
+        "count": 50,
+        "avgMs": 76303,
+        "p50Ms": 38304,
+        "p95Ms": 227125,
+        "p99Ms": 242670,
+        "maxMs": 242670
+      }
+    },
+    "logout": {
+      "total": 50,
+      "completed": 50,
+      "passed": 50,
+      "failed": 0,
+      "durations": {
+        "count": 50,
+        "avgMs": 32795,
+        "p50Ms": 31161,
+        "p95Ms": 53366,
+        "p99Ms": 61067,
+        "maxMs": 61067
+      }
+    },
+    "login": {
+      "total": 50,
+      "completed": 50,
+      "passed": 50,
+      "failed": 0,
+      "durations": {
+        "count": 50,
+        "avgMs": 41173,
+        "p50Ms": 36264,
+        "p95Ms": 82316,
+        "p99Ms": 90747,
+        "maxMs": 90747
+      }
+    },
+    "publishPost": {
+      "total": 50,
+      "completed": 50,
+      "passed": 50,
+      "failed": 0,
+      "durations": {
+        "count": 50,
+        "avgMs": 44141,
+        "p50Ms": 47507,
+        "p95Ms": 57314,
+        "p99Ms": 61283,
+        "maxMs": 61283
+      }
+    },
+    "recognition": {
+      "total": 50,
+      "completed": 50,
+      "passed": 50,
+      "failed": 0,
+      "durations": {
+        "count": 50,
+        "avgMs": 19001,
+        "p50Ms": 18896,
+        "p95Ms": 33765,
+        "p99Ms": 46376,
+        "maxMs": 46376
+      }
+    }
+  },
+  "recognition": {
+    "statusCounts": {
+      "success": 50
+    },
+    "durations": {
+      "count": 50,
+      "avgMs": 1911,
+      "p50Ms": 938,
+      "p95Ms": 7919,
+      "p99Ms": 14617,
+      "maxMs": 14617
+    },
+    "classifyDurations": {
+      "count": 0,
+      "avgMs": null,
+      "p50Ms": null,
+      "p95Ms": null,
+      "p99Ms": null,
+      "maxMs": null
+    },
+    "topLabels": {
+      "普通翠鸟 / Common Kingfisher": 50
+    },
+    "resources": [
+      {
+        "name": "bird_info.json",
+        "count": 23,
+        "avgMs": 3186,
+        "p50Ms": 1351,
+        "p95Ms": 9344,
+        "p99Ms": 15779,
+        "maxMs": 15779
+      }
+    ]
+  },
+  "diagnostics": {
+    "consoleErrors": 0,
+    "consoleWarnings": 0,
+    "exceptions": 0,
+    "networkFailures": 0,
+    "crashes": 0
+  },
+  "failures": []
+}

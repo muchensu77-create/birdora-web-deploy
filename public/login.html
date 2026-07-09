@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>登录 / 注册 - Birdora</title>
+    <link rel="icon" type="image/svg+xml" sizes="any" href="./assets/favicon.svg" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body data-page="login">
+    <main class="auth-page auth-page-simple">
+      <section class="auth-shell auth-shell-simple">
+        <div class="auth-intro auth-intro-simple">
+          <p class="eyebrow">Birdora</p>
+          <h1>欢迎回来</h1>
+          <p>登录后继续识鸟、记录观察，并查看你的社区分享。</p>
+        </div>
+
+        <form class="auth-card auth-card-main auth-card-switcher" data-auth-form="account" data-auth-mode="login" novalidate>
+          <div class="auth-card-head auth-card-head-compact">
+            <p class="eyebrow" id="authModeEyebrow">登录</p>
+            <h2 id="authModeTitle">继续你的观鸟记录</h2>
+            <p class="auth-subcopy" id="authModeCopy">登录 Birdora，继续保存你的观鸟笔记、评论和识别记录。</p>
+          </div>
+
+          <div class="auth-fields">
+            <label class="auth-field auth-field-optional auth-hidden" data-auth-visible="register">
+              <span>昵称</span>
+              <input type="text" name="nickname" placeholder="为你的账号起一个名字" autocomplete="nickname" />
+            </label>
+
+            <label class="auth-field">
+              <span>邮箱</span>
+              <input type="email" name="email" placeholder="name@example.com" autocomplete="email" />
+            </label>
+
+            <label class="auth-field">
+              <span>密码</span>
+              <input type="password" name="password" placeholder="请输入密码" autocomplete="current-password" />
+            </label>
+          </div>
+
+          <label class="agree-row auth-hidden" data-auth-visible="register">
+            <input type="checkbox" name="agree" />
+            <span>
+              注册即表示你同意
+              <a href="./terms.html" target="_blank" rel="noreferrer">《用户协议》</a>
+              与
+              <a href="./privacy.html" target="_blank" rel="noreferrer">《隐私政策》</a>
+            </span>
+          </label>
+
+          <button class="primary-btn auth-submit auth-submit-pill" id="authSubmitBtn" type="submit">登录</button>
+          <p class="auth-message" data-auth-message aria-live="polite" role="alert"></p>
+
+          <p class="auth-switch-copy">
+            <span id="authSwitchLead">还没有账号？</span>
+            <button class="auth-switch-btn" type="button" data-auth-switch="register">去注册</button>
+          </p>
+        </form>
+
+        <div class="auth-legal">
+          <a href="./terms.html" target="_blank" rel="noreferrer">用户协议</a>
+          <span>·</span>
+          <a href="./privacy.html" target="_blank" rel="noreferrer">隐私政策</a>
+        </div>
+      </section>
+    </main>
+
+    <script src="./community-api.js"></script>
+    <script src="./script.js"></script>
+  </body>
+</html>

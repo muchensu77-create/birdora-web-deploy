@@ -1,0 +1,909 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN"><head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Birdora 观鸟眼镜</title>
+    <link rel="icon" type="image/svg+xml" sizes="any" href="./assets/favicon.svg">
+    <link rel="stylesheet" href="./styles.css">
+    <link rel="stylesheet" href="./community-post-card.css">
+  </head>
+  <body data-page="home" data-home-view="atlas">
+    <header class="topbar">
+      <a class="brand" href="#home" aria-label="Birdora 首页">
+        <span class="brand-mark">B</span>
+        <span>Birdora</span>
+        <span class="brand-user" data-user-name="" hidden=""></span>
+      </a>
+      <nav class="nav" aria-label="主导航">
+        <a href="#identify">识别</a>
+        <a href="#atlas">图鉴</a>
+        <a href="#community">社区</a>
+        <a href="#device">设备</a>
+      </nav>
+      <div class="topbar-actions">
+        <button class="ghost-btn" type="button" data-scroll="#identify">上传鸟照</button>
+        <button class="ghost-btn" type="button" data-logout="" aria-label="登录 Birdora">登录</button>
+      </div>
+    </header>
+
+    <main id="home">
+      <section class="hero home-only reveal-on-scroll">
+        <div class="hero-media" role="img" aria-label="观鸟眼镜与湿地鸟类"></div>
+        <div class="hero-copy">
+          <p class="eyebrow">智能观鸟系统</p>
+          <h1><span>拍下飞羽瞬间，</span><span>立刻知道它是谁。</span></h1>
+          <p>
+            Birdora 观鸟眼镜把拍摄、定位、AI 识别、鸟类知识图鉴和分享社区连在一起，
+            让每一次外出观察都变成可记录、可学习、可交流的自然笔记。
+          </p>
+          <div class="hero-actions">
+            <button class="primary-btn" type="button" data-scroll="#identify">开始识别</button>
+            <button class="secondary-btn" type="button" data-scroll="#atlas">浏览图鉴</button>
+          </div>
+        </div>
+        <aside class="live-card" aria-label="今日观测摘要">
+          <span>今日识别</span>
+          <strong>27</strong>
+          <small>杭州·西溪湿地公园</small>
+        </aside>
+      </section>
+
+      <section class="learning-roadmap home-only" id="learning-roadmap" aria-labelledby="roadmapTitle">
+        <div class="roadmap-bg" aria-hidden="true"></div>
+        <div class="roadmap-overlay" aria-hidden="true"></div>
+        <svg class="roadmap-path desktop-path" viewBox="0 0 1100 520" aria-hidden="true" focusable="false">
+          <defs>
+            <marker id="roadmapArrowDesktop" viewBox="0 0 12 12" refX="10.5" refY="6" markerWidth="12" markerHeight="12" orient="auto">
+              <path d="M2 2 L10 6 L2 10 Z"></path>
+            </marker>
+          </defs>
+          <path d="M180 136 C310 78 413 178 492 247 S723 312 842 420"></path>
+        </svg>
+        <svg class="roadmap-path mobile-path" viewBox="0 0 120 760" aria-hidden="true" focusable="false">
+          <defs>
+            <marker id="roadmapArrowMobile" viewBox="0 0 12 12" refX="6" refY="10.5" markerWidth="12" markerHeight="12" orient="auto">
+              <path d="M2 2 L10 2 L6 10 Z"></path>
+            </marker>
+          </defs>
+          <path d="M60 46 C34 150 88 222 60 318 S34 506 60 702"></path>
+        </svg>
+
+        <div class="roadmap-content">
+          <div class="roadmap-intro">
+            <p class="eyebrow">学习路线图</p>
+            <h2 id="roadmapTitle">从拍到一张鸟照，走到完整观鸟笔记</h2>
+            <p>按顺序完成三个步骤：先上传照片观察细节，再检索鸟种资料，最后把发现整理成自己的观鸟日常。</p>
+          </div>
+
+          <article class="roadmap-node node-1">
+            <span class="roadmap-index">01</span>
+            <span class="roadmap-tag">入门 · 观察</span>
+            <h3>上传鸟照</h3>
+            <p>预览一些别人的照片，也可以上传自己的鸟照，让识别结果带你进入下一步。</p>
+            <button class="primary-btn roadmap-link" type="button" data-scroll="#identify">点击前往</button>
+          </article>
+
+          <article class="roadmap-node node-2">
+            <span class="roadmap-index">02</span>
+            <span class="roadmap-tag">识别 · 检索</span>
+            <h3>检索鸟种</h3>
+            <p>我们支持 Wiki 资料线索和本地图鉴检索，帮助你核对习性、栖息地与观察特征。</p>
+            <button class="primary-btn roadmap-link" type="button" data-scroll="#atlas">点击前往</button>
+          </article>
+
+          <article class="roadmap-node node-3">
+            <span class="roadmap-index">03</span>
+            <span class="roadmap-tag">记录 · 进阶</span>
+            <h3>发布笔记</h3>
+            <p>配合照片发布你的观鸟日常，旁边会浮动展示其他人的日记，方便交流和学习。</p>
+            <button class="primary-btn roadmap-link" type="button" data-scroll="#community">点击前往</button>
+          </article>
+        </div>
+      </section>
+
+      <section class="split-section feature-page feature-identify reveal-on-scroll" id="identify">
+        <div class="feature-page-nav">
+          <button class="secondary-btn" type="button" data-scroll="#home">返回主页</button>
+          <button class="primary-btn" type="button" data-scroll="#atlas">下一步：检索鸟种</button>
+        </div>
+        <div class="section-head">
+          <p class="eyebrow">AI 识别</p>
+          <h2>上传鸟照，生成识别卡片</h2>
+          <p>选择照片后，浏览器会加载 OSEA 鸟类模型，从全量标签库返回 Top 5 候选，并优先匹配本地图鉴资料。</p>
+        </div>
+        <div class="identify-grid">
+          <label class="upload-zone" for="birdUpload">
+            <input id="birdUpload" type="file" accept="image/*">
+            <span class="upload-icon">+</span>
+            <strong>选择鸟类照片</strong>
+            <small>支持眼镜同步照片或手机相册上传</small>
+            <img id="previewImage" alt="">
+          </label>
+          <article class="result-card" id="resultCard">
+            <div class="confidence-ring">
+              <span id="confidenceText">92%</span>
+            </div>
+            <div>
+              <p class="eyebrow">识别结果</p>
+              <h3 id="resultName">翠鸟</h3>
+              <p id="resultMeta">OSEA 模型运行器已就绪，首次识别会加载模型和标签库</p>
+            </div>
+            <dl>
+              <div><dt>特征</dt><dd id="resultFeature">蓝绿色背部，橙色腹部，嘴长而尖。</dd></div>
+              <div><dt>模型判断</dt><dd id="modelDetail">已接入 sun-jiao/osea_mobile 的 bird_model.onnx，识别时从全量标签库返回 Top 5 候选。</dd></div>
+              <div class="candidate-panel">
+                <dt>Top 候选</dt>
+                <dd>
+                  <ol class="candidate-list" id="candidateList">
+                    <li class="candidate-empty">上传照片后显示模型 Top 5 候选。</li>
+                  </ol>
+                </dd>
+              </div>
+              <div><dt>建议</dt><dd>记录地点、保留距离，不干扰栖息。</dd></div>
+            </dl>
+            <p class="form-message observation-message" id="observationMessage" aria-live="polite" role="status"></p>
+            <div class="recognition-actions">
+              <button class="secondary-btn full" id="saveObservation" type="button" disabled="" aria-disabled="true">确认并保存观测记录</button>
+            </div>
+            <button class="primary-btn full" id="shareDetected" type="button" disabled="" aria-disabled="true">保存后发布到社区</button>
+          </article>
+        </div>
+      </section>
+
+      <section class="observation-section feature-page feature-identify" id="observations">
+        <div class="section-head compact">
+          <p class="eyebrow">我的观测记录</p>
+          <h2>已确认的识别记录</h2>
+        </div>
+        <div class="observation-list" id="observationList" aria-live="polite">
+      <article class="observation-empty">
+        <p>登录后可以查看你保存过的观测记录。</p>
+        <a class="primary-btn more-link" href="./login.html?next=%2Fpreview-local%2F%23atlas">登录</a>
+      </article>
+    </div>
+      </section>
+
+      <section class="atlas-section feature-page feature-atlas reveal-on-scroll is-visible" id="atlas">
+        <div class="feature-page-nav">
+          <button class="secondary-btn" type="button" data-scroll="#home">返回主页</button>
+          <button class="primary-btn" type="button" data-scroll="#community">下一步：发布笔记</button>
+        </div>
+        <div class="section-head compact">
+          <p class="eyebrow">鸟类知识图鉴</p>
+          <h2>检索鸟种、习性与观测线索</h2>
+        </div>
+        <div class="search-row">
+          <input id="birdSearch" type="search" aria-label="搜索鸟种" placeholder="搜索中文名、英文名或拉丁名，例如：翠鸟、Kingfisher、Alcedo...">
+        </div>
+        <p class="atlas-summary" id="atlasSummary">已索引 10,964 个 OSEA 标签；默认优先展示常见候选清单里的鸟种。 富图鉴进度：13/100 个候选已补齐。</p>
+        <article class="atlas-detail" id="atlasDetail" aria-live="polite">
+    <div class="atlas-detail-main">
+      
+      <figure class="atlas-detail-photo">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/f/f1/Little_egret_%28Egretta_garzetta%29_Photograph_by_Shantanu_Kuveskar.jpg/330px-Little_egret_%28Egretta_garzetta%29_Photograph_by_Shantanu_Kuveskar.jpg" alt="白鹭照片" loading="eager">
+        <figcaption>Wikimedia Commons · See source page</figcaption>
+      </figure>
+    
+      <div class="atlas-detail-heading">
+        <p class="eyebrow">默认展示</p>
+        <h3>白鹭</h3>
+        <p>Little Egret · Egretta garzetta</p>
+      </div>
+    </div>
+    <dl>
+      <div><dt>资料状态</dt><dd>图文已补充</dd></div>
+      <div><dt>识别标签</dt><dd>OSEA index 861</dd></div>
+      <div><dt>栖息地</dt><dd>浅滩、稻田、湿地</dd></div>
+      <div><dt>观察线索</dt><dd>黑嘴黑腿，脚趾偏黄，常在浅水边缓慢觅食。</dd></div>
+      <div><dt>食性</dt><dd>鱼虾、蛙类、昆虫</dd></div>
+      <div><dt>图片版权</dt><dd>Wikimedia Commons · See source page</dd></div>
+      <div><dt>来源</dt><dd><a href="https://en.wikipedia.org/wiki/Little_egret" target="_blank" rel="noreferrer">查看图片/资料来源</a></dd></div>
+    </dl>
+  </article>
+        <div class="bird-grid is-marquee is-auto-scrolling" id="birdGrid">
+    <div class="bird-marquee" aria-label="默认鸟类卡片滚动列表">
+      <div class="bird-track">
+    <article class="bird-card is-rich">
+      
+      <figure class="bird-photo">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/f/f1/Little_egret_%28Egretta_garzetta%29_Photograph_by_Shantanu_Kuveskar.jpg/330px-Little_egret_%28Egretta_garzetta%29_Photograph_by_Shantanu_Kuveskar.jpg" alt="白鹭照片" loading="lazy">
+        <figcaption>Wikimedia Commons · See source page</figcaption>
+      </figure>
+    
+      <div>
+        <h3>白鹭</h3>
+        <p>Little Egret · Egretta garzetta</p>
+        <p>通体白色，颈部修长，觅食时步伐缓慢。</p>
+        <p class="bird-clue">黑嘴黑腿，脚趾偏黄，常在浅水边缓慢觅食。</p>
+        <div class="tag-row">
+          <span>图文已补充</span>
+          <span>浅滩、稻田、湿地</span>
+        </div>
+        <div class="atlas-card-actions">
+          <a class="source-link" href="https://en.wikipedia.org/wiki/Little_egret" target="_blank" rel="noreferrer">查看来源</a>
+          <button class="source-link atlas-open" type="button" data-atlas-index="861">查看详情</button>
+        </div>
+      </div>
+    </article>
+  
+    <article class="bird-card is-rich">
+      
+      <figure class="bird-photo">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/6/66/Light-vented_Bulbul2.jpg/330px-Light-vented_Bulbul2.jpg" alt="白头鹎照片" loading="lazy">
+        <figcaption>Wikimedia Commons · See source page</figcaption>
+      </figure>
+    
+      <div>
+        <h3>白头鹎</h3>
+        <p>Light-vented Bulbul · Pycnonotus sinensis</p>
+        <p>头顶白斑明显，叫声清亮，是城市常见鸟。</p>
+        <p class="bird-clue">头顶黑、后颈有白斑，城市绿化带很常见。</p>
+        <div class="tag-row">
+          <span>图文已补充</span>
+          <span>城市绿地、庭院、公园</span>
+        </div>
+        <div class="atlas-card-actions">
+          <a class="source-link" href="https://en.wikipedia.org/wiki/Light-vented_bulbul" target="_blank" rel="noreferrer">查看来源</a>
+          <button class="source-link atlas-open" type="button" data-atlas-index="7201">查看详情</button>
+        </div>
+      </div>
+    </article>
+  
+    <article class="bird-card is-rich">
+      
+      <figure class="bird-photo">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/6/6d/Spotted_dove_%28Spilopelia_chinensis_suratensis%29.jpg/330px-Spotted_dove_%28Spilopelia_chinensis_suratensis%29.jpg" alt="珠颈斑鸠照片" loading="lazy">
+        <figcaption>Wikimedia Commons · See source page</figcaption>
+      </figure>
+    
+      <div>
+        <h3>珠颈斑鸠</h3>
+        <p>Spotted Dove · Spilopelia chinensis</p>
+        <p>颈侧有黑底白点斑块，常在地面慢步觅食。</p>
+        <p class="bird-clue">颈侧黑底白点像项链，起飞时有明显振翅声。</p>
+        <div class="tag-row">
+          <span>图文已补充</span>
+          <span>街区、公园、农田</span>
+        </div>
+        <div class="atlas-card-actions">
+          <a class="source-link" href="https://en.wikipedia.org/wiki/Spotted_dove" target="_blank" rel="noreferrer">查看来源</a>
+          <button class="source-link atlas-open" type="button" data-atlas-index="1892">查看详情</button>
+        </div>
+      </div>
+    </article>
+  
+    <article class="bird-card is-rich">
+      
+      <figure class="bird-photo">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/3/30/2011_Blauelster_in_Shanghai.jpg/330px-2011_Blauelster_in_Shanghai.jpg" alt="灰喜鹊照片" loading="lazy">
+        <figcaption>Wikimedia Commons · See source page</figcaption>
+      </figure>
+    
+      <div>
+        <h3>灰喜鹊</h3>
+        <p>Azure-winged Magpie · Cyanopica cyanus</p>
+        <p>尾羽较长，翅尾带蓝色，常成小群活动。</p>
+        <p class="bird-clue">黑色头顶、蓝色翅尾，常成群穿梭在林缘。</p>
+        <div class="tag-row">
+          <span>图文已补充</span>
+          <span>林缘、灌丛、校园</span>
+        </div>
+        <div class="atlas-card-actions">
+          <a class="source-link" href="https://en.wikipedia.org/wiki/Azure-winged_magpie" target="_blank" rel="noreferrer">查看来源</a>
+          <button class="source-link atlas-open" type="button" data-atlas-index="6798">查看详情</button>
+        </div>
+      </div>
+    </article>
+  
+    <article class="bird-card is-rich">
+      
+      <figure class="bird-photo">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/d/d5/Urocissa_erythrorhyncha.jpg/330px-Urocissa_erythrorhyncha.jpg" alt="红嘴蓝鹊照片" loading="lazy">
+        <figcaption>Wikimedia Commons · See source page</figcaption>
+      </figure>
+    
+      <div>
+        <h3>红嘴蓝鹊</h3>
+        <p>Red-billed Blue Magpie · Urocissa erythroryncha</p>
+        <p>红色嘴和脚，蓝色长尾醒目，叫声响亮。</p>
+        <p class="bird-clue">红色嘴脚、长尾蓝羽非常醒目。</p>
+        <div class="tag-row">
+          <span>图文已补充</span>
+          <span>山地林区、林缘</span>
+        </div>
+        <div class="atlas-card-actions">
+          <a class="source-link" href="https://en.wikipedia.org/wiki/Red-billed_blue_magpie" target="_blank" rel="noreferrer">查看来源</a>
+          <button class="source-link atlas-open" type="button" data-atlas-index="6803">查看详情</button>
+        </div>
+      </div>
+    </article>
+  
+    <article class="bird-card is-rich">
+      
+      <figure class="bird-photo">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/e/ee/Common_moorhen_%28Gallinula_chloropus%29_France.jpg/330px-Common_moorhen_%28Gallinula_chloropus%29_France.jpg" alt="黑水鸡照片" loading="lazy">
+        <figcaption>Wikimedia Commons · See source page</figcaption>
+      </figure>
+    
+      <div>
+        <h3>黑水鸡</h3>
+        <p>Common Moorhen · Gallinula chloropus</p>
+        <p>额甲红色，身体深色，游动时尾部常上翘。</p>
+        <p class="bird-clue">红额甲和红黄相间的嘴明显。</p>
+        <div class="tag-row">
+          <span>图文已补充</span>
+          <span>芦苇荡、池塘、河汊</span>
+        </div>
+        <div class="atlas-card-actions">
+          <a class="source-link" href="https://en.wikipedia.org/wiki/Common_moorhen" target="_blank" rel="noreferrer">查看来源</a>
+          <button class="source-link atlas-open" type="button" data-atlas-index="1388">查看详情</button>
+        </div>
+      </div>
+    </article>
+  
+    <article class="bird-card is-rich">
+      
+      <figure class="bird-photo">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/8/83/Long-tailed_Shrilke_0A2A3080.jpg/330px-Long-tailed_Shrilke_0A2A3080.jpg" alt="棕背伯劳照片" loading="lazy">
+        <figcaption>Wikimedia Commons · See source page</figcaption>
+      </figure>
+    
+      <div>
+        <h3>棕背伯劳</h3>
+        <p>Long-tailed Shrike · Lanius schach</p>
+        <p>黑色眼罩明显，常站在枝头观察猎物。</p>
+        <p class="bird-clue">黑色眼罩、棕背和长尾非常明显。</p>
+        <div class="tag-row">
+          <span>图文已补充</span>
+          <span>灌丛、农田边缘、开阔林地</span>
+        </div>
+        <div class="atlas-card-actions">
+          <a class="source-link" href="https://en.wikipedia.org/wiki/Long-tailed_shrike" target="_blank" rel="noreferrer">查看来源</a>
+          <button class="source-link atlas-open" type="button" data-atlas-index="6452">查看详情</button>
+        </div>
+      </div>
+    </article>
+  
+    <article class="bird-card is-rich">
+      
+      <figure class="bird-photo">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/7/7d/Rauchschwalbe_Hirundo_rustica.jpg/330px-Rauchschwalbe_Hirundo_rustica.jpg" alt="家燕照片" loading="lazy">
+        <figcaption>Wikimedia Commons · See source page</figcaption>
+      </figure>
+    
+      <div>
+        <h3>家燕</h3>
+        <p>Barn Swallow · Hirundo rustica</p>
+        <p>上体蓝黑色，喉部红褐，尾羽分叉明显，飞行敏捷。</p>
+        <p class="bird-clue">低空快速穿梭，尾巴像剪刀一样分叉。</p>
+        <div class="tag-row">
+          <span>图文已补充</span>
+          <span>村镇、农田、湿地边缘</span>
+        </div>
+        <div class="atlas-card-actions">
+          <a class="source-link" href="https://en.wikipedia.org/wiki/Barn_swallow" target="_blank" rel="noreferrer">查看来源</a>
+          <button class="source-link atlas-open" type="button" data-atlas-index="7381">查看详情</button>
+        </div>
+      </div>
+    </article>
+  
+    <article class="bird-card is-rich">
+      
+      <figure class="bird-photo">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/9/98/Tree_Sparrow_August_2007_Osaka_Japan.jpg/330px-Tree_Sparrow_August_2007_Osaka_Japan.jpg" alt="麻雀照片" loading="lazy">
+        <figcaption>Wikimedia Commons · See source page</figcaption>
+      </figure>
+    
+      <div>
+        <h3>麻雀</h3>
+        <p>Eurasian Tree Sparrow · Passer montanus</p>
+        <p>体型小，褐色背部带纵纹，脸颊有黑斑。</p>
+        <p class="bird-clue">常成群在地面啄食，头顶栗褐色。</p>
+        <div class="tag-row">
+          <span>图文已补充</span>
+          <span>城市街区、村庄、农田</span>
+        </div>
+        <div class="atlas-card-actions">
+          <a class="source-link" href="https://en.wikipedia.org/wiki/Eurasian_tree_sparrow" target="_blank" rel="noreferrer">查看来源</a>
+          <button class="source-link atlas-open" type="button" data-atlas-index="9380">查看详情</button>
+        </div>
+      </div>
+    </article>
+  
+    <article class="bird-card is-rich">
+      
+      <figure class="bird-photo">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/d/dc/Oriental_Magpie_on_Longevity_Hill%2C_Beijing.jpg/330px-Oriental_Magpie_on_Longevity_Hill%2C_Beijing.jpg" alt="喜鹊照片" loading="lazy">
+        <figcaption>Daniel Case / Wikimedia Commons · CC BY-SA 3.0</figcaption>
+      </figure>
+    
+      <div>
+        <h3>喜鹊</h3>
+        <p>Oriental Magpie · Pica serica</p>
+        <p>黑白羽色分明，肩部白斑醒目，长尾带蓝绿色金属光泽。</p>
+        <p class="bird-clue">常成对或小群活动，黑白对比和长尾是远距离识别重点。</p>
+        <div class="tag-row">
+          <span>图文已补充</span>
+          <span>城市绿地、公园、林缘、农田和村镇</span>
+        </div>
+        <div class="atlas-card-actions">
+          <a class="source-link" href="https://commons.wikimedia.org/wiki/File:Oriental_Magpie_on_Longevity_Hill,_Beijing.jpg" target="_blank" rel="noreferrer">查看来源</a>
+          <button class="source-link atlas-open" type="button" data-atlas-index="10868">查看详情</button>
+        </div>
+      </div>
+    </article>
+  
+    <article class="bird-card is-rich">
+      
+      <figure class="bird-photo">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/b/b9/Large-billed_Crow_%28Corvus_macrorhynchos%29_Tokyo.jpg/330px-Large-billed_Crow_%28Corvus_macrorhynchos%29_Tokyo.jpg" alt="大嘴乌鸦照片" loading="lazy">
+        <figcaption>Jason Thompson / Wikimedia Commons · CC BY 2.0</figcaption>
+      </figure>
+    
+      <div>
+        <h3>大嘴乌鸦</h3>
+        <p>Large-billed Crow · Corvus macrorhynchos</p>
+        <p>体型较大，全身黑色，嘴粗厚，上嘴弧度明显。</p>
+        <p class="bird-clue">粗大的嘴形是识别重点，常在树梢、屋顶或地面取食。</p>
+        <div class="tag-row">
+          <span>图文已补充</span>
+          <span>城市绿地、林缘、海岸、农田</span>
+        </div>
+        <div class="atlas-card-actions">
+          <a class="source-link" href="https://commons.wikimedia.org/wiki/File:Large-billed_Crow_(Corvus_macrorhynchos)_Tokyo.jpg" target="_blank" rel="noreferrer">查看来源</a>
+          <button class="source-link atlas-open" type="button" data-atlas-index="6864">查看详情</button>
+        </div>
+      </div>
+    </article>
+  
+    <article class="bird-card is-rich">
+      
+      <figure class="bird-photo">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/6/67/Carrion_crow_on_a_branch.jpg/330px-Carrion_crow_on_a_branch.jpg" alt="小嘴乌鸦照片" loading="lazy">
+        <figcaption>Alexis Lours / Wikimedia Commons · CC BY 2.0</figcaption>
+      </figure>
+    
+      <div>
+        <h3>小嘴乌鸦</h3>
+        <p>Carrion Crow · Corvus corone</p>
+        <p>全身黑色，嘴较细直，额部到嘴基过渡较平缓。</p>
+        <p class="bird-clue">与大嘴乌鸦相比嘴更细，常在开阔地或树顶停歇观察。</p>
+        <div class="tag-row">
+          <span>图文已补充</span>
+          <span>开阔农田、林缘、城郊</span>
+        </div>
+        <div class="atlas-card-actions">
+          <a class="source-link" href="https://commons.wikimedia.org/wiki/File:Carrion_crow_on_a_branch.jpg" target="_blank" rel="noreferrer">查看来源</a>
+          <button class="source-link atlas-open" type="button" data-atlas-index="6861">查看详情</button>
+        </div>
+      </div>
+    </article>
+  </div>
+      <div class="bird-track" aria-hidden="true">
+    <article class="bird-card is-rich">
+      
+      <figure class="bird-photo">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/f/f1/Little_egret_%28Egretta_garzetta%29_Photograph_by_Shantanu_Kuveskar.jpg/330px-Little_egret_%28Egretta_garzetta%29_Photograph_by_Shantanu_Kuveskar.jpg" alt="白鹭照片" loading="lazy">
+        <figcaption>Wikimedia Commons · See source page</figcaption>
+      </figure>
+    
+      <div>
+        <h3>白鹭</h3>
+        <p>Little Egret · Egretta garzetta</p>
+        <p>通体白色，颈部修长，觅食时步伐缓慢。</p>
+        <p class="bird-clue">黑嘴黑腿，脚趾偏黄，常在浅水边缓慢觅食。</p>
+        <div class="tag-row">
+          <span>图文已补充</span>
+          <span>浅滩、稻田、湿地</span>
+        </div>
+        <div class="atlas-card-actions">
+          <a class="source-link" href="https://en.wikipedia.org/wiki/Little_egret" target="_blank" rel="noreferrer" tabindex="-1">查看来源</a>
+          <button class="source-link atlas-open" type="button" data-atlas-index="861" tabindex="-1">查看详情</button>
+        </div>
+      </div>
+    </article>
+  
+    <article class="bird-card is-rich">
+      
+      <figure class="bird-photo">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/6/66/Light-vented_Bulbul2.jpg/330px-Light-vented_Bulbul2.jpg" alt="白头鹎照片" loading="lazy">
+        <figcaption>Wikimedia Commons · See source page</figcaption>
+      </figure>
+    
+      <div>
+        <h3>白头鹎</h3>
+        <p>Light-vented Bulbul · Pycnonotus sinensis</p>
+        <p>头顶白斑明显，叫声清亮，是城市常见鸟。</p>
+        <p class="bird-clue">头顶黑、后颈有白斑，城市绿化带很常见。</p>
+        <div class="tag-row">
+          <span>图文已补充</span>
+          <span>城市绿地、庭院、公园</span>
+        </div>
+        <div class="atlas-card-actions">
+          <a class="source-link" href="https://en.wikipedia.org/wiki/Light-vented_bulbul" target="_blank" rel="noreferrer" tabindex="-1">查看来源</a>
+          <button class="source-link atlas-open" type="button" data-atlas-index="7201" tabindex="-1">查看详情</button>
+        </div>
+      </div>
+    </article>
+  
+    <article class="bird-card is-rich">
+      
+      <figure class="bird-photo">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/6/6d/Spotted_dove_%28Spilopelia_chinensis_suratensis%29.jpg/330px-Spotted_dove_%28Spilopelia_chinensis_suratensis%29.jpg" alt="珠颈斑鸠照片" loading="lazy">
+        <figcaption>Wikimedia Commons · See source page</figcaption>
+      </figure>
+    
+      <div>
+        <h3>珠颈斑鸠</h3>
+        <p>Spotted Dove · Spilopelia chinensis</p>
+        <p>颈侧有黑底白点斑块，常在地面慢步觅食。</p>
+        <p class="bird-clue">颈侧黑底白点像项链，起飞时有明显振翅声。</p>
+        <div class="tag-row">
+          <span>图文已补充</span>
+          <span>街区、公园、农田</span>
+        </div>
+        <div class="atlas-card-actions">
+          <a class="source-link" href="https://en.wikipedia.org/wiki/Spotted_dove" target="_blank" rel="noreferrer" tabindex="-1">查看来源</a>
+          <button class="source-link atlas-open" type="button" data-atlas-index="1892" tabindex="-1">查看详情</button>
+        </div>
+      </div>
+    </article>
+  
+    <article class="bird-card is-rich">
+      
+      <figure class="bird-photo">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/3/30/2011_Blauelster_in_Shanghai.jpg/330px-2011_Blauelster_in_Shanghai.jpg" alt="灰喜鹊照片" loading="lazy">
+        <figcaption>Wikimedia Commons · See source page</figcaption>
+      </figure>
+    
+      <div>
+        <h3>灰喜鹊</h3>
+        <p>Azure-winged Magpie · Cyanopica cyanus</p>
+        <p>尾羽较长，翅尾带蓝色，常成小群活动。</p>
+        <p class="bird-clue">黑色头顶、蓝色翅尾，常成群穿梭在林缘。</p>
+        <div class="tag-row">
+          <span>图文已补充</span>
+          <span>林缘、灌丛、校园</span>
+        </div>
+        <div class="atlas-card-actions">
+          <a class="source-link" href="https://en.wikipedia.org/wiki/Azure-winged_magpie" target="_blank" rel="noreferrer" tabindex="-1">查看来源</a>
+          <button class="source-link atlas-open" type="button" data-atlas-index="6798" tabindex="-1">查看详情</button>
+        </div>
+      </div>
+    </article>
+  
+    <article class="bird-card is-rich">
+      
+      <figure class="bird-photo">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/d/d5/Urocissa_erythrorhyncha.jpg/330px-Urocissa_erythrorhyncha.jpg" alt="红嘴蓝鹊照片" loading="lazy">
+        <figcaption>Wikimedia Commons · See source page</figcaption>
+      </figure>
+    
+      <div>
+        <h3>红嘴蓝鹊</h3>
+        <p>Red-billed Blue Magpie · Urocissa erythroryncha</p>
+        <p>红色嘴和脚，蓝色长尾醒目，叫声响亮。</p>
+        <p class="bird-clue">红色嘴脚、长尾蓝羽非常醒目。</p>
+        <div class="tag-row">
+          <span>图文已补充</span>
+          <span>山地林区、林缘</span>
+        </div>
+        <div class="atlas-card-actions">
+          <a class="source-link" href="https://en.wikipedia.org/wiki/Red-billed_blue_magpie" target="_blank" rel="noreferrer" tabindex="-1">查看来源</a>
+          <button class="source-link atlas-open" type="button" data-atlas-index="6803" tabindex="-1">查看详情</button>
+        </div>
+      </div>
+    </article>
+  
+    <article class="bird-card is-rich">
+      
+      <figure class="bird-photo">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/e/ee/Common_moorhen_%28Gallinula_chloropus%29_France.jpg/330px-Common_moorhen_%28Gallinula_chloropus%29_France.jpg" alt="黑水鸡照片" loading="lazy">
+        <figcaption>Wikimedia Commons · See source page</figcaption>
+      </figure>
+    
+      <div>
+        <h3>黑水鸡</h3>
+        <p>Common Moorhen · Gallinula chloropus</p>
+        <p>额甲红色，身体深色，游动时尾部常上翘。</p>
+        <p class="bird-clue">红额甲和红黄相间的嘴明显。</p>
+        <div class="tag-row">
+          <span>图文已补充</span>
+          <span>芦苇荡、池塘、河汊</span>
+        </div>
+        <div class="atlas-card-actions">
+          <a class="source-link" href="https://en.wikipedia.org/wiki/Common_moorhen" target="_blank" rel="noreferrer" tabindex="-1">查看来源</a>
+          <button class="source-link atlas-open" type="button" data-atlas-index="1388" tabindex="-1">查看详情</button>
+        </div>
+      </div>
+    </article>
+  
+    <article class="bird-card is-rich">
+      
+      <figure class="bird-photo">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/8/83/Long-tailed_Shrilke_0A2A3080.jpg/330px-Long-tailed_Shrilke_0A2A3080.jpg" alt="棕背伯劳照片" loading="lazy">
+        <figcaption>Wikimedia Commons · See source page</figcaption>
+      </figure>
+    
+      <div>
+        <h3>棕背伯劳</h3>
+        <p>Long-tailed Shrike · Lanius schach</p>
+        <p>黑色眼罩明显，常站在枝头观察猎物。</p>
+        <p class="bird-clue">黑色眼罩、棕背和长尾非常明显。</p>
+        <div class="tag-row">
+          <span>图文已补充</span>
+          <span>灌丛、农田边缘、开阔林地</span>
+        </div>
+        <div class="atlas-card-actions">
+          <a class="source-link" href="https://en.wikipedia.org/wiki/Long-tailed_shrike" target="_blank" rel="noreferrer" tabindex="-1">查看来源</a>
+          <button class="source-link atlas-open" type="button" data-atlas-index="6452" tabindex="-1">查看详情</button>
+        </div>
+      </div>
+    </article>
+  
+    <article class="bird-card is-rich">
+      
+      <figure class="bird-photo">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/7/7d/Rauchschwalbe_Hirundo_rustica.jpg/330px-Rauchschwalbe_Hirundo_rustica.jpg" alt="家燕照片" loading="lazy">
+        <figcaption>Wikimedia Commons · See source page</figcaption>
+      </figure>
+    
+      <div>
+        <h3>家燕</h3>
+        <p>Barn Swallow · Hirundo rustica</p>
+        <p>上体蓝黑色，喉部红褐，尾羽分叉明显，飞行敏捷。</p>
+        <p class="bird-clue">低空快速穿梭，尾巴像剪刀一样分叉。</p>
+        <div class="tag-row">
+          <span>图文已补充</span>
+          <span>村镇、农田、湿地边缘</span>
+        </div>
+        <div class="atlas-card-actions">
+          <a class="source-link" href="https://en.wikipedia.org/wiki/Barn_swallow" target="_blank" rel="noreferrer" tabindex="-1">查看来源</a>
+          <button class="source-link atlas-open" type="button" data-atlas-index="7381" tabindex="-1">查看详情</button>
+        </div>
+      </div>
+    </article>
+  
+    <article class="bird-card is-rich">
+      
+      <figure class="bird-photo">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/9/98/Tree_Sparrow_August_2007_Osaka_Japan.jpg/330px-Tree_Sparrow_August_2007_Osaka_Japan.jpg" alt="麻雀照片" loading="lazy">
+        <figcaption>Wikimedia Commons · See source page</figcaption>
+      </figure>
+    
+      <div>
+        <h3>麻雀</h3>
+        <p>Eurasian Tree Sparrow · Passer montanus</p>
+        <p>体型小，褐色背部带纵纹，脸颊有黑斑。</p>
+        <p class="bird-clue">常成群在地面啄食，头顶栗褐色。</p>
+        <div class="tag-row">
+          <span>图文已补充</span>
+          <span>城市街区、村庄、农田</span>
+        </div>
+        <div class="atlas-card-actions">
+          <a class="source-link" href="https://en.wikipedia.org/wiki/Eurasian_tree_sparrow" target="_blank" rel="noreferrer" tabindex="-1">查看来源</a>
+          <button class="source-link atlas-open" type="button" data-atlas-index="9380" tabindex="-1">查看详情</button>
+        </div>
+      </div>
+    </article>
+  
+    <article class="bird-card is-rich">
+      
+      <figure class="bird-photo">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/d/dc/Oriental_Magpie_on_Longevity_Hill%2C_Beijing.jpg/330px-Oriental_Magpie_on_Longevity_Hill%2C_Beijing.jpg" alt="喜鹊照片" loading="lazy">
+        <figcaption>Daniel Case / Wikimedia Commons · CC BY-SA 3.0</figcaption>
+      </figure>
+    
+      <div>
+        <h3>喜鹊</h3>
+        <p>Oriental Magpie · Pica serica</p>
+        <p>黑白羽色分明，肩部白斑醒目，长尾带蓝绿色金属光泽。</p>
+        <p class="bird-clue">常成对或小群活动，黑白对比和长尾是远距离识别重点。</p>
+        <div class="tag-row">
+          <span>图文已补充</span>
+          <span>城市绿地、公园、林缘、农田和村镇</span>
+        </div>
+        <div class="atlas-card-actions">
+          <a class="source-link" href="https://commons.wikimedia.org/wiki/File:Oriental_Magpie_on_Longevity_Hill,_Beijing.jpg" target="_blank" rel="noreferrer" tabindex="-1">查看来源</a>
+          <button class="source-link atlas-open" type="button" data-atlas-index="10868" tabindex="-1">查看详情</button>
+        </div>
+      </div>
+    </article>
+  
+    <article class="bird-card is-rich">
+      
+      <figure class="bird-photo">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/b/b9/Large-billed_Crow_%28Corvus_macrorhynchos%29_Tokyo.jpg/330px-Large-billed_Crow_%28Corvus_macrorhynchos%29_Tokyo.jpg" alt="大嘴乌鸦照片" loading="lazy">
+        <figcaption>Jason Thompson / Wikimedia Commons · CC BY 2.0</figcaption>
+      </figure>
+    
+      <div>
+        <h3>大嘴乌鸦</h3>
+        <p>Large-billed Crow · Corvus macrorhynchos</p>
+        <p>体型较大，全身黑色，嘴粗厚，上嘴弧度明显。</p>
+        <p class="bird-clue">粗大的嘴形是识别重点，常在树梢、屋顶或地面取食。</p>
+        <div class="tag-row">
+          <span>图文已补充</span>
+          <span>城市绿地、林缘、海岸、农田</span>
+        </div>
+        <div class="atlas-card-actions">
+          <a class="source-link" href="https://commons.wikimedia.org/wiki/File:Large-billed_Crow_(Corvus_macrorhynchos)_Tokyo.jpg" target="_blank" rel="noreferrer" tabindex="-1">查看来源</a>
+          <button class="source-link atlas-open" type="button" data-atlas-index="6864" tabindex="-1">查看详情</button>
+        </div>
+      </div>
+    </article>
+  
+    <article class="bird-card is-rich">
+      
+      <figure class="bird-photo">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/6/67/Carrion_crow_on_a_branch.jpg/330px-Carrion_crow_on_a_branch.jpg" alt="小嘴乌鸦照片" loading="lazy">
+        <figcaption>Alexis Lours / Wikimedia Commons · CC BY 2.0</figcaption>
+      </figure>
+    
+      <div>
+        <h3>小嘴乌鸦</h3>
+        <p>Carrion Crow · Corvus corone</p>
+        <p>全身黑色，嘴较细直，额部到嘴基过渡较平缓。</p>
+        <p class="bird-clue">与大嘴乌鸦相比嘴更细，常在开阔地或树顶停歇观察。</p>
+        <div class="tag-row">
+          <span>图文已补充</span>
+          <span>开阔农田、林缘、城郊</span>
+        </div>
+        <div class="atlas-card-actions">
+          <a class="source-link" href="https://commons.wikimedia.org/wiki/File:Carrion_crow_on_a_branch.jpg" target="_blank" rel="noreferrer" tabindex="-1">查看来源</a>
+          <button class="source-link atlas-open" type="button" data-atlas-index="6861" tabindex="-1">查看详情</button>
+        </div>
+      </div>
+    </article>
+  </div>
+    </div>
+  </div>
+      </section>
+
+      <section class="community-section feature-page feature-community reveal-on-scroll" id="community">
+        <div class="feature-page-nav">
+          <button class="secondary-btn" type="button" data-scroll="#home">返回主页</button>
+          <button class="primary-btn" type="button" data-scroll="#identify">回到第一步</button>
+        </div>
+        <div class="section-head compact">
+          <p class="eyebrow">分享社区</p>
+          <h2>发布你的观鸟笔记</h2>
+        </div>
+        <div class="community-layout">
+          <form class="post-panel" id="postForm" novalidate="">
+            <input id="postTitle" type="text" aria-label="观鸟笔记标题" placeholder="记录标题，例如：清晨遇到一只翠鸟" required="" aria-describedby="postMessage">
+            <textarea id="postBody" aria-label="观鸟笔记内容" placeholder="写下地点、行为、天气或你的观察..." required="" aria-describedby="postMessage"></textarea>
+            <label class="post-image-field" for="postImage">
+              <span class="post-image-label">配图</span>
+              <span class="post-image-control">
+                <span class="post-image-action" aria-hidden="true">选择图片</span>
+                <span class="post-image-name" id="postImageName" title="">未选择图片</span>
+              </span>
+              <input id="postImage" type="file" accept="image/jpeg,image/png,image/webp" aria-describedby="postImageName postMessage">
+            </label>
+            <p class="form-message post-message" id="postMessage" aria-live="polite" role="alert"></p>
+            <div class="post-tools">
+              <button class="secondary-btn" type="button" id="useDetected" disabled="" aria-disabled="true">带入识别结果</button>
+              <button class="primary-btn" type="submit">发布</button>
+            </div>
+          </form>
+          <div class="feed-preview">
+            <div class="feed" id="feed" aria-live="polite">
+      <article class="feed-card feed-card-preview reveal-card" data-post-id="post-egret-morning" style="transition-delay: 0ms;">
+        <div class="feed-card-head">
+          <div class="feed-meta"><span>西溪观察员</span><span>09:42</span><span class="post-badge">Birdora 示例内容</span></div>
+          <div class="post-management" aria-label="帖子操作"><button class="post-action" type="button" data-post-detail="post-egret-morning">查看详情</button></div>
+        </div>
+        
+        
+        <h3>今天在湿地看到白鹭整理羽毛</h3>
+        <p class="feed-body">距离很远拍下来的，识别后才发现它正在浅滩边觅食。站了很久，动作特别优雅。</p>
+      
+        
+        
+        
+        <div class="comment-box ">
+          <div class="comment-toolbar">
+            <button class="comment-toggle" type="button" data-comment-toggle="post-egret-morning" aria-expanded="false" aria-controls="comment-panel-post-egret-morning" aria-label="展开《今天在湿地看到白鹭整理羽毛》的评论">评论</button>
+            <span class="comment-count">评论 0</span>
+            <span class="comment-count">提问 0</span>
+          </div>
+          <div class="comment-panel" id="comment-panel-post-egret-morning">
+            
+            <ul class="comment-list"><p class="comment-empty">还没有评论，来写一句吧。</p></ul>
+            <ul class="question-list"><p class="comment-empty">还没有提问。</p></ul>
+          </div>
+        </div>
+      </article>
+    
+      <article class="feed-card feed-card-preview reveal-card" data-post-id="post-bulbul-park" style="transition-delay: 120ms;">
+        <div class="feed-card-head">
+          <div class="feed-meta"><span>晨光巡园者</span><span>昨天</span><span class="post-badge">Birdora 示例内容</span></div>
+          <div class="post-management" aria-label="帖子操作"><button class="post-action" type="button" data-post-detail="post-bulbul-park">查看详情</button></div>
+        </div>
+        
+        
+        <h3>公园里的白头鹎</h3>
+        <p class="feed-body">它一直在香樟树上叫，眼镜同步的位置很准，连续记录到了三次停枝和一次低飞。</p>
+      
+        
+        
+        
+        <div class="comment-box ">
+          <div class="comment-toolbar">
+            <button class="comment-toggle" type="button" data-comment-toggle="post-bulbul-park" aria-expanded="false" aria-controls="comment-panel-post-bulbul-park" aria-label="展开《公园里的白头鹎》的评论">评论</button>
+            <span class="comment-count">评论 0</span>
+            <span class="comment-count">提问 0</span>
+          </div>
+          <div class="comment-panel" id="comment-panel-post-bulbul-park">
+            
+            <ul class="comment-list"><p class="comment-empty">还没有评论，来写一句吧。</p></ul>
+            <ul class="question-list"><p class="comment-empty">还没有提问。</p></ul>
+          </div>
+        </div>
+      </article>
+    
+      <article class="feed-card feed-card-preview reveal-card" data-post-id="post-kingfisher-river" style="transition-delay: 240ms;">
+        <div class="feed-card-head">
+          <div class="feed-meta"><span>溪流守望者</span><span>昨天</span><span class="post-badge">Birdora 示例内容</span></div>
+          <div class="post-management" aria-label="帖子操作"><button class="post-action" type="button" data-post-detail="post-kingfisher-river">查看详情</button></div>
+        </div>
+        
+        
+        <h3>河边等到一只贴水飞过的翠鸟</h3>
+        <p class="feed-body">等了二十分钟才拍到，速度非常快，几乎是一道蓝绿色的闪光，最后停在一根枯枝上。</p>
+      
+        
+        
+        
+        <div class="comment-box ">
+          <div class="comment-toolbar">
+            <button class="comment-toggle" type="button" data-comment-toggle="post-kingfisher-river" aria-expanded="false" aria-controls="comment-panel-post-kingfisher-river" aria-label="展开《河边等到一只贴水飞过的翠鸟》的评论">评论</button>
+            <span class="comment-count">评论 0</span>
+            <span class="comment-count">提问 0</span>
+          </div>
+          <div class="comment-panel" id="comment-panel-post-kingfisher-river">
+            
+            <ul class="comment-list"><p class="comment-empty">还没有评论，来写一句吧。</p></ul>
+            <ul class="question-list"><p class="comment-empty">还没有提问。</p></ul>
+          </div>
+        </div>
+      </article>
+    </div>
+            <a class="primary-btn more-link reveal-card" href="./community.html" style="transition-delay: 360ms;">更多</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="device-section reveal-on-scroll" id="device">
+        <div class="device-copy device-panel">
+          <p class="eyebrow">设备管理</p>
+          <h2 class="device-title" id="deviceConnectionTitle">Birdora Glasses 未连接</h2>
+          <p>同步拍摄记录、电量、固件与存储空间，保持眼镜和网站数据一致。</p>
+          <button class="primary-btn device-action" id="deviceConnectBtn" type="button" aria-busy="false" data-device-state="disconnected">连接设备</button>
+          <div class="device-stats device-status-grid">
+            <span class="device-stat-card"><strong id="deviceBatteryValue">—</strong> 电量</span>
+            <span class="device-stat-card"><strong id="deviceStorageValue">—</strong> 可用空间</span>
+            <span class="device-stat-card"><strong id="deviceFirmwareValue">—</strong> 固件</span>
+          </div>
+        </div>
+        <div class="glasses-card" aria-label="眼镜设备状态">
+          <img class="device-glasses" src="./assets/device-glasses-cutout.png" alt="Birdora Glasses 智能观鸟眼镜">
+          <p class="device-sync-status" id="deviceSyncStatus">蓝牙未连接</p>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <span>Birdora 观鸟眼镜网站原型</span>
+      <span>识别 · 图鉴 · 社区 · 设备</span>
+    </footer>
+
+    <script src="./assets/vendor/ort.min.js"></script>
+    <script src="./community-api.js"></script>
+    <script src="./observation-api.js"></script>
+    <script src="./community-post-card.js"></script>
+    <script src="./script.js"></script>
+  
+
+</body></html>

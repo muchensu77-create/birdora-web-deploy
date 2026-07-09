@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">Birdora</title>
+  <circle cx="32" cy="32" r="30" fill="#1f7a50"/>
+  <path
+    fill="#fff"
+    d="M22 17h11.7c7.2 0 11.3 3.2 11.3 8.5 0 3.1-1.6 5.5-4.4 6.8 3.8 1.2 5.9 3.9 5.9 7.4 0 6-4.7 9.3-12.6 9.3H22V17Zm11 12.5c3 0 4.7-1.2 4.7-3.5s-1.7-3.4-4.7-3.4h-3.8v6.9H33Zm.7 13.8c3.5 0 5.4-1.4 5.4-4.1 0-2.6-1.9-4-5.4-4h-4.5v8.1h4.5Z"
+  />
+</svg>
