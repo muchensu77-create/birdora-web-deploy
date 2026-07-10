@@ -31,24 +31,31 @@
         </div>
     </header>
 
-    <main class="device-standalone-page">
-        <section class="device-section device-section-v2" id="device">
-            <div class="device-copy device-panel">
+    <main class="device-page device-tools-page">
+        <section class="page-hero compact-page-hero">
+            <p class="eyebrow">Birdora Glasses</p>
+            <h1>设备与同步中心</h1>
+            <p>管理眼镜连接、同步状态、固件和本地存储，让每次外出观察都能及时回到你的观鸟记录中。</p>
+        </section>
+
+        <section class="device-dashboard" aria-label="设备状态">
+            <article class="device-manager-panel">
                 <div class="device-panel-heading">
-                    <p class="eyebrow">设备管理</p>
-                    <span class="device-panel-badge">Birdora 配套设备</span>
+                    <p class="eyebrow">连接状态</p>
+                    <span class="device-panel-badge">已配对设备</span>
                 </div>
-                <h1 class="device-title" id="deviceConnectionTitle">Birdora Glasses 未连接</h1>
-                <p class="device-description">连接观鸟眼镜后，可统一查看电量、存储与固件状态，并同步外出拍摄记录。</p>
+                <h2 class="device-title" id="deviceConnectionTitle">Birdora Glasses 未连接</h2>
+                <p class="device-description">连接后可使用下方工具同步照片、检查固件，并查看设备剩余空间。</p>
                 <button class="primary-btn device-action" id="deviceConnectBtn" type="button">连接设备</button>
-                <div class="device-stats device-status-grid">
+                <div class="device-metric-grid">
                     <span class="device-stat-card"><small>剩余电量</small><strong id="deviceBatteryValue">--</strong></span>
                     <span class="device-stat-card"><small>可用空间</small><strong id="deviceStorageValue">--</strong></span>
                     <span class="device-stat-card"><small>当前固件</small><strong id="deviceFirmwareValue">--</strong></span>
                 </div>
-            </div>
-            <div class="glasses-card" aria-label="眼镜设备状态">
-                <div class="device-visual-heading">
+            </article>
+
+            <article class="device-visual-panel" aria-label="眼镜设备预览">
+                <div>
                     <p class="eyebrow">设备预览</p>
                     <h2>Birdora Glasses</h2>
                 </div>
@@ -57,7 +64,39 @@
                     <span class="device-sync-dot" aria-hidden="true"></span>
                     <p class="device-sync-status" id="deviceSyncStatus">蓝牙未连接</p>
                 </div>
-            </div>
+            </article>
+        </section>
+
+        <section class="device-action-grid" aria-label="设备工具">
+            <article>
+                <p class="eyebrow">照片同步</p>
+                <h2>同步最近拍摄</h2>
+                <p>将眼镜中尚未同步的鸟照带回识别页面继续处理。</p>
+                <button class="secondary-btn" type="button" data-device-tool="sync">开始同步</button>
+            </article>
+            <article>
+                <p class="eyebrow">固件检查</p>
+                <h2>检查系统版本</h2>
+                <p>确认识别、连接和拍摄功能正在使用稳定的设备版本。</p>
+                <button class="secondary-btn" type="button" data-device-tool="firmware">检查更新</button>
+            </article>
+            <article>
+                <p class="eyebrow">存储管理</p>
+                <h2>查看同步空间</h2>
+                <p>核对可用空间后再出发，避免重要的拍摄记录无法保存。</p>
+                <button class="secondary-btn" type="button" data-device-tool="storage">检查空间</button>
+            </article>
+        </section>
+
+        <section class="device-timeline" aria-labelledby="deviceActivityTitle">
+            <p class="eyebrow">设备活动</p>
+            <h2 id="deviceActivityTitle">最近同步与维护</h2>
+            <p class="device-tool-message" id="deviceToolMessage" aria-live="polite">连接设备后，可在这里查看同步和维护结果。</p>
+            <ol>
+                <li><strong>照片同步</strong><span>连接后会优先显示最近拍摄的鸟照，方便继续识别和保存观测。</span></li>
+                <li><strong>设备存储</strong><span>照片同步完成后，网站会更新剩余空间提示。</span></li>
+                <li><strong>固件状态</strong><span>检查更新后会提示当前版本是否已经是最新版本。</span></li>
+            </ol>
         </section>
     </main>
 

@@ -309,6 +309,7 @@ const deviceBatteryValue = document.querySelector("#deviceBatteryValue");
 const deviceStorageValue = document.querySelector("#deviceStorageValue");
 const deviceFirmwareValue = document.querySelector("#deviceFirmwareValue");
 const deviceSyncStatus = document.querySelector("#deviceSyncStatus");
+const deviceToolMessage = document.querySelector("#deviceToolMessage");
 const speciesCountBadges = document.querySelectorAll("[data-species-count]");
 const monthSpeciesCountBadges = document.querySelectorAll("[data-month-species-count]");
 
@@ -3088,9 +3089,26 @@ async function renderBirds(options = {}) {
 
   const runId = ++atlasRenderRunId;
   const query = birdSearch.value.trim().toLowerCase();
+  const isSearching = Boolean(query);
+  birdGrid.hidden = isSearching;
+  if (isSearching) {
+    stopAtlasMarqueeAutoScroll();
+    birdGrid.innerHTML = "";
+  }
+  if (atlasDetail) {
+    if (isSearching) {
+      atlasDetail.hidden = false;
+      atlasDetail.innerHTML = `<div class="atlas-detail-heading"><p class="eyebrow">搜索中</p><h3>正在匹配鸟种</h3><p>正在从中文名、英文名和拉丁名中查找相关线索。</p></div>`;
+    } else {
+      atlasDetail.hidden = true;
+      atlasDetail.innerHTML = "";
+    }
+  }
   birdGrid.classList.remove("is-empty");
   birdGrid.classList.remove("is-marquee");
-  birdGrid.innerHTML = `<article class="bird-card atlas-loading"><div><h3>正在加载图鉴索引</h3><p>正在读取 OSEA 鸟类标签库...</p></div></article>`;
+  if (!isSearching) {
+    birdGrid.innerHTML = `<article class="bird-card atlas-loading"><div><h3>正在加载图鉴索引</h3><p>正在读取 OSEA 鸟类标签库...</p></div></article>`;
+  }
 
   try {
     const [entries, commonBirdCandidates] = await Promise.all([
@@ -3136,36 +3154,50 @@ async function renderBirds(options = {}) {
       atlasDetail.innerHTML = "";
     }
 
-    if (query && visible[0] && !options.keepDetail) {
-      renderAtlasDetail(visible[0], "搜索结果详情");
+    if (query && visible[0]) {
+      renderAtlasDetail(visible[0], `搜索结果详情 · 共 ${matched.length} 种匹配`);
     }
 
     if (!visible.length) {
       if (atlasDetail && !options.keepDetail) {
-        atlasDetail.hidden = true;
-        atlasDetail.innerHTML = "";
+        if (query) {
+          atlasDetail.hidden = false;
+          atlasDetail.innerHTML = `<div class="atlas-detail-heading"><p class="eyebrow">搜索结果</p><h3>没有找到匹配鸟种</h3><p>可以换一个中文名、英文名或拉丁名再试。</p></div>`;
+        } else {
+          atlasDetail.hidden = true;
+          atlasDetail.innerHTML = "";
+        }
       }
       birdGrid.classList.add("is-empty");
       birdGrid.classList.remove("is-marquee");
-      birdGrid.innerHTML =
-        `<article class="bird-card"><div><h3>没有找到鸟种</h3><p>可以换一个中文名、英文名或拉丁名再试。</p></div></article>`;
+      if (!query) {
+        birdGrid.innerHTML =
+          `<article class="bird-card"><div><h3>没有找到鸟种</h3><p>可以换一个中文名、英文名或拉丁名再试。</p></div></article>`;
+      }
+      return;
+    }
+
+    if (query) {
+      birdGrid.innerHTML = "";
+      birdGrid.hidden = true;
+      stopAtlasMarqueeAutoScroll();
       return;
     }
 
     birdGrid.classList.remove("is-empty");
-    birdGrid.classList.toggle("is-marquee", !query);
-    birdGrid.innerHTML = query
-      ? `
-        <div class="atlas-results">
-          ${visible.map(renderAtlasCard).join("")}
-        </div>
-      `
-      : renderAtlasMarquee(visible);
+    birdGrid.hidden = false;
+    birdGrid.classList.add("is-marquee");
+    birdGrid.innerHTML = renderAtlasMarquee(visible);
     syncAtlasMarqueeAutoScroll();
   } catch (error) {
     if (runId !== atlasRenderRunId) return;
 
     stopAtlasMarqueeAutoScroll();
+    if (isSearching && atlasDetail) {
+      atlasDetail.hidden = false;
+      atlasDetail.innerHTML = `<div class="atlas-detail-heading"><p class="eyebrow">搜索失败</p><h3>暂时无法加载图鉴</h3><p>${escapeHtml(error.message || "请稍后重试。")}</p></div>`;
+      return;
+    }
     birdGrid.classList.add("is-empty");
     birdGrid.classList.remove("is-marquee");
     birdGrid.innerHTML =
@@ -4086,42 +4118,9 @@ function getSavedDeviceConnectionState() {
   }
 }
 
-function updateDeviceConnectionUI(state) {
-  if (
-    !deviceConnectionTitle ||
-    !deviceConnectBtn ||
-    !deviceBatteryValue ||
-    !deviceStorageValue ||
-    !deviceFirmwareValue ||
-    !deviceSyncStatus
-  ) {
-    return;
-  }
-
-  const isConnecting = state === "connecting";
-  const isConnected = state === "connected";
-
-  deviceConnectionTitle.textContent = `Birdora Glasses ${isConnecting ? "连接中" : isConnected ? "已连接" : "未连接"}`;
-  deviceConnectBtn.textContent = isConnecting ? "连接中..." : isConnected ? "断开连接" : "连接设备";
-  deviceConnectBtn.disabled = isConnecting;
-  deviceConnectBtn.classList.toggle("is-connecting", isConnecting);
-  deviceConnectBtn.setAttribute("aria-busy", String(isConnecting));
-  deviceConnectBtn.setAttribute("data-device-state", state);
-  deviceBatteryValue.textContent = isConnected ? "86%" : "—";
-  deviceStorageValue.textContent = isConnected ? "32.4GB" : "—";
-  deviceFirmwareValue.textContent = isConnected ? "V2.0.5" : "—";
-  deviceSyncStatus.textContent = isConnecting
-    ? "正在搜索附近的 Birdora Glasses..."
-    : isConnected
-      ? "蓝牙在线 · 最近同步 3 分钟前"
-      : "蓝牙未连接";
-  deviceSyncStatus.classList.toggle("is-connecting", isConnecting);
-}
-
 function initDeviceConnection() {
-  if (!deviceConnectBtn) return;
-
   updateDeviceConnectionUI(getSavedDeviceConnectionState());
+  if (!deviceConnectBtn) return;
 
   deviceConnectBtn.addEventListener("click", () => {
     const currentState = deviceConnectBtn.dataset.deviceState || "disconnected";
@@ -4430,7 +4429,6 @@ function initAuthForms() {
 function updateDeviceConnectionUI(state) {
   if (
     !deviceConnectionTitle ||
-    !deviceConnectBtn ||
     !deviceBatteryValue ||
     !deviceStorageValue ||
     !deviceFirmwareValue ||
@@ -4443,11 +4441,13 @@ function updateDeviceConnectionUI(state) {
   const isConnected = state === "connected";
 
   deviceConnectionTitle.textContent = `Birdora Glasses ${isConnecting ? "连接中" : isConnected ? "已连接" : "未连接"}`;
-  deviceConnectBtn.textContent = isConnecting ? "连接中..." : isConnected ? "断开连接" : "连接设备";
-  deviceConnectBtn.disabled = isConnecting;
-  deviceConnectBtn.classList.toggle("is-connecting", isConnecting);
-  deviceConnectBtn.setAttribute("aria-busy", String(isConnecting));
-  deviceConnectBtn.setAttribute("data-device-state", state);
+  if (deviceConnectBtn) {
+    deviceConnectBtn.textContent = isConnecting ? "连接中..." : isConnected ? "断开连接" : "连接设备";
+    deviceConnectBtn.disabled = isConnecting;
+    deviceConnectBtn.classList.toggle("is-connecting", isConnecting);
+    deviceConnectBtn.setAttribute("aria-busy", String(isConnecting));
+    deviceConnectBtn.setAttribute("data-device-state", state);
+  }
   deviceBatteryValue.textContent = isConnected ? "86%" : "--";
   deviceStorageValue.textContent = isConnected ? "32.4GB" : "--";
   deviceFirmwareValue.textContent = isConnected ? "V2.0.5" : "--";
@@ -4457,6 +4457,44 @@ function updateDeviceConnectionUI(state) {
       ? "蓝牙在线 · 最近同步 3 分钟前"
       : "蓝牙未连接";
   deviceSyncStatus.classList.toggle("is-connecting", isConnecting);
+}
+
+function setDeviceToolMessage(message) {
+  if (deviceToolMessage) deviceToolMessage.textContent = message;
+}
+
+function initDeviceTools() {
+  const toolButtons = document.querySelectorAll("[data-device-tool]");
+  if (!toolButtons.length) return;
+
+  toolButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      const connected = deviceConnectBtn?.dataset.deviceState === "connected";
+      if (!connected) {
+        setDeviceToolMessage("请先连接 Birdora Glasses，再使用同步、固件和存储工具。");
+        return;
+      }
+
+      const tool = button.dataset.deviceTool;
+      if (tool === "sync") {
+        button.disabled = true;
+        setDeviceToolMessage("正在同步最近拍摄的鸟照...");
+        window.setTimeout(() => {
+          button.disabled = false;
+          deviceSyncStatus.textContent = "蓝牙在线 · 刚刚完成同步";
+          setDeviceToolMessage("同步完成。最近拍摄的鸟照已准备好，可前往识别页面继续查看。");
+        }, 700);
+        return;
+      }
+
+      if (tool === "firmware") {
+        setDeviceToolMessage("已检查设备版本：V2.0.5 已是当前稳定版本。");
+        return;
+      }
+
+      setDeviceToolMessage("可用空间为 32.4GB，当前可以继续同步新的拍摄记录。");
+    });
+  });
 }
 
 async function initAuthenticatedPage() {
@@ -4474,6 +4512,7 @@ async function initAuthenticatedPage() {
   initPublishing();
   initScrollButtons();
   initDeviceConnection();
+  initDeviceTools();
   renderCurrentFeed();
   renderObservationList();
   updateModelReadiness();
