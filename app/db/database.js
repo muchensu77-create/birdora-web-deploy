@@ -167,6 +167,12 @@ function getDatabase() {
       id TEXT PRIMARY KEY,
       email TEXT NOT NULL UNIQUE,
       nickname TEXT NOT NULL,
+      bio TEXT NOT NULL DEFAULT '',
+      gender TEXT NOT NULL DEFAULT '',
+      age INTEGER DEFAULT NULL,
+      avatar_url TEXT NOT NULL DEFAULT '',
+      email_notifications INTEGER NOT NULL DEFAULT 1,
+      public_profile INTEGER NOT NULL DEFAULT 1,
       password_hash TEXT NOT NULL,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
@@ -239,6 +245,17 @@ function getDatabase() {
       FOREIGN KEY (post_id) REFERENCES community_posts(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS community_post_videos (
+      id TEXT PRIMARY KEY,
+      post_id TEXT NOT NULL UNIQUE,
+      storage_path TEXT NOT NULL,
+      original_name TEXT NOT NULL,
+      mime_type TEXT NOT NULL,
+      size_bytes INTEGER NOT NULL,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (post_id) REFERENCES community_posts(id) ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS observations (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
@@ -273,6 +290,8 @@ function getDatabase() {
       ON community_post_questions(post_id, created_at ASC);
     CREATE INDEX IF NOT EXISTS idx_community_post_images_post_id
       ON community_post_images(post_id);
+    CREATE INDEX IF NOT EXISTS idx_community_post_videos_post_id
+      ON community_post_videos(post_id);
     CREATE INDEX IF NOT EXISTS idx_observations_user_id_created_at
       ON observations(user_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_observations_created_at
@@ -280,6 +299,16 @@ function getDatabase() {
   `);
 
   migrateCommunityPostColumns(database);
+  // The points feature has been retired; remove legacy point records on startup.
+  database.exec("DROP TABLE IF EXISTS user_point_events;");
+  ensureColumns(database, "users", [
+    { name: "bio", definition: "bio TEXT NOT NULL DEFAULT ''" },
+    { name: "gender", definition: "gender TEXT NOT NULL DEFAULT ''" },
+    { name: "age", definition: "age INTEGER DEFAULT NULL" },
+    { name: "avatar_url", definition: "avatar_url TEXT NOT NULL DEFAULT ''" },
+    { name: "email_notifications", definition: "email_notifications INTEGER NOT NULL DEFAULT 1" },
+    { name: "public_profile", definition: "public_profile INTEGER NOT NULL DEFAULT 1" },
+  ]);
   ensureCommunityObservationConstraints(database);
   database.exec(`
     CREATE INDEX IF NOT EXISTS idx_community_posts_observation_id
@@ -296,6 +325,12 @@ function mapUserRow(row) {
     id: row.id,
     email: row.email,
     nickname: row.nickname,
+    bio: row.bio || "",
+    gender: row.gender || "",
+    age: Number.isInteger(row.age) ? row.age : null,
+    avatarUrl: row.avatar_url || "",
+    emailNotifications: Boolean(row.email_notifications),
+    publicProfile: Boolean(row.public_profile),
     passwordHash: row.password_hash,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

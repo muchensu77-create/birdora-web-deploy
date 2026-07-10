@@ -18,6 +18,10 @@ const IMAGE_EXTENSIONS = {
   "image/png": "png",
   "image/webp": "webp",
 };
+const VIDEO_EXTENSIONS = {
+  "video/mp4": "mp4",
+  "video/webm": "webm",
+};
 const PLACE_KEYWORDS = [
   "公园",
   "湿地",
@@ -250,6 +254,8 @@ function mapPostRow(row, viewerId = "", interactions = {}) {
     questionCount,
     imageUrl: row.image_storage_path ? `/api/community/posts/${encodeURIComponent(row.id)}/image` : "",
     imageAlt: row.image_original_name || "",
+    videoUrl: row.video_storage_path ? `/api/community/posts/${encodeURIComponent(row.id)}/video` : "",
+    videoAlt: row.video_original_name || "",
   };
 }
 
@@ -274,6 +280,10 @@ function selectPostById(db, id) {
       images.original_name AS image_original_name,
       images.mime_type AS image_mime_type,
       images.size_bytes AS image_size_bytes,
+      videos.storage_path AS video_storage_path,
+      videos.original_name AS video_original_name,
+      videos.mime_type AS video_mime_type,
+      videos.size_bytes AS video_size_bytes,
       observations.id AS observation_summary_id,
       observations.selected_species_name AS observation_selected_species_name,
       observations.selected_species_scientific_name AS observation_selected_species_scientific_name,
@@ -284,6 +294,7 @@ function selectPostById(db, id) {
     FROM community_posts AS posts
     JOIN users ON users.id = posts.user_id
     LEFT JOIN community_post_images AS images ON images.post_id = posts.id
+    LEFT JOIN community_post_videos AS videos ON videos.post_id = posts.id
     LEFT JOIN observations ON observations.id = posts.observation_id
     WHERE posts.id = ?
   `).get(id);
@@ -519,6 +530,10 @@ async function listPosts({ viewerId = "", limit = 50, offset = 0 } = {}) {
       images.original_name AS image_original_name,
       images.mime_type AS image_mime_type,
       images.size_bytes AS image_size_bytes,
+      videos.storage_path AS video_storage_path,
+      videos.original_name AS video_original_name,
+      videos.mime_type AS video_mime_type,
+      videos.size_bytes AS video_size_bytes,
       observations.id AS observation_summary_id,
       observations.selected_species_name AS observation_selected_species_name,
       observations.selected_species_scientific_name AS observation_selected_species_scientific_name,
@@ -529,6 +544,7 @@ async function listPosts({ viewerId = "", limit = 50, offset = 0 } = {}) {
     FROM community_posts AS posts
     JOIN users ON users.id = posts.user_id
     LEFT JOIN community_post_images AS images ON images.post_id = posts.id
+    LEFT JOIN community_post_videos AS videos ON videos.post_id = posts.id
     LEFT JOIN observations ON observations.id = posts.observation_id
     ORDER BY posts.created_at DESC, posts.id DESC
     LIMIT ? OFFSET ?
@@ -743,6 +759,37 @@ function insertPostImage(db, postId, preparedImage) {
   return preparedImage.storageFile;
 }
 
+function preparePostVideo(video) {
+  if (!video) return null;
+  const extension = VIDEO_EXTENSIONS[video.mimeType];
+  if (!extension) {
+    const error = new Error("unsupported video type");
+    error.statusCode = 400;
+    throw error;
+  }
+  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+  const id = crypto.randomUUID();
+  const storageFile = `${id}.${extension}`;
+  fs.writeFileSync(path.join(UPLOAD_DIR, storageFile), video.buffer);
+  return { id, storageFile, originalName: video.originalName || `post-video.${extension}`, mimeType: video.mimeType, sizeBytes: video.buffer.length };
+}
+
+function insertPostVideo(db, postId, preparedVideo) {
+  if (!preparedVideo) return;
+  db.prepare(`
+    INSERT INTO community_post_videos (id, post_id, storage_path, original_name, mime_type, size_bytes, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    preparedVideo.id,
+    postId,
+    preparedVideo.storageFile,
+    preparedVideo.originalName,
+    preparedVideo.mimeType,
+    preparedVideo.sizeBytes,
+    new Date().toISOString()
+  );
+}
+
 function removeImageFile(storageFile) {
   if (!storageFile) return;
 
@@ -751,12 +798,13 @@ function removeImageFile(storageFile) {
   fs.rmSync(resolvedPath, { force: true });
 }
 
-async function createPost({ userId, observationId = "", title, body, bird, image }) {
+async function createPost({ userId, observationId = "", title, body, bird, image, video }) {
   const db = getDatabase();
   const now = new Date().toISOString();
   const id = crypto.randomUUID();
-  const analysis = analyzePostCopy({ title, body, bird, hasImage: Boolean(image) });
+  const analysis = analyzePostCopy({ title, body, bird, hasImage: Boolean(image || video) });
   let preparedImage = null;
+  let preparedVideo = null;
   let transactionStarted = false;
 
   try {
@@ -765,6 +813,7 @@ async function createPost({ userId, observationId = "", title, body, bird, image
     }
 
     preparedImage = preparePostImage(image);
+    preparedVideo = preparePostVideo(video);
     db.exec("BEGIN");
     transactionStarted = true;
 
@@ -801,11 +850,13 @@ async function createPost({ userId, observationId = "", title, body, bird, image
     );
 
     insertPostImage(db, id, preparedImage);
+    insertPostVideo(db, id, preparedVideo);
     db.exec("COMMIT");
     transactionStarted = false;
   } catch (error) {
     if (transactionStarted) db.exec("ROLLBACK");
     removeImageFile(preparedImage?.storageFile);
+    removeImageFile(preparedVideo?.storageFile);
     if (isMissingObservationConstraintError(error)) {
       throw createObservationLinkConflictError();
     }
@@ -871,8 +922,10 @@ async function deletePost({ id, userId }) {
   const db = getDatabase();
   getOwnedPost(db, id, userId);
   const image = db.prepare("SELECT storage_path FROM community_post_images WHERE post_id = ?").get(id);
+  const video = db.prepare("SELECT storage_path FROM community_post_videos WHERE post_id = ?").get(id);
   db.prepare("DELETE FROM community_posts WHERE id = ? AND user_id = ?").run(id, userId);
   removeImageFile(image?.storage_path);
+  removeImageFile(video?.storage_path);
 }
 
 async function getPostImage({ id }) {
@@ -900,6 +953,15 @@ async function getPostImage({ id }) {
     originalName: image.original_name,
     sizeBytes: image.size_bytes,
   };
+}
+
+async function getPostVideo({ id }) {
+  const db = getDatabase();
+  const video = db.prepare(`SELECT storage_path, original_name, mime_type, size_bytes FROM community_post_videos WHERE post_id = ?`).get(id);
+  if (!video) throw createPostNotFoundError();
+  const resolvedPath = path.resolve(UPLOAD_DIR, video.storage_path);
+  if (!resolvedPath.startsWith(`${path.resolve(UPLOAD_DIR)}${path.sep}`) || !fs.existsSync(resolvedPath)) throw createPostNotFoundError();
+  return { filePath: resolvedPath, mimeType: video.mime_type, originalName: video.original_name, sizeBytes: video.size_bytes };
 }
 
 async function createComment({ postId, userId, body }) {
@@ -1004,6 +1066,7 @@ module.exports = {
   deleteComment,
   deletePost,
   getPostImage,
+  getPostVideo,
   getPostDetails,
   listCommentsForPost,
   listQuestionsForPost,

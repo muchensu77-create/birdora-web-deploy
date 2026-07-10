@@ -3,9 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>登录 / 注册 - Birdora</title>
+    <title>登录 - Birdora</title>
     <link rel="icon" type="image/svg+xml" sizes="any" href="./assets/favicon.svg" />
     <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./design-system.css" />
   </head>
   <body data-page="login">
     <main class="auth-page auth-page-simple">
@@ -13,7 +14,7 @@
         <div class="auth-intro auth-intro-simple">
           <p class="eyebrow">Birdora</p>
           <h1>欢迎回来</h1>
-          <p>登录后继续识鸟、记录观察，并查看你的社区分享。</p>
+          <p>登录后继续识别鸟种、保存观测记录，并查看你发布过的社区笔记。</p>
         </div>
 
         <form class="auth-card auth-card-main auth-card-switcher" data-auth-form="account" data-auth-mode="login" novalidate>
@@ -45,7 +46,7 @@
             <span>
               注册即表示你同意
               <a href="./terms.html" target="_blank" rel="noreferrer">《用户协议》</a>
-              与
+              和
               <a href="./privacy.html" target="_blank" rel="noreferrer">《隐私政策》</a>
             </span>
           </label>
@@ -54,8 +55,8 @@
           <p class="auth-message" data-auth-message aria-live="polite" role="alert"></p>
 
           <p class="auth-switch-copy">
-            <span id="authSwitchLead">还没有账号？</span>
-            <button class="auth-switch-btn" type="button" data-auth-switch="register">去注册</button>
+            <span>还没有账号？</span>
+            <a class="auth-switch-btn" href="./register.html">去注册</a>
           </p>
         </form>
 

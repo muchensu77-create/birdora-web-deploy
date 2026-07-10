@@ -6,6 +6,7 @@ const BIRD_MAX_LENGTH = 80;
 const COMMENT_MAX_LENGTH = 180;
 const QUESTION_MAX_LENGTH = 180;
 const IMAGE_MAX_BYTES = 1024 * 1024;
+const VIDEO_MAX_BYTES = 8 * 1024 * 1024;
 const POSTS_DEFAULT_LIMIT = 20;
 const POSTS_MAX_LIMIT = 100;
 const COMMENTS_DEFAULT_LIMIT = 10;
@@ -14,6 +15,7 @@ const QUESTIONS_DEFAULT_LIMIT = 10;
 const QUESTIONS_MAX_LIMIT = 50;
 const REACTION_TYPES = new Set(["helpful", "curious"]);
 const SUPPORTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const SUPPORTED_VIDEO_TYPES = new Set(["video/mp4", "video/webm"]);
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 const JPEG_SIGNATURE = [0xff, 0xd8, 0xff];
 
@@ -105,6 +107,28 @@ function validatePostImage(req, res) {
   };
 }
 
+function validatePostVideo(req, res) {
+  const videoDataUrl = String(req.body.videoDataUrl || "").trim();
+  if (!videoDataUrl) return null;
+  const match = videoDataUrl.match(/^data:(video\/(?:mp4|webm));base64,([A-Za-z0-9+/=]+)$/);
+  if (!match || !SUPPORTED_VIDEO_TYPES.has(match[1])) {
+    res.status(400).json({ message: "videoDataUrl must be an mp4 or webm data URL" });
+    return false;
+  }
+  const buffer = Buffer.from(match[2], "base64");
+  if (!buffer.length || buffer.length > VIDEO_MAX_BYTES) {
+    res.status(400).json({ message: `video must be smaller than ${VIDEO_MAX_BYTES} bytes` });
+    return false;
+  }
+  const isMp4 = match[1] === "video/mp4" && buffer.length >= 12 && buffer.toString("ascii", 4, 8) === "ftyp";
+  const isWebm = match[1] === "video/webm" && buffer.length >= 4 && buffer[0] === 0x1a && buffer[1] === 0x45 && buffer[2] === 0xdf && buffer[3] === 0xa3;
+  if (!isMp4 && !isWebm) {
+    res.status(400).json({ message: "videoDataUrl content does not match video type" });
+    return false;
+  }
+  return { buffer, mimeType: match[1], originalName: String(req.body.videoName || "post-video").trim().slice(0, 120) };
+}
+
 function validateRequiredBody(req, res, maxLength, label) {
   const body = normalizeRequiredText(req.body.body, maxLength);
   if (!body) {
@@ -154,11 +178,18 @@ async function create(req, res) {
   }
   const image = validatePostImage(req, res);
   if (image === false) return;
+  const video = validatePostVideo(req, res);
+  if (video === false) return;
+  if (image && video) {
+    res.status(400).json({ message: "a post can include either one image or one video" });
+    return;
+  }
 
   const post = await communityPostService.createPost({
     userId: req.user.id,
     observationId,
     image,
+    video,
     ...postBody,
   });
   res.status(201).json({ post });
@@ -260,6 +291,13 @@ async function image(req, res) {
   res.sendFile(postImage.filePath);
 }
 
+async function video(req, res) {
+  const postVideo = await communityPostService.getPostVideo({ id: req.params.id });
+  res.set("Content-Type", postVideo.mimeType);
+  res.set("Cache-Control", "public, max-age=31536000, immutable");
+  res.sendFile(postVideo.filePath);
+}
+
 module.exports = {
   comment,
   comments,
@@ -273,4 +311,5 @@ module.exports = {
   remove,
   removeComment,
   update,
+  video,
 };

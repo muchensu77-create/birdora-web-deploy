@@ -1,59 +1,56 @@
 <!doctype html>
 <html lang="zh-CN">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>观鸟社区 - Birdora</title>
-    <link rel="icon" type="image/svg+xml" sizes="any" href="./assets/favicon.svg" />
-    <link rel="stylesheet" href="./styles.css" />
-    <link rel="stylesheet" href="./community-post-card.css" />
-  </head>
-  <body data-page="community">
-    <header class="topbar">
-      <a class="brand" href="./index.html#home" aria-label="Birdora 首页">
-        <span class="brand-mark">B</span>
-        <span>Birdora</span>
-        <span class="brand-user" data-user-name hidden></span>
-      </a>
-      <nav class="nav" aria-label="主导航">
-        <a href="./index.html#identify">识别</a>
-        <a href="./index.html#atlas">图鉴</a>
-        <a href="./community.html" aria-current="page">社区</a>
-        <a href="./index.html#device">设备</a>
-      </nav>
-      <div class="topbar-actions">
-        <a class="ghost-btn link-btn" href="./index.html#community">返回发布</a>
-        <button class="ghost-btn" type="button" data-logout>退出登录</button>
-      </div>
-    </header>
 
-    <main class="community-page">
-      <section class="community-hero">
-        <div class="section-head">
-          <p class="eyebrow">Birdora 社区</p>
-          <h1>观鸟社区</h1>
-          <p>浏览所有用户公开发布的观鸟笔记，登录后可修改或删除自己的记录。</p>
-        </div>
-      </section>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>社区 - Birdora</title>
+  <link rel="icon" type="image/svg+xml" sizes="any" href="./assets/favicon.svg" />
+  <link rel="stylesheet" href="./styles.css" />
+  <link rel="stylesheet" href="./design-system.css" />
+</head>
 
-      <section class="community-browser">
-        <div class="community-switch" role="tablist" aria-label="帖子筛选">
-          <button class="community-tab is-active" id="communityTabRecommended" type="button" role="tab" data-community-tab="recommended" aria-controls="communityFeed">推荐</button>
-          <button class="community-tab" id="communityTabMine" type="button" role="tab" data-community-tab="mine" aria-controls="communityFeed">我的</button>
-        </div>
-        <div class="community-list feed" id="communityFeed" role="tabpanel" aria-live="polite" tabindex="0"></div>
-      </section>
-    </main>
+<body data-page="community">
+  <header class="topbar glass-topbar">
+    <a class="brand" href="./index.html#home" aria-label="Birdora 首页">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span>Birdora</span>
+      <span class="brand-user" data-user-name hidden></span>
+    </a>
+    <nav class="nav" aria-label="主导航">
+      <a href="./index.html#home">首页</a>
+      <a href="./explore.html">识别</a>
+      <a href="./community.html" aria-current="page">社区</a>
+      <a href="./device.html">设备</a>
+      <a href="./profile.html">个人</a>
+    </nav>
+    <div class="topbar-actions">
+      <a class="ghost-btn link-btn" href="./register.html" data-register-link>注册</a>
+      <a class="ghost-btn link-btn" href="./login.html" data-login-link>登录</a>
+    </div>
+  </header>
 
-    <footer>
-      <span>Birdora 观鸟眼镜网站原型</span>
-      <span>识别 · 图鉴 · 社区 · 设备</span>
-    </footer>
+  <main class="community-workspace" data-community-workspace>
+    <section class="community-rail" aria-label="社区功能导航">
+      <a class="community-rail-link" href="./community.html?view=recommended" data-community-view-link="recommended">推荐</a>
+      <a class="community-rail-link" href="./community.html?view=following" data-community-view-link="following">关注</a>
+      <a class="community-rail-link" href="./community.html?view=publish" data-community-view-link="publish">发布</a>
+      <a class="community-rail-link" href="./community.html?view=messages" data-community-view-link="messages">消息</a>
+    </section>
 
-    <script src="./assets/vendor/ort.min.js"></script>
-    <script src="./community-api.js"></script>
-    <script src="./observation-api.js"></script>
-    <script src="./community-post-card.js"></script>
-    <script src="./script.js"></script>
-  </body>
+    <section class="community-view" data-community-view-panel aria-live="polite"></section>
+  </main>
+
+  <footer>
+    <span>Birdora 观鸟眼镜网站原型</span>
+    <span>记录 · 分享 · 交流</span>
+  </footer>
+
+  <script src="./assets/vendor/ort.min.js"></script>
+  <script src="./community-api.js"></script>
+  <script src="./observation-api.js"></script>
+  <script src="./community-post-card.js"></script>
+  <script src="./script.js"></script>
+</body>
+
 </html>

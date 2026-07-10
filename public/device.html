@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>设备管理 - Birdora</title>
+    <link rel="icon" type="image/svg+xml" sizes="any" href="./assets/favicon.svg" />
+    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./community-post-card.css" />
+    <link rel="stylesheet" href="./design-system.css" />
+</head>
+
+<body data-page="device">
+    <header class="topbar glass-topbar">
+        <a class="brand" href="./index.html#home" aria-label="Birdora 首页">
+            <span class="brand-mark">●</span>
+            <span>Birdora</span>
+            <span class="brand-user" data-user-name hidden></span>
+        </a>
+        <nav class="nav" aria-label="主导航">
+            <a href="./index.html#home">首页</a>
+            <a href="./explore.html">识别</a>
+            <a href="./community.html">社区</a>
+            <a href="./device.html" aria-current="page">设备</a>
+            <a href="./profile.html">个人</a>
+        </nav>
+        <div class="topbar-actions">
+            <a class="ghost-btn link-btn" href="./register.html" data-register-link>注册</a>
+            <a class="ghost-btn link-btn" href="./login.html" data-login-link>登录</a>
+        </div>
+    </header>
+
+    <main class="device-standalone-page">
+        <section class="device-section device-section-v2" id="device">
+            <div class="device-copy device-panel">
+                <div class="device-panel-heading">
+                    <p class="eyebrow">设备管理</p>
+                    <span class="device-panel-badge">Birdora 配套设备</span>
+                </div>
+                <h1 class="device-title" id="deviceConnectionTitle">Birdora Glasses 未连接</h1>
+                <p class="device-description">连接观鸟眼镜后，可统一查看电量、存储与固件状态，并同步外出拍摄记录。</p>
+                <button class="primary-btn device-action" id="deviceConnectBtn" type="button">连接设备</button>
+                <div class="device-stats device-status-grid">
+                    <span class="device-stat-card"><small>剩余电量</small><strong id="deviceBatteryValue">--</strong></span>
+                    <span class="device-stat-card"><small>可用空间</small><strong id="deviceStorageValue">--</strong></span>
+                    <span class="device-stat-card"><small>当前固件</small><strong id="deviceFirmwareValue">--</strong></span>
+                </div>
+            </div>
+            <div class="glasses-card" aria-label="眼镜设备状态">
+                <div class="device-visual-heading">
+                    <p class="eyebrow">设备预览</p>
+                    <h2>Birdora Glasses</h2>
+                </div>
+                <img class="device-glasses" src="./assets/device-glasses-cutout.png" alt="Birdora Glasses 智能观鸟眼镜" />
+                <div class="device-sync-row">
+                    <span class="device-sync-dot" aria-hidden="true"></span>
+                    <p class="device-sync-status" id="deviceSyncStatus">蓝牙未连接</p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <span>Birdora 观鸟眼镜网站原型</span>
+        <span>设备 · 同步 · 固件 · 存储</span>
+    </footer>
+
+    <script src="./assets/vendor/ort.min.js"></script>
+    <script src="./community-api.js"></script>
+    <script src="./observation-api.js"></script>
+    <script src="./community-post-card.js"></script>
+    <script src="./script.js"></script>
+</body>
+
+</html>

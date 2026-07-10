@@ -25,6 +25,8 @@ router.post("/register", authLimiter, asyncHandler(authController.register));
 router.post("/login", authLimiter, asyncHandler(authController.login));
 router.post("/logout", asyncHandler(authJwt.attachSession), asyncHandler(authController.logout));
 router.get("/me", asyncHandler(authJwt.requireAuth), asyncHandler(authController.me));
+router.patch("/profile", asyncHandler(authJwt.requireAuth), authLimiter, asyncHandler(authController.updateProfile));
+router.delete("/account", asyncHandler(authJwt.requireAuth), authLimiter, asyncHandler(authController.removeAccount));
 router.get("/status", asyncHandler(authJwt.attachSession), asyncHandler(authController.status));
 
 module.exports = router;

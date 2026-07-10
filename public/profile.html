@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>个人中心 - Birdora</title>
+  <link rel="icon" type="image/svg+xml" sizes="any" href="./assets/favicon.svg" />
+  <link rel="stylesheet" href="./styles.css" />
+  <link rel="stylesheet" href="./design-system.css" />
+</head>
+<body data-page="profile">
+  <header class="topbar glass-topbar">
+    <a class="brand" href="./index.html#home" aria-label="Birdora 首页"><span class="brand-mark" aria-hidden="true"></span><span>Birdora</span><span class="brand-user" data-user-name hidden></span></a>
+    <nav class="nav" aria-label="主导航">
+      <a href="./index.html#home">首页</a><a href="./explore.html">识别</a><a href="./community.html">社区</a><a href="./device.html">设备</a><a href="./profile.html" aria-current="page">个人</a>
+    </nav>
+    <div class="topbar-actions">
+      <a class="ghost-btn link-btn" href="./register.html" data-register-link>注册</a>
+      <a class="ghost-btn link-btn" href="./login.html" data-login-link>登录</a>
+    </div>
+  </header>
+
+  <main class="profile-center" data-profile-center>
+    <section class="profile-center-hero">
+      <div class="profile-avatar" data-profile-avatar aria-hidden="true">B</div>
+      <div><p>个人中心</p><h1 data-profile-center-name>我的观鸟档案</h1><span data-profile-center-email>登录后可编辑个人资料。</span></div>
+    </section>
+
+    <section class="profile-login-state" data-profile-login-state>
+      <h2>登录后管理你的资料</h2><p>设置个人简介、头像和偏好，也可以管理账号安全。</p><a class="primary-btn link-btn" href="./login.html">登录</a><a class="secondary-btn link-btn" href="./register.html">注册</a>
+    </section>
+
+    <div class="profile-center-grid" data-profile-settings hidden>
+      <form class="profile-settings-panel" id="profileSettingsForm" novalidate>
+        <div class="profile-panel-heading"><p>资料</p><h2>基本信息</h2></div>
+        <div class="profile-avatar-editor"><label for="profileAvatarInput" class="profile-avatar-choice"><span data-profile-avatar-preview>B</span><input id="profileAvatarInput" type="file" accept="image/jpeg,image/png,image/webp" /></label><p>选择一张清晰的头像图片，最大 600KB。</p></div>
+        <label><span>昵称</span><input id="profileNicknameInput" maxlength="40" required /></label>
+        <label><span>个人简介</span><textarea id="profileBioInput" maxlength="280" placeholder="介绍一下你的观鸟习惯或常去地点。"></textarea></label>
+        <div class="profile-two-fields"><label><span>性别</span><select id="profileGenderInput"><option value="">不填写</option><option value="female">女</option><option value="male">男</option><option value="nonbinary">非二元</option><option value="prefer_not_to_say">不愿透露</option></select></label><label><span>年龄</span><input id="profileAgeInput" type="number" min="13" max="100" placeholder="例如：15" /></label></div>
+        <p class="profile-form-message" data-profile-message aria-live="polite"></p><button class="primary-btn" type="submit">保存资料</button>
+      </form>
+
+      <section class="profile-settings-panel profile-preferences"><div class="profile-panel-heading"><p>设置</p><h2>偏好与隐私</h2></div>
+        <label class="profile-toggle"><input id="profilePublicInput" type="checkbox" checked /><span><strong>公开个人档案</strong><small>允许其他用户看到你的昵称和简介。</small></span></label>
+        <label class="profile-toggle"><input id="profileEmailInput" type="checkbox" checked /><span><strong>接收站内提醒</strong><small>有新的点赞、评论和关注时提醒我。</small></span></label>
+        <p class="profile-form-message" data-profile-preference-message aria-live="polite"></p><button class="secondary-btn" type="button" data-profile-save-preferences>保存设置</button>
+      </section>
+
+      <section class="profile-settings-panel profile-account-security"><div class="profile-panel-heading"><p>账号</p><h2>安全操作</h2></div>
+        <p>退出后可随时重新登录。注销账号会永久删除你的资料、观鸟记录和社区内容。</p>
+        <button class="secondary-btn" type="button" data-logout>退出登录</button>
+        <details class="profile-delete-account"><summary>注销账号</summary><p>请输入当前密码，并输入“注销我的账号”确认。</p><input id="profileDeletePassword" type="password" autocomplete="current-password" placeholder="当前密码" /><input id="profileDeleteConfirmation" type="text" placeholder="注销我的账号" /><p class="profile-form-message" data-profile-delete-message aria-live="polite"></p><button class="danger-btn" type="button" data-profile-delete>永久注销账号</button></details>
+      </section>
+    </div>
+  </main>
+
+  <footer><span>Birdora 观鸟眼镜网站原型</span><span>个人档案 · 设置 · 账号安全</span></footer>
+  <script src="./assets/vendor/ort.min.js"></script><script src="./community-api.js"></script><script src="./observation-api.js"></script><script src="./community-post-card.js"></script><script src="./script.js"></script>
+</body>
+</html>

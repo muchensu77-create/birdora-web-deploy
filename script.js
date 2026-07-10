@@ -1,5 +1,14 @@
 const page = document.body.dataset.page || "home";
 
+function renderHomeObservationDate() {
+  const dateLabel = document.querySelector("#homeObservationDate");
+  if (!dateLabel) return;
+  const today = new Date();
+  dateLabel.textContent = `${today.getMonth() + 1}月${today.getDate()}日`;
+}
+
+renderHomeObservationDate();
+
 const STORAGE_KEYS = {
   loggedIn: "birdoraLoggedIn",
   authUser: "birdora-auth-user",
@@ -8,7 +17,7 @@ const STORAGE_KEYS = {
   deviceConnected: "birdora-device-connected",
 };
 
-const APP_PAGES = new Set(["home", "community"]);
+const APP_PAGES = new Set(["home", "community", "explore", "profile", "upload", "publish", "device"]);
 const AUTH_API_BASE_URL = resolveAuthApiBaseUrl();
 const AUTH_ROUTES = {
   register: "/api/auth/register",
@@ -283,6 +292,8 @@ const postMessage = document.querySelector("#postMessage");
 const useDetected = document.querySelector("#useDetected");
 const communityTabs = document.querySelectorAll("[data-community-tab]");
 const logoutButtons = document.querySelectorAll("[data-logout]");
+const loginLinks = document.querySelectorAll("[data-login-link]");
+const registerLinks = document.querySelectorAll("[data-register-link]");
 const authForms = document.querySelectorAll("[data-auth-form]");
 const authSwitchButtons = document.querySelectorAll("[data-auth-switch]");
 const authModeFields = document.querySelectorAll("[data-auth-visible]");
@@ -298,6 +309,8 @@ const deviceBatteryValue = document.querySelector("#deviceBatteryValue");
 const deviceStorageValue = document.querySelector("#deviceStorageValue");
 const deviceFirmwareValue = document.querySelector("#deviceFirmwareValue");
 const deviceSyncStatus = document.querySelector("#deviceSyncStatus");
+const speciesCountBadges = document.querySelectorAll("[data-species-count]");
+const monthSpeciesCountBadges = document.querySelectorAll("[data-month-species-count]");
 
 window.__birdoraAuthFormsReady = false;
 window.__birdoraLogoutReady = false;
@@ -488,6 +501,10 @@ function getLoginUrl() {
   return `./login.html?next=${encodeURIComponent(getCurrentPagePath())}`;
 }
 
+function getRegisterUrl() {
+  return `./register.html?next=${encodeURIComponent(getCurrentPagePath())}`;
+}
+
 function getPostLoginUrl() {
   const next = new URLSearchParams(window.location.search).get("next");
   if (!next) return "./index.html";
@@ -597,6 +614,11 @@ function renderUserChrome() {
   logoutButtons.forEach((button) => {
     button.textContent = currentUser ? "退出登录" : "登录";
     button.setAttribute("aria-label", currentUser ? "退出登录" : "登录 Birdora");
+    button.hidden = !currentUser && loginLinks.length > 0;
+  });
+
+  loginLinks.forEach((link) => {
+    link.hidden = Boolean(currentUser);
   });
 }
 
@@ -1076,6 +1098,35 @@ function renderObservationList() {
   observationList.innerHTML = observations.map(renderObservationCard).join("");
 }
 
+function updateSpeciesSummaryFromObservations() {
+  const uniqueSpecies = new Set(
+    observations
+      .map((observation) => observation.selectedSpeciesName)
+      .filter(Boolean)
+  );
+  const now = new Date();
+  const monthSpecies = new Set(
+    observations
+      .filter((observation) => {
+        const createdAt = new Date(observation.createdAt || observation.observedAt || 0);
+        return (
+          !Number.isNaN(createdAt.getTime()) &&
+          createdAt.getFullYear() === now.getFullYear() &&
+          createdAt.getMonth() === now.getMonth()
+        );
+      })
+      .map((observation) => observation.selectedSpeciesName)
+      .filter(Boolean)
+  );
+
+  speciesCountBadges.forEach((badge) => {
+    badge.textContent = String(uniqueSpecies.size);
+  });
+  monthSpeciesCountBadges.forEach((badge) => {
+    badge.textContent = `+${monthSpecies.size}`;
+  });
+}
+
 async function loadMyObservations() {
   if (!observationList) return;
 
@@ -1094,6 +1145,7 @@ async function loadMyObservations() {
       offset: 0,
     });
     observations = result.observations;
+    updateSpeciesSummaryFromObservations();
     observationsPageInfo = result.pageInfo || {
       limit: OBSERVATION_PAGE_SIZE,
       offset: 0,
@@ -1110,6 +1162,7 @@ async function loadMyObservations() {
   }
 
   renderObservationList();
+  updateSpeciesSummaryFromObservations();
 }
 
 function formatInteractionTime(item) {
@@ -2969,6 +3022,7 @@ function renderAtlasCard(entry, options = {}) {
 function renderAtlasDetail(entry, context = "图鉴详情") {
   if (!atlasDetail || !entry) return;
 
+  atlasDetail.hidden = false;
   const hasImage = Boolean(entry.image);
   const imageRights = entry.image
     ? `${entry.imageCredit || "图片来源待补充"}${entry.license ? ` · ${entry.license}` : ""}`
@@ -3077,11 +3131,20 @@ async function renderBirds(options = {}) {
 
     renderAtlasSummary(entries.length, visible.length, matched.length, query, progress);
 
-    if (visible[0] && !options.keepDetail) {
-      renderAtlasDetail(visible[0], query ? "搜索结果详情" : "默认展示");
+    if (!query && atlasDetail && !options.keepDetail) {
+      atlasDetail.hidden = true;
+      atlasDetail.innerHTML = "";
+    }
+
+    if (query && visible[0] && !options.keepDetail) {
+      renderAtlasDetail(visible[0], "搜索结果详情");
     }
 
     if (!visible.length) {
+      if (atlasDetail && !options.keepDetail) {
+        atlasDetail.hidden = true;
+        atlasDetail.innerHTML = "";
+      }
       birdGrid.classList.add("is-empty");
       birdGrid.classList.remove("is-marquee");
       birdGrid.innerHTML =
@@ -3921,7 +3984,7 @@ function initPublishing() {
       }
 
       if (currentRecognitionShareKey && currentRecognitionShareKey === lastSharedRecognitionKey) {
-        document.querySelector("#community")?.scrollIntoView({ behavior: "smooth" });
+        document.querySelector("#publish")?.scrollIntoView({ behavior: "smooth" });
         return;
       }
 
@@ -3933,7 +3996,7 @@ function initPublishing() {
         setObservationMessage("已从观测记录发布到社区。");
         updateRecognitionActions();
         renderCurrentFeed();
-        document.querySelector("#community")?.scrollIntoView({ behavior: "smooth" });
+        document.querySelector("#publish")?.scrollIntoView({ behavior: "smooth" });
       } catch (error) {
         setObservationMessage(getCommunityMutationMessage(error, "发布失败，请稍后重试。"));
         if (error?.status === 401) {
@@ -3980,7 +4043,7 @@ function getHomeViewFromHash(hash = window.location.hash) {
     return "atlas";
   }
 
-  if (target === "community") {
+  if (target === "community" || target === "publish") {
     return "community";
   }
 
@@ -4096,7 +4159,7 @@ function initDeviceConnection() {
 function syncHomeCommunityReveal() {
   if (page === "community") return;
 
-  const preview = document.querySelector("#community .feed-preview");
+  const preview = document.querySelector("#publish .feed-preview");
   if (!preview) return;
 
   const revealItems = [
@@ -4117,7 +4180,7 @@ function syncHomeCommunityReveal() {
 function initHomeCommunityReveal() {
   if (page === "community") return;
 
-  const preview = document.querySelector("#community .feed-preview");
+  const preview = document.querySelector("#publish .feed-preview");
   if (!preview) return;
 
   syncHomeCommunityReveal();
@@ -4151,7 +4214,7 @@ function initHomeCommunityReveal() {
 
 function initSoftReveal() {
   const sections = document.querySelectorAll(
-    ".hero, .hero-section, .identify-section, #identify, .bird-section, .atlas-section, #atlas, .community-section, #community, .device-section, #device"
+    ".hero, .hero-section, .identify-section, #identify, .bird-section, .atlas-section, #atlas, .community-section, #publish, .device-section, #device"
   );
   if (!sections.length) return;
 
@@ -4190,6 +4253,210 @@ async function initLoginPage() {
 
   clearAuthState();
   initAuthForms();
+}
+
+function renderUserChrome() {
+  const displayName = currentUser?.nickname || currentUser?.email?.split("@")[0] || "";
+
+  userNameBadges.forEach((badge) => {
+    if (!displayName) {
+      badge.textContent = "";
+      badge.removeAttribute("title");
+      badge.removeAttribute("aria-label");
+      badge.hidden = true;
+      return;
+    }
+
+    badge.textContent = displayName;
+    badge.title = displayName;
+    badge.setAttribute("aria-label", `当前用户：${displayName}`);
+    badge.hidden = false;
+  });
+
+  logoutButtons.forEach((button) => {
+    button.textContent = currentUser ? "退出登录" : "登录";
+    button.setAttribute("aria-label", currentUser ? "退出登录" : "登录 Birdora");
+    button.hidden = !currentUser && loginLinks.length + registerLinks.length > 0;
+  });
+
+  loginLinks.forEach((link) => {
+    link.href = getLoginUrl();
+    link.hidden = Boolean(currentUser);
+  });
+
+  registerLinks.forEach((link) => {
+    link.href = getRegisterUrl();
+    link.hidden = Boolean(currentUser);
+  });
+}
+
+function translateAuthMessage(message, fallback = "认证请求失败，请稍后重试。") {
+  const messages = {
+    "email and password are required": "请先填写邮箱和密码。",
+    "email format is invalid": "邮箱格式不正确，请检查后重试。",
+    "password must be at least 8 characters": "密码至少需要 8 位。",
+    "email is already registered": "这个邮箱已经注册过了，请直接登录。",
+    "email or password is incorrect": "邮箱或密码不正确，请检查后重试。",
+    Unauthorized: "登录状态已失效，请重新登录。",
+  };
+
+  return messages[message] || message || fallback;
+}
+
+function initAuthForms() {
+  const form = authForms[0];
+  if (!form) return;
+
+  const message = form.querySelector("[data-auth-message]");
+  const emailField = form.querySelector('[name="email"]');
+  const passwordField = form.querySelector('[name="password"]');
+  const nicknameField = form.querySelector('[name="nickname"]');
+  const agreeField = form.querySelector('[name="agree"]');
+  if (!message || !emailField || !passwordField || !nicknameField || !agreeField) return;
+
+  const modeConfig = {
+    login: {
+      eyebrow: "登录",
+      title: "继续你的观鸟记录",
+      copy: "登录 Birdora，继续保存你的观鸟笔记、评论和识别记录。",
+      submit: "登录",
+    },
+    register: {
+      eyebrow: "注册",
+      title: "创建你的 Birdora 账号",
+      copy: "注册后可以保存识别记录、发布观鸟笔记，并在设备页同步眼镜数据。",
+      submit: "注册并进入",
+    },
+  };
+
+  const setMessage = (text = "") => {
+    message.textContent = text;
+  };
+
+  const setSubmitting = (submitting) => {
+    if (authSubmitBtn) {
+      authSubmitBtn.disabled = submitting;
+      authSubmitBtn.textContent = submitting ? "请稍候..." : modeConfig[form.dataset.authMode || "login"].submit;
+    }
+  };
+
+  const setAuthMode = (mode) => {
+    const config = modeConfig[mode] || modeConfig.login;
+    form.dataset.authMode = mode;
+
+    if (authModeEyebrow) authModeEyebrow.textContent = config.eyebrow;
+    if (authModeTitle) authModeTitle.textContent = config.title;
+    if (authModeCopy) authModeCopy.textContent = config.copy;
+    if (authSubmitBtn) authSubmitBtn.textContent = config.submit;
+
+    authModeFields.forEach((field) => {
+      const visible = field.dataset.authVisible === mode;
+      field.classList.toggle("auth-hidden", !visible);
+      field.setAttribute("aria-hidden", String(!visible));
+      field.querySelectorAll("input").forEach((input) => {
+        input.disabled = !visible;
+      });
+    });
+
+    passwordField.autocomplete = mode === "register" ? "new-password" : "current-password";
+    setMessage("");
+  };
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    setMessage("");
+
+    const mode = form.dataset.authMode || "login";
+    const email = emailField.value.trim().toLowerCase();
+    const password = passwordField.value.trim();
+
+    if (!email || !password) {
+      setMessage("请先填写邮箱和密码。");
+      return;
+    }
+
+    if (mode === "register") {
+      const nickname = nicknameField.value.trim();
+      const agreed = agreeField.checked;
+
+      if (!nickname) {
+        setMessage("请先填写昵称。");
+        nicknameField.focus();
+        return;
+      }
+
+      if (!agreed) {
+        setMessage("请先勾选同意《用户协议》和《隐私政策》。");
+        return;
+      }
+
+      setSubmitting(true);
+      try {
+        const result = await authRequest(AUTH_ROUTES.register, {
+          method: "POST",
+          body: { email, password, nickname },
+        });
+
+        rememberAuthUser(result.user);
+        window.location.replace(getPostLoginUrl());
+      } catch (error) {
+        setMessage(withRequestId(error.message || "注册失败，请稍后重试。", error));
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const result = await authRequest(AUTH_ROUTES.login, {
+        method: "POST",
+        body: { email, password },
+      });
+
+      rememberAuthUser(result.user);
+      window.location.replace(getPostLoginUrl());
+    } catch (error) {
+      setMessage(withRequestId(error.message || "登录失败，请稍后重试。", error));
+    } finally {
+      setSubmitting(false);
+    }
+  });
+
+  setAuthMode(form.dataset.authMode || "login");
+  window.__birdoraAuthFormsReady = true;
+}
+
+function updateDeviceConnectionUI(state) {
+  if (
+    !deviceConnectionTitle ||
+    !deviceConnectBtn ||
+    !deviceBatteryValue ||
+    !deviceStorageValue ||
+    !deviceFirmwareValue ||
+    !deviceSyncStatus
+  ) {
+    return;
+  }
+
+  const isConnecting = state === "connecting";
+  const isConnected = state === "connected";
+
+  deviceConnectionTitle.textContent = `Birdora Glasses ${isConnecting ? "连接中" : isConnected ? "已连接" : "未连接"}`;
+  deviceConnectBtn.textContent = isConnecting ? "连接中..." : isConnected ? "断开连接" : "连接设备";
+  deviceConnectBtn.disabled = isConnecting;
+  deviceConnectBtn.classList.toggle("is-connecting", isConnecting);
+  deviceConnectBtn.setAttribute("aria-busy", String(isConnecting));
+  deviceConnectBtn.setAttribute("data-device-state", state);
+  deviceBatteryValue.textContent = isConnected ? "86%" : "--";
+  deviceStorageValue.textContent = isConnected ? "32.4GB" : "--";
+  deviceFirmwareValue.textContent = isConnected ? "V2.0.5" : "--";
+  deviceSyncStatus.textContent = isConnecting
+    ? "正在搜索附近的 Birdora Glasses..."
+    : isConnected
+      ? "蓝牙在线 · 最近同步 3 分钟前"
+      : "蓝牙未连接";
+  deviceSyncStatus.classList.toggle("is-connecting", isConnecting);
 }
 
 async function initAuthenticatedPage() {
@@ -4260,13 +4527,430 @@ async function initAuthenticatedPage() {
 }
 
 function initApp() {
-  if (page === "login") {
+  if (page === "login" || page === "register") {
     initLoginPage();
   } else if (APP_PAGES.has(page)) {
     initAuthenticatedPage();
   } else {
     initSoftReveal();
   }
+  initTopbarScrollHide();
+}
+
+function initTopbarScrollHide() {
+  const topbar = document.querySelector(".topbar");
+  if (!topbar) return;
+
+  let lastScrollY = window.scrollY;
+  let ticking = false;
+
+  window.addEventListener("scroll", () => {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(() => {
+      const currentScrollY = window.scrollY;
+      const scrollDelta = currentScrollY - lastScrollY;
+      const threshold = 8;
+
+      if (scrollDelta > threshold && currentScrollY > 60) {
+        topbar.classList.add("is-hidden");
+      } else if (scrollDelta < -threshold) {
+        topbar.classList.remove("is-hidden");
+      }
+
+      if (currentScrollY < 10) {
+        topbar.classList.remove("is-hidden");
+      }
+
+      lastScrollY = currentScrollY;
+      ticking = false;
+    });
+  }, { passive: true });
 }
 
 initApp();
+
+/* Community workspace: the community page has its own compact sub-routes. */
+const COMMUNITY_VIEWS = new Set(["recommended", "following", "publish", "messages"]);
+const COMMUNITY_DRAFT_KEY = "birdora-community-composer-draft";
+const COMMUNITY_MEDIA_MAX_BYTES = 8 * 1024 * 1024;
+let communityWorkspacePosts = [];
+let communityWorkspaceMediaUrl = "";
+
+const communityDemoPosts = [
+  {
+    id: "demo-egret", title: "雨后湿地的白鹭", body: "水面刚安静下来，它从芦苇边慢慢走出。", author: "西溪观察员", likes: 128,
+    imageUrl: "./assets/birds/egret.jpg", kind: "image",
+  },
+  {
+    id: "demo-kingfisher", title: "河湾的一抹蓝", body: "等了二十分钟，终于看到翠鸟贴着水面飞过。", author: "小河边", likes: 86,
+    imageUrl: "./assets/birds/kingfisher.jpg", kind: "image",
+  },
+  {
+    id: "demo-text", title: "第一次听见夜鹭的叫声", body: "傍晚沿湖走到旧桥边，声音从树冠里传来。没有拍到照片，但这段安静的等待很值得记住。", author: "晚风记录", likes: 53,
+    kind: "text",
+  },
+  {
+    id: "demo-photo", title: "荷叶间的黑水鸡", body: "", author: "湖畔小队", likes: 71,
+    imageUrl: "./assets/birds/egret.jpg", kind: "image-only",
+  },
+  {
+    id: "demo-note", title: "适合新手的观鸟时间", body: "清晨六点半到八点，光线柔和，公园里也更安静。带上望远镜和一瓶水就够了。", author: "晨光步道", likes: 96,
+    kind: "text",
+  },
+  {
+    id: "demo-river", title: "桥下遇见家燕", body: "", author: "溪流守望", likes: 44,
+    imageUrl: "./assets/birds/kingfisher.jpg", kind: "image-only",
+  },
+];
+
+function getCommunityWorkspaceView() {
+  const view = new URLSearchParams(window.location.search).get("view") || "recommended";
+  return COMMUNITY_VIEWS.has(view) ? view : "recommended";
+}
+
+function escapeCommunityText(value) {
+  return escapeHtml(String(value || ""));
+}
+
+function getCommunityWorkspacePosts(view) {
+  const apiPosts = communityWorkspacePosts.map((post) => ({
+    ...post,
+    likes: Number(post.feedback?.helpful?.count) || 0,
+    kind: post.videoUrl ? "video" : post.imageUrl ? "image" : "text",
+  }));
+  const demos = view === "following"
+    ? communityDemoPosts.filter((post) => ["西溪观察员", "小河边", "晚风记录"].includes(post.author))
+    : communityDemoPosts;
+  const merged = [...apiPosts, ...demos];
+  return view === "recommended" ? merged.sort(() => Math.random() - 0.5) : merged;
+}
+
+function renderCommunityMedia(post) {
+  if (post.videoUrl) {
+    return `<video class="community-note-media" controls preload="metadata" src="${escapeCommunityText(post.videoUrl)}"></video>`;
+  }
+  if (post.imageUrl) {
+    return `<img class="community-note-media" src="${escapeCommunityText(post.imageUrl)}" alt="${escapeCommunityText(post.title)}" loading="lazy" />`;
+  }
+  return post.kind === "text" ? `<div class="community-text-cover"><span>观鸟随记</span><p>${escapeCommunityText(post.body)}</p></div>` : "";
+}
+
+function renderCommunityNoteCard(post) {
+  const hasBody = Boolean(post.body && post.kind !== "text");
+  return `
+    <article class="community-note-card" data-workspace-post="${escapeCommunityText(post.id)}">
+      ${renderCommunityMedia(post)}
+      <div class="community-note-info">
+        <h2>${escapeCommunityText(post.title)}</h2>
+        ${hasBody ? `<p>${escapeCommunityText(post.body)}</p>` : ""}
+        <div class="community-note-meta"><span>${escapeCommunityText(post.author || "Birdora 用户")}</span><button type="button" data-workspace-like="${escapeCommunityText(post.id)}" aria-label="点赞 ${escapeCommunityText(post.title)}">赞 ${Number(post.likes) || 0}</button></div>
+      </div>
+    </article>
+  `;
+}
+
+function renderCommunityFeedView(view) {
+  const label = view === "following" ? "关注" : "推荐";
+  const copy = view === "following" ? "你关注的观鸟者最近分享" : "来自 Birdora 社区的观鸟记录";
+  return `
+    <header class="community-view-heading"><p>${label}</p><h1>${view === "following" ? "关注的人正在观察" : "今天的观鸟笔记"}</h1><span>${copy}</span></header>
+    <div class="community-note-grid">${getCommunityWorkspacePosts(view).map(renderCommunityNoteCard).join("")}</div>
+  `;
+}
+
+function getCommunityDraft() {
+  try {
+    return JSON.parse(window.localStorage.getItem(COMMUNITY_DRAFT_KEY) || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function renderCommunityPublishView() {
+  const draft = getCommunityDraft();
+  const previewPosts = getCommunityWorkspacePosts("recommended").slice(0, 3);
+  return `
+    <header class="community-view-heading"><p>发布</p><h1>分享一次观察</h1><span>图片、视频和文字都可以成为一条观鸟笔记。</span></header>
+    <div class="community-publish-layout">
+    <form class="community-composer" id="communityComposer" novalidate>
+      <label class="community-field"><span>标题</span><input id="communityComposerTitle" maxlength="80" required placeholder="给这次观察起个标题" value="${escapeCommunityText(draft.title)}" /></label>
+      <label class="community-field"><span>地点</span><input id="communityComposerLocation" maxlength="80" placeholder="例如：杭州 · 西湖公园" value="${escapeCommunityText(draft.location)}" /></label>
+      <label class="community-field community-field-wide"><span>正文</span><textarea id="communityComposerBody" maxlength="600" required placeholder="写下鸟种、天气、环境，或当时让你记住的细节。">${escapeCommunityText(draft.body)}</textarea></label>
+      <label class="community-media-picker" for="communityMedia"><input id="communityMedia" type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" /><span class="community-media-picker-icon">+</span><strong>添加图片或视频</strong><small>图片、MP4 或 WebM，最大 8MB</small></label>
+      <div class="community-media-preview" id="communityMediaPreview" hidden></div>
+      <p class="community-composer-message" id="communityComposerMessage" aria-live="polite"></p>
+      <div class="community-composer-actions"><button class="secondary-btn" type="button" data-community-save-draft>存草稿</button><button class="primary-btn" type="submit">发布笔记</button></div>
+    </form>
+    <aside class="community-publish-aside" aria-label="其他观鸟者的笔记">
+      <div class="community-publish-aside-head"><div><p>正在分享</p><h2>他人的观察</h2></div><a href="./community.html?view=recommended">更多</a></div>
+      <div class="community-mini-note-list">${previewPosts.map(renderCommunityNoteCard).join("")}</div>
+    </aside>
+    </div>
+  `;
+}
+
+function renderCommunityMessagesView() {
+  const messages = [
+    ["点赞", "溪流守望赞了你的《清晨遇见白鹭》", "刚刚"],
+    ["关注", "林间观察开始关注你", "今天 09:12"],
+    ["评论", "晨光步道评论：这个位置光线真好", "昨天"],
+    ["系统", "你的发布已同步到社区推荐流", "7 月 8 日"],
+  ];
+  return `
+    <header class="community-view-heading"><p>消息</p><h1>最近互动</h1><span>与观鸟伙伴保持联系。</span></header>
+    <div class="community-message-list">${messages.map(([type, text, time]) => `<article class="community-message"><span class="community-message-type">${type}</span><p>${text}</p><time>${time}</time></article>`).join("")}</div>
+  `;
+}
+
+function renderCommunityPersonalView() {
+  const name = currentUser?.nickname || "访客";
+  const ownPosts = communityWorkspacePosts.filter((post) => post.canManage);
+  return `
+    <header class="community-view-heading"><p>个人</p><h1>${escapeCommunityText(name)}的观鸟页</h1><span>${currentUser ? "管理你的公开笔记和互动。" : "登录后可管理你的笔记和互动。"}</span></header>
+    <section class="community-person-card"><strong>${ownPosts.length}</strong><span>已发布笔记</span><a class="secondary-btn link-btn" href="${escapeCommunityText(currentUser ? "./community.html?view=publish" : getLoginUrl())}">${currentUser ? "写一条笔记" : "登录"}</a></section>
+    <div class="community-note-grid">${ownPosts.length ? ownPosts.map(renderCommunityNoteCard).join("") : `<div class="community-empty-state"><h2>还没有公开笔记</h2><p>从一次观察开始，留下你的观鸟记录。</p></div>`}</div>
+  `;
+}
+
+function renderCommunityWorkspace() {
+  const panel = document.querySelector("[data-community-view-panel]");
+  if (!panel) return;
+  const view = getCommunityWorkspaceView();
+  document.body.dataset.communityView = view;
+  document.querySelectorAll("[data-community-view-link]").forEach((link) => {
+    const active = link.dataset.communityViewLink === view;
+    link.classList.toggle("is-active", active);
+    link.setAttribute("aria-current", active ? "page" : "false");
+  });
+  panel.innerHTML = view === "recommended" || view === "following"
+    ? renderCommunityFeedView(view)
+    : view === "publish" ? renderCommunityPublishView()
+    : renderCommunityMessagesView();
+  bindCommunityWorkspaceView();
+}
+
+function renderCommunityMediaPreview(file) {
+  const preview = document.querySelector("#communityMediaPreview");
+  if (!preview) return;
+  if (communityWorkspaceMediaUrl) URL.revokeObjectURL(communityWorkspaceMediaUrl);
+  communityWorkspaceMediaUrl = file ? URL.createObjectURL(file) : "";
+  if (!file) {
+    preview.hidden = true;
+    preview.innerHTML = "";
+    return;
+  }
+  const isVideo = file.type.startsWith("video/");
+  preview.hidden = false;
+  preview.innerHTML = `${isVideo ? `<video controls src="${communityWorkspaceMediaUrl}"></video>` : `<img src="${communityWorkspaceMediaUrl}" alt="待发布图片" />`}<span>${escapeCommunityText(file.name)}</span>`;
+}
+
+function readCommunityMedia(file) {
+  if (!file) return Promise.resolve(null);
+  if (file.size > COMMUNITY_MEDIA_MAX_BYTES) return Promise.reject(new Error("图片或视频请控制在 8MB 以内。"));
+  const allowed = new Set(["image/jpeg", "image/png", "image/webp", "video/mp4", "video/webm"]);
+  if (!allowed.has(file.type)) return Promise.reject(new Error("请选择 JPG、PNG、WebP、MP4 或 WebM 文件。"));
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(
+      file.type.startsWith("video/")
+        ? { videoDataUrl: String(reader.result || ""), videoName: file.name }
+        : { imageDataUrl: String(reader.result || ""), imageName: file.name }
+    );
+    reader.onerror = () => reject(new Error("媒体文件读取失败，请重新选择。"));
+    reader.readAsDataURL(file);
+  });
+}
+
+function saveCommunityDraft() {
+  const title = document.querySelector("#communityComposerTitle")?.value.trim() || "";
+  const location = document.querySelector("#communityComposerLocation")?.value.trim() || "";
+  const body = document.querySelector("#communityComposerBody")?.value.trim() || "";
+  try {
+    window.localStorage.setItem(COMMUNITY_DRAFT_KEY, JSON.stringify({ title, location, body }));
+    const message = document.querySelector("#communityComposerMessage");
+    if (message) message.textContent = "草稿已保存在当前浏览器。媒体文件请在发布前重新选择。";
+  } catch {
+    const message = document.querySelector("#communityComposerMessage");
+    if (message) message.textContent = "草稿保存失败，请检查浏览器存储权限。";
+  }
+}
+
+function bindCommunityWorkspaceView() {
+  const mediaInput = document.querySelector("#communityMedia");
+  mediaInput?.addEventListener("change", () => renderCommunityMediaPreview(mediaInput.files?.[0] || null));
+  document.querySelector("[data-community-save-draft]")?.addEventListener("click", saveCommunityDraft);
+  document.querySelector("#communityComposer")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!currentUser) {
+      window.location.assign(getLoginUrl());
+      return;
+    }
+    const title = document.querySelector("#communityComposerTitle").value.trim();
+    const location = document.querySelector("#communityComposerLocation").value.trim();
+    const body = document.querySelector("#communityComposerBody").value.trim();
+    const message = document.querySelector("#communityComposerMessage");
+    const submit = event.currentTarget.querySelector('[type="submit"]');
+    if (!title || !body) {
+      message.textContent = !title ? "请填写标题。" : "请写下正文内容。";
+      return;
+    }
+    submit.disabled = true;
+    message.textContent = "正在发布...";
+    try {
+      const media = await readCommunityMedia(mediaInput?.files?.[0]);
+      const newPost = await communityApi.create({ title, body: location ? `${body}\n地点：${location}` : body, bird: "观鸟笔记", ...(media || {}) });
+      communityWorkspacePosts.unshift(newPost);
+      window.localStorage.removeItem(COMMUNITY_DRAFT_KEY);
+      window.history.replaceState({}, "", "./community.html?view=personal");
+      renderCommunityWorkspace();
+    } catch (error) {
+      message.textContent = getCommunityMutationMessage(error, "发布失败，请稍后重试。");
+    } finally {
+      submit.disabled = false;
+    }
+  });
+  document.querySelectorAll("[data-workspace-like]").forEach((button) => {
+    button.addEventListener("click", () => {
+      button.classList.toggle("is-liked");
+      const current = Number(button.textContent.replace(/\D/g, "")) || 0;
+      button.textContent = `赞 ${current + (button.classList.contains("is-liked") ? 1 : -1)}`;
+    });
+  });
+}
+
+function initCommunityWorkspace() {
+  if (page !== "community" || !document.querySelector("[data-community-workspace]")) return;
+  renderCommunityWorkspace();
+  communityApi.list({ limit: 30 }).then((result) => {
+    communityWorkspacePosts = result.posts || [];
+    renderCommunityWorkspace();
+  }).catch(() => {
+    renderCommunityWorkspace();
+  });
+  window.addEventListener("popstate", renderCommunityWorkspace);
+}
+
+initCommunityWorkspace();
+
+let profileAvatarDataUrl = "";
+
+function setProfileCenterMessage(selector, text = "") {
+  const target = document.querySelector(selector);
+  if (target) target.textContent = text;
+}
+
+function renderProfileCenter() {
+  if (page !== "profile") return;
+  const signedIn = Boolean(currentUser);
+  const loginState = document.querySelector("[data-profile-login-state]");
+  const settings = document.querySelector("[data-profile-settings]");
+  if (loginState) loginState.hidden = signedIn;
+  if (settings) settings.hidden = !signedIn;
+  const name = currentUser?.nickname || "我的观鸟档案";
+  const email = currentUser?.email || "登录后可编辑个人资料。";
+  const avatar = currentUser?.avatarUrl || profileAvatarDataUrl;
+  document.querySelectorAll("[data-profile-center-name]").forEach((node) => { node.textContent = name; });
+  document.querySelectorAll("[data-profile-center-email]").forEach((node) => { node.textContent = email; });
+  document.querySelectorAll("[data-profile-avatar], [data-profile-avatar-preview]").forEach((node) => {
+    node.textContent = avatar ? "" : name.slice(0, 1).toUpperCase();
+    node.style.backgroundImage = avatar ? `url("${avatar}")` : "";
+    node.classList.toggle("has-image", Boolean(avatar));
+  });
+  if (!signedIn) return;
+  const nickname = document.querySelector("#profileNicknameInput");
+  const bio = document.querySelector("#profileBioInput");
+  const gender = document.querySelector("#profileGenderInput");
+  const age = document.querySelector("#profileAgeInput");
+  const publicProfile = document.querySelector("#profilePublicInput");
+  const emailNotifications = document.querySelector("#profileEmailInput");
+  if (nickname) nickname.value = currentUser.nickname || "";
+  if (bio) bio.value = currentUser.bio || "";
+  if (gender) gender.value = currentUser.gender || "";
+  if (age) age.value = currentUser.age || "";
+  if (publicProfile) publicProfile.checked = currentUser.publicProfile !== false;
+  if (emailNotifications) emailNotifications.checked = currentUser.emailNotifications !== false;
+}
+
+function readProfileAvatar(file) {
+  if (!file) return Promise.resolve("");
+  if (!new Set(["image/jpeg", "image/png", "image/webp"]).has(file.type) || file.size > 600 * 1024) {
+    return Promise.reject(new Error("头像请使用不超过 600KB 的 JPG、PNG 或 WebP 图片。"));
+  }
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("头像读取失败，请重新选择。"));
+    reader.readAsDataURL(file);
+  });
+}
+
+function getProfilePayload() {
+  return {
+    nickname: document.querySelector("#profileNicknameInput")?.value.trim() || "",
+    bio: document.querySelector("#profileBioInput")?.value.trim() || "",
+    gender: document.querySelector("#profileGenderInput")?.value || "",
+    age: document.querySelector("#profileAgeInput")?.value || "",
+    avatarUrl: profileAvatarDataUrl || currentUser?.avatarUrl || "",
+    publicProfile: Boolean(document.querySelector("#profilePublicInput")?.checked),
+    emailNotifications: Boolean(document.querySelector("#profileEmailInput")?.checked),
+  };
+}
+
+async function saveProfileCenter(messageSelector) {
+  if (!currentUser) return;
+  const data = await authRequest("/api/auth/profile", { method: "PATCH", body: getProfilePayload() });
+  rememberAuthUser(data.user);
+  profileAvatarDataUrl = "";
+  renderProfileCenter();
+  setProfileCenterMessage(messageSelector, "已保存。");
+}
+
+function initProfileCenter() {
+  if (page !== "profile" || !document.querySelector("[data-profile-center]")) return;
+  renderProfileCenter();
+  syncAuthState().then(renderProfileCenter).catch(renderProfileCenter);
+  const avatarInput = document.querySelector("#profileAvatarInput");
+  avatarInput?.addEventListener("change", async () => {
+    try {
+      profileAvatarDataUrl = await readProfileAvatar(avatarInput.files?.[0]);
+      renderProfileCenter();
+      setProfileCenterMessage("[data-profile-message]", "头像已选好，点击保存资料后生效。");
+    } catch (error) {
+      avatarInput.value = "";
+      setProfileCenterMessage("[data-profile-message]", error.message);
+    }
+  });
+  document.querySelector("#profileSettingsForm")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    try {
+      await saveProfileCenter("[data-profile-message]");
+    } catch (error) {
+      setProfileCenterMessage("[data-profile-message]", translateAuthMessage(error.message, "资料保存失败，请稍后重试。"));
+    }
+  });
+  document.querySelector("[data-profile-save-preferences]")?.addEventListener("click", async () => {
+    try {
+      await saveProfileCenter("[data-profile-preference-message]");
+    } catch (error) {
+      setProfileCenterMessage("[data-profile-preference-message]", translateAuthMessage(error.message, "设置保存失败，请稍后重试。"));
+    }
+  });
+  document.querySelector("[data-profile-delete]")?.addEventListener("click", async () => {
+    const password = document.querySelector("#profileDeletePassword")?.value || "";
+    const confirmation = document.querySelector("#profileDeleteConfirmation")?.value || "";
+    if (!password || confirmation !== "注销我的账号") {
+      setProfileCenterMessage("[data-profile-delete-message]", "请输入当前密码，并准确输入“注销我的账号”。");
+      return;
+    }
+    try {
+      await authRequest("/api/auth/account", { method: "DELETE", body: { password, confirmation } });
+      clearAuthState();
+      window.location.replace("./index.html#home");
+    } catch (error) {
+      setProfileCenterMessage("[data-profile-delete-message]", translateAuthMessage(error.message, "注销失败，请稍后重试。"));
+    }
+  });
+}
+
+initProfileCenter();

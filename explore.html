@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>识别与检索 - Birdora</title>
+    <link rel="icon" type="image/svg+xml" sizes="any" href="./assets/favicon.svg" />
+    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./community-post-card.css" />
+    <link rel="stylesheet" href="./design-system.css" />
+</head>
+
+<body data-page="explore">
+    <header class="topbar glass-topbar">
+        <a class="brand" href="./index.html#home" aria-label="Birdora 首页">
+            <span class="brand-mark">●</span>
+            <span>Birdora</span>
+            <span class="brand-user" data-user-name hidden></span>
+        </a>
+        <nav class="nav" aria-label="主导航">
+            <a href="./index.html#home">首页</a>
+            <a href="./explore.html" aria-current="page">识别</a>
+            <a href="./community.html">社区</a>
+            <a href="./device.html">设备</a>
+            <a href="./profile.html">个人</a>
+        </nav>
+        <div class="topbar-actions">
+            <a class="ghost-btn link-btn" href="./register.html" data-register-link>注册</a>
+            <a class="ghost-btn link-btn" href="./login.html" data-login-link>登录</a>
+        </div>
+    </header>
+
+    <main class="app-page-v2 explore-page">
+        <section class="split-section feature-page feature-identify explore-identify-section" id="identify">
+            <div class="section-head section-head-with-actions">
+                <div>
+                    <p class="eyebrow">AI 识别</p>
+                    <h2>上传鸟照，生成识别卡片</h2>
+                    <p>选择照片后，浏览器会加载 OSEA 鸟类模型，从标签库返回 Top 5 候选，并优先匹配本地图鉴资料。</p>
+                </div>
+                <div class="feature-page-nav section-head-actions">
+                    <a class="secondary-btn link-btn" href="./index.html#home">返回首页</a>
+                    <a class="primary-btn link-btn" href="./community.html?view=publish">下一步：发布笔记</a>
+                </div>
+            </div>
+            <div class="identify-grid">
+                <label class="upload-zone" for="birdUpload">
+                    <input id="birdUpload" type="file" accept="image/*" />
+                    <span class="upload-icon">+</span>
+                    <strong>选择鸟类照片</strong>
+                    <small>支持手机相册或 Birdora Glasses 同步照片</small>
+                    <img id="previewImage" alt="" />
+                </label>
+                <article class="result-card" id="resultCard">
+                    <span id="confidenceText" hidden></span>
+                    <div>
+                        <p class="eyebrow">识别结果</p>
+                        <h3 id="resultName">等待上传</h3>
+                        <p id="resultMeta">上传照片后显示模型判断。</p>
+                    </div>
+                    <dl>
+                        <div>
+                            <dt>特征</dt>
+                            <dd id="resultFeature">请先上传一张清晰鸟照。</dd>
+                        </div>
+                        <div>
+                            <dt>模型判断</dt>
+                            <dd id="modelDetail">首次使用需要联网加载模型，之后即可识别。</dd>
+                        </div>
+                        <div class="candidate-panel">
+                            <dt>Top 候选</dt>
+                            <dd>
+                                <ol class="candidate-list" id="candidateList">
+                                    <li class="candidate-empty">上传照片后显示 Top 5 候选。</li>
+                                </ol>
+                            </dd>
+                        </div>
+                        <div>
+                            <dt>建议</dt>
+                            <dd>记录地点、保持距离，不干扰鸟类栖息。</dd>
+                        </div>
+                    </dl>
+                    <p class="form-message observation-message" id="observationMessage" aria-live="polite" role="status"></p>
+                    <div class="recognition-actions">
+                        <button class="secondary-btn full" id="saveObservation" type="button">确认并保存观测记录</button>
+                        <button class="primary-btn full" id="shareDetected" type="button">发布到社区</button>
+                    </div>
+                </article>
+            </div>
+        </section>
+
+        <section class="atlas-section feature-page feature-atlas" id="atlas">
+            <div class="section-head compact">
+                <p class="eyebrow">检索鸟种</p>
+                <h2>搜索鸟种、习性与观察线索</h2>
+                <p>输入中文名、英文名或拉丁名后，上方详情卡会显示匹配结果；未搜索时只保留下方滚动图例。</p>
+            </div>
+            <div class="search-row">
+                <input id="birdSearch" type="search" aria-label="搜索鸟种" placeholder="搜索中文名、英文名或拉丁名，例如：翠鸟、Kingfisher、Alcedo..." />
+            </div>
+            <p class="atlas-summary" id="atlasSummary">正在准备 OSEA 鸟类标签索引...</p>
+            <article class="atlas-detail" id="atlasDetail" aria-live="polite" hidden></article>
+            <div class="bird-grid" id="birdGrid"></div>
+        </section>
+
+        <section class="beginner-guide" aria-labelledby="beginnerGuideTitle">
+            <p class="eyebrow">新手观鸟提示</p>
+            <h2 id="beginnerGuideTitle">第一次出门观鸟，可以这样开始</h2>
+            <p>观鸟最重要的不是马上拍到稀有鸟，而是学会安静、耐心和尊重。出门前确认天气、路线和返程时间，带上水、帽子、纸巾、充好电的手机或相机。</p>
+            <p>看到鸟以后不要急着靠近。先观察它停在哪里、体型大概多大、嘴和尾巴是否明显、翅膀和腹部有没有特殊颜色。记录地点、行为和声音，比只写“看到一只小鸟”更有价值。</p>
+            <p>检索鸟种时不要只看一张图就下结论。可以把 Birdora 的识别候选当作线索，再用图鉴详情核对体型、栖息地和行为。若结果不确定，就在笔记里写“疑似”并说明原因。</p>
+        </section>
+    </main>
+
+    <footer>
+        <span>Birdora 观鸟眼镜网站原型</span>
+        <span>上传 · 识别 · 图鉴 · 新手提示</span>
+    </footer>
+
+    <script src="./assets/vendor/ort.min.js"></script>
+    <script src="./community-api.js"></script>
+    <script src="./observation-api.js"></script>
+    <script src="./community-post-card.js"></script>
+    <script src="./script.js"></script>
+</body>
+
+</html>

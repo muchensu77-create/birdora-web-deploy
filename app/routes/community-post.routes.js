@@ -32,6 +32,7 @@ router.post(
   asyncHandler(communityPostController.create)
 );
 router.get("/:id/image", asyncHandler(communityPostController.image));
+router.get("/:id/video", asyncHandler(communityPostController.video));
 router.get(
   "/:id/comments",
   asyncHandler(authJwt.attachSession),

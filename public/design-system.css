@@ -1,0 +1,1113 @@
+/* Global typography and content bounds. Loaded last on every page. */
+:root {
+  --page-gutter: clamp(20px, 6vw, 96px);
+  --page-width: calc(100% - (var(--page-gutter) * 2));
+  --type-title-size: clamp(40px, 3.62vw, 52px);
+  --type-medium-size: clamp(26px, 2.3vw, 33px);
+  --type-text-size: 17px;
+  --type-title-color: #123b2f;
+  --type-medium-color: #183b30;
+  --type-text-color: #66746f;
+  --type-font: "Avenir Next", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --space-section: clamp(56px, 6vw, 86px);
+  --space-card: clamp(24px, 3vw, 40px);
+}
+
+html,
+body {
+  overflow-x: clip;
+}
+
+body {
+  font-family: var(--type-font);
+  font-size: var(--type-text-size);
+  line-height: 1.9;
+}
+
+/* Reset legacy one-off sizes before assigning the three canonical levels. */
+body :where(p, a, button, input, textarea, select, label, li, small, time, summary, dt, dd, figcaption, h2, h3, h4, strong),
+body span:not(h1 span):not(h2 span):not(.brand-mark):not(.upload-icon):not(.community-media-picker-icon):not(.profile-avatar-choice > span) {
+  font-size: var(--type-text-size) !important;
+}
+
+/* Page-level titles follow the Explore atlas heading exactly. */
+h1,
+.hero-copy h1,
+.section-head h1,
+.section-head h2,
+.page-hero h1,
+.community-view-heading h1,
+.profile-center-hero h1,
+.auth-intro h1,
+.doc-card > h1,
+.beginner-guide > h2,
+.learning-roadmap .roadmap-intro h2 {
+  margin-top: 0 !important;
+  color: var(--type-title-color) !important;
+  font-family: var(--type-font) !important;
+  font-size: var(--type-title-size) !important;
+  font-weight: 800 !important;
+  line-height: 1.08 !important;
+  letter-spacing: 0 !important;
+}
+
+/* Panel and card headings follow the connected-device heading. */
+.device-title,
+.auth-card h2,
+.result-card h3,
+.atlas-detail h3,
+.device-action-grid h2,
+.device-timeline h2,
+.profile-login-state h2,
+.profile-panel-heading h2,
+.post-detail-head h2,
+.community-empty-state h2,
+.learning-roadmap .road-step-card > strong,
+.learning-roadmap .road-index,
+.brand > span:not(.brand-mark):not(.brand-user),
+.live-card > strong,
+.device-stat-card > strong,
+.community-person-card > strong,
+.confidence-ring > span {
+  color: var(--type-medium-color) !important;
+  font-family: var(--type-font) !important;
+  font-size: var(--type-medium-size) !important;
+  font-weight: 800 !important;
+  line-height: 1.25 !important;
+  letter-spacing: 0 !important;
+}
+
+#homeObservationDate {
+  color: #fff !important;
+}
+
+.community-publish-aside h2,
+.community-mini-note-list .community-note-info h2 {
+  color: var(--type-text-color) !important;
+  font-family: var(--type-font) !important;
+  font-size: var(--type-text-size) !important;
+  font-weight: 400 !important;
+  line-height: 1.5 !important;
+  letter-spacing: 0 !important;
+}
+
+/* Body copy uses the home introduction as the single baseline. */
+p,
+li,
+label,
+input,
+textarea,
+select,
+button,
+.link-btn,
+.nav a,
+.community-rail-link,
+.community-view-heading > span,
+.road-description,
+.road-entry,
+.device-sync-status,
+.device-stat-card,
+.profile-center-hero span {
+  font-family: var(--type-font);
+  font-size: var(--type-text-size);
+  letter-spacing: 0;
+}
+
+p,
+li,
+.community-view-heading > span,
+.road-description,
+.device-sync-status,
+.profile-center-hero span {
+  color: var(--type-text-color);
+  line-height: 1.9;
+}
+
+.eyebrow,
+small,
+.community-note-meta,
+.road-label {
+  font-family: var(--type-font);
+  font-size: var(--type-text-size) !important;
+  letter-spacing: 0 !important;
+  line-height: 1.5;
+}
+
+/* Dark photographic surfaces keep the same type metrics with readable color. */
+.hero .hero-copy h1,
+.hero .hero-copy h1 span {
+  color: #fff !important;
+}
+
+.hero .hero-copy p,
+.hero .hero-copy .eyebrow,
+.live-card,
+.live-card span,
+.live-card small {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+/* Every working surface shares the roadmap card's left and right boundary. */
+.glass-topbar,
+.app-page-v2,
+.community-workspace,
+.profile-center,
+.device-section,
+footer {
+  width: var(--page-width) !important;
+  max-width: none !important;
+  margin-right: auto !important;
+  margin-left: auto !important;
+}
+
+.auth-page,
+.doc-page {
+  padding-right: var(--page-gutter) !important;
+  padding-left: var(--page-gutter) !important;
+}
+
+.hero {
+  margin-right: 0 !important;
+  margin-left: 0 !important;
+  padding-right: var(--page-gutter) !important;
+  padding-left: var(--page-gutter) !important;
+}
+
+.learning-roadmap {
+  padding-right: var(--page-gutter) !important;
+  padding-left: var(--page-gutter) !important;
+}
+
+.learning-roadmap .roadmap-content {
+  width: 100% !important;
+  max-width: none !important;
+}
+
+.app-page-v2 > .split-section,
+.app-page-v2 > .atlas-section,
+.device-section {
+  padding-right: 0 !important;
+  padding-left: 0 !important;
+}
+
+.community-publish-layout {
+  grid-template-columns: minmax(0, 760px) minmax(230px, 280px);
+  justify-content: center;
+  width: min(1120px, 100%);
+  margin-right: auto;
+  margin-left: auto;
+}
+
+body[data-community-view="publish"] .community-workspace {
+  margin-top: 24px;
+}
+
+body[data-community-view="publish"] .community-rail {
+  margin-bottom: 20px;
+}
+
+body[data-community-view="publish"] .community-view-heading {
+  margin-bottom: 16px;
+}
+
+@media (min-width: 921px) and (min-height: 700px) {
+  #identify {
+    padding-top: clamp(24px, 3.2vh, 34px);
+    padding-bottom: clamp(24px, 3.2vh, 34px);
+  }
+
+  #identify .section-head {
+    margin-bottom: clamp(14px, 2vh, 20px);
+  }
+
+  #identify .section-head .eyebrow {
+    margin-bottom: 10px;
+  }
+
+  #identify .section-head h2 {
+    margin-bottom: 12px !important;
+  }
+
+  #identify .section-head p:not(.eyebrow) {
+    line-height: 1.6;
+  }
+
+  #identify .identify-grid {
+    gap: 24px;
+  }
+
+  #identify .upload-zone,
+  #identify .result-card {
+    height: clamp(420px, calc(100svh - 270px), 560px);
+    min-height: 0;
+    max-height: 560px;
+  }
+
+  #identify .upload-zone {
+    padding: 24px;
+  }
+
+  #identify .result-card {
+    grid-template-columns: 72px minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
+    gap: 8px;
+    padding: 22px 26px;
+    overflow: hidden;
+  }
+
+  #identify .confidence-ring {
+    width: 72px;
+    height: 72px;
+  }
+
+  #identify .result-card dl {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-content: start;
+    gap: 6px;
+    overflow: hidden;
+  }
+
+  #identify .result-card dl > div {
+    padding: 9px 13px;
+  }
+
+  #identify .result-card .candidate-panel {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  #identify .result-card dl > div:last-child {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  #identify .candidate-list {
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    gap: 4px;
+  }
+
+  #identify .candidate-list li {
+    min-width: 0;
+    padding: 3px 8px;
+    border-top: 0;
+    border-left: 1px solid rgba(73, 112, 92, 0.09);
+  }
+
+  #identify .candidate-list li:first-child {
+    padding-top: 3px;
+    border-left: 0;
+  }
+
+  #identify .candidate-empty {
+    grid-column: 1 / -1;
+  }
+
+  #identify .candidate-row,
+  #identify .candidate-open {
+    grid-template-columns: 1fr;
+    align-content: start;
+    gap: 3px;
+  }
+
+  #identify .candidate-open > span:last-child {
+    display: flex;
+    gap: 6px;
+    min-width: 0;
+    text-align: left;
+  }
+
+  #identify .candidate-list small,
+  #identify .candidate-list em {
+    display: none;
+  }
+
+  #identify .candidate-atlas {
+    justify-self: start;
+  }
+
+  #identify #modelDetail {
+    -webkit-line-clamp: 2;
+  }
+
+  #identify .observation-message,
+  #identify .recognition-actions {
+    grid-column: 1 / -1;
+  }
+
+  #identify .recognition-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 920px) {
+  .community-publish-layout {
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+}
+
+/* Normalize repeated vertical spacing without changing component structure. */
+.app-page-v2 > section,
+.profile-center > section,
+.profile-center > div,
+.community-workspace > section {
+  margin-right: 0;
+  margin-left: 0;
+}
+
+.app-page-v2 > section + section {
+  margin-top: var(--space-section);
+}
+
+.section-head > h1,
+.section-head > h2,
+.page-hero > h1,
+.community-view-heading > h1,
+.profile-center-hero h1,
+.auth-intro h1,
+.doc-card > h1 {
+  margin-bottom: 20px !important;
+}
+
+.section-head > p:not(.eyebrow),
+.page-hero > p:not(.eyebrow),
+.community-view-heading > span {
+  max-width: 760px;
+  margin-top: 0;
+}
+
+@media (max-width: 900px) {
+  :root {
+    --page-gutter: 20px;
+    --type-title-size: 34px;
+    --type-medium-size: 26px;
+    --space-section: 48px;
+  }
+
+  .glass-topbar {
+    width: calc(100% - 24px) !important;
+  }
+
+  .hero {
+    padding-right: var(--page-gutter) !important;
+    padding-left: var(--page-gutter) !important;
+  }
+}
+
+@media (max-width: 420px) {
+  :root {
+    --type-title-size: 32px;
+    --type-medium-size: 24px;
+    --type-text-size: 16px;
+  }
+}
+
+/* Compact atlas carousel: title, search, and the carousel bottom fit one viewport. */
+#atlas {
+  padding-top: clamp(26px, 3.5vh, 38px);
+  padding-bottom: clamp(26px, 3.5vh, 38px);
+}
+
+#atlas .section-head {
+  margin-bottom: 14px;
+}
+
+#atlas .section-head > .eyebrow {
+  margin-bottom: 10px;
+}
+
+#atlas .section-head > h2 {
+  margin-bottom: 12px !important;
+}
+
+#atlas .section-head > p:not(.eyebrow) {
+  line-height: 1.55;
+}
+
+#atlas .search-row {
+  margin-bottom: 14px;
+}
+
+#atlas .search-row input {
+  padding: 12px 16px;
+}
+
+#atlas .atlas-summary {
+  margin: 0 0 10px;
+  line-height: 1.45;
+}
+
+#atlas .bird-grid.is-marquee {
+  min-height: 0;
+  padding-top: 2px;
+  padding-bottom: 6px;
+}
+
+#atlas .bird-grid.is-marquee .bird-card {
+  display: flex;
+  flex-direction: column;
+  width: 340px;
+  min-height: 510px;
+  flex-basis: 340px;
+  border-radius: 18px;
+}
+
+#atlas .bird-grid.is-marquee .bird-photo {
+  flex: 0 0 130px;
+  height: 130px;
+}
+
+#atlas .bird-grid.is-marquee .bird-card > div:last-child {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  padding: 12px 14px 14px;
+}
+
+#atlas .bird-grid.is-marquee .bird-card h3 {
+  margin-bottom: 4px;
+}
+
+#atlas .bird-grid.is-marquee .bird-card > div > p {
+  margin: 0 0 5px;
+  line-height: 1.4;
+}
+
+#atlas .bird-grid.is-marquee .bird-card > div > p:first-of-type {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+#atlas .bird-grid.is-marquee .bird-card > div > p:nth-of-type(2),
+#atlas .bird-grid.is-marquee .bird-clue {
+  display: block;
+  overflow: visible;
+  -webkit-line-clamp: unset;
+}
+
+#atlas .bird-grid.is-marquee .bird-clue {
+  padding: 6px 8px;
+  border-radius: 8px;
+}
+
+#atlas .bird-grid.is-marquee .tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 6px;
+}
+
+#atlas .bird-grid.is-marquee .tag-row span {
+  padding: 4px 7px;
+}
+
+#atlas .bird-grid.is-marquee .atlas-card-actions {
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 6px;
+}
+
+#atlas .bird-grid.is-marquee .source-link,
+#atlas .bird-grid.is-marquee .atlas-open {
+  min-height: 32px;
+  margin-top: 0;
+}
+
+.beginner-guide {
+  border-radius: 24px;
+  transform: none !important;
+  transition: none !important;
+  animation: none !important;
+}
+
+.beginner-guide:hover,
+.beginner-guide:focus-within {
+  transform: none !important;
+  box-shadow: 0 18px 56px rgba(17, 47, 36, 0.09) !important;
+}
+
+/* Denser device console with more information per row. */
+.device-page {
+  gap: 16px !important;
+  padding-bottom: 52px;
+}
+
+.device-page > section + section {
+  margin-top: 0 !important;
+}
+
+.device-page > .page-hero {
+  padding-top: 34px;
+  padding-bottom: 16px;
+}
+
+.device-dashboard {
+  gap: 14px;
+}
+
+.device-manager-panel,
+.device-visual-panel,
+.device-action-grid > article,
+.device-timeline,
+.device-metric-grid > .device-stat-card {
+  border-radius: 16px;
+}
+
+.device-manager-panel {
+  gap: 10px;
+  padding: 22px 24px;
+}
+
+.device-visual-panel {
+  gap: 10px;
+  min-height: 0;
+  padding: 16px 22px;
+}
+
+.device-visual-panel .device-glasses {
+  width: min(360px, 82%);
+  max-height: 138px;
+}
+
+.device-metric-grid,
+.device-action-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.device-metric-grid > .device-stat-card {
+  gap: 5px;
+  padding: 16px 18px;
+}
+
+.device-action-grid > article {
+  padding: 17px 18px;
+}
+
+.device-action-grid h2 {
+  margin: 5px 0 7px;
+  color: var(--type-medium-color) !important;
+  font-size: var(--type-text-size) !important;
+  line-height: 1.4 !important;
+}
+
+.device-action-grid p {
+  margin-top: 0;
+  line-height: 1.55;
+}
+
+.device-timeline {
+  padding: 20px 22px;
+}
+
+.device-timeline .section-head {
+  align-items: center;
+}
+
+.device-timeline ol {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.device-timeline li {
+  grid-template-columns: 1fr;
+  gap: 4px;
+  padding: 11px 12px;
+  border: 1px solid rgba(73, 112, 92, 0.1);
+  border-radius: 10px;
+  background: rgba(246, 251, 248, 0.72);
+}
+
+@media (max-width: 1100px) {
+  .device-metric-grid,
+  .device-action-grid,
+  .device-timeline ol {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  #atlas .bird-grid.is-marquee .bird-card {
+    width: min(290px, calc(100vw - 64px));
+    min-height: 465px;
+    flex-basis: min(290px, calc(100vw - 64px));
+  }
+
+  #atlas .bird-grid.is-marquee .bird-photo {
+    flex-basis: 150px;
+    height: 150px;
+  }
+
+  .device-metric-grid,
+  .device-action-grid,
+  .device-timeline ol {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Final geometry pass: one card radius and content aligned to the shared gutters. */
+:root {
+  --unified-radius: 22px;
+  --radius-xl: var(--unified-radius);
+  --radius-lg: var(--unified-radius);
+  --radius-md: var(--unified-radius);
+  --radius-sm: var(--unified-radius);
+}
+
+body :where(
+  article,
+  dialog,
+  form,
+  button,
+  input,
+  textarea,
+  select,
+  footer,
+  .topbar,
+  .hero,
+  .live-card,
+  .road-step-card,
+  .device-section,
+  .device-panel,
+  .glasses-card,
+  .device-stat-card,
+  .community-rail,
+  .community-publish-aside,
+  .community-message,
+  .profile-center-hero,
+  .profile-login-state,
+  .profile-settings-panel,
+  .auth-intro,
+  .auth-card,
+  .doc-card,
+  .upload-zone,
+  .result-card,
+  .atlas-detail,
+  .beginner-guide,
+  .tag-row span,
+  .road-label
+) {
+  border-radius: var(--unified-radius) !important;
+}
+
+.brand-mark,
+.profile-avatar,
+.profile-avatar-choice > span {
+  border-radius: 50% !important;
+}
+
+body[data-page="home"] .hero {
+  width: var(--page-width) !important;
+  margin-right: auto !important;
+  margin-left: auto !important;
+  padding-right: clamp(28px, 4vw, 64px) !important;
+  padding-left: clamp(28px, 4vw, 64px) !important;
+  border-radius: 40px !important;
+  overflow: hidden;
+}
+
+.device-standalone-page {
+  width: 100%;
+  min-height: calc(100svh - 120px);
+  padding: clamp(48px, 7vw, 96px) 0 80px;
+}
+
+.device-standalone-page .device-section {
+  width: var(--page-width) !important;
+  margin: 0 auto !important;
+}
+
+/* Device page: preserve the compact feature set while giving every label breathing room. */
+body[data-page="device"] .device-section-v2 {
+  grid-template-columns: minmax(0, 1.08fr) minmax(360px, 0.92fr);
+  gap: clamp(18px, 2vw, 30px);
+  align-items: stretch;
+  padding: clamp(20px, 2.4vw, 34px) !important;
+  border: 1px solid rgba(29, 105, 57, 0.2);
+  background: rgba(247, 252, 248, 0.7);
+  box-shadow: 0 28px 70px rgba(18, 77, 42, 0.09);
+}
+
+body[data-page="device"] .device-panel,
+body[data-page="device"] .glasses-card {
+  min-width: 0;
+  padding: clamp(28px, 3.2vw, 48px) !important;
+  border: 1px solid rgba(29, 105, 57, 0.2) !important;
+  background: rgba(255, 255, 255, 0.86) !important;
+}
+
+body[data-page="device"] .device-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+body[data-page="device"] .device-panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  margin-bottom: 18px;
+}
+
+body[data-page="device"] .device-panel-heading .eyebrow,
+body[data-page="device"] .device-visual-heading .eyebrow {
+  margin: 0;
+}
+
+body[data-page="device"] .device-panel-badge {
+  padding: 8px 12px;
+  border: 1px solid rgba(29, 105, 57, 0.16);
+  border-radius: var(--unified-radius);
+  color: var(--green-deep);
+  background: rgba(225, 241, 229, 0.78);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+body[data-page="device"] .device-title {
+  max-width: 680px;
+  margin: 0 0 16px;
+}
+
+body[data-page="device"] .device-description {
+  max-width: 650px;
+  margin: 0 0 26px;
+}
+
+body[data-page="device"] .device-panel .device-action {
+  margin: 0;
+}
+
+body[data-page="device"] .device-stats {
+  width: 100%;
+  gap: 12px;
+  margin-top: 28px;
+}
+
+body[data-page="device"] .device-stat-card {
+  display: flex;
+  min-width: 0;
+  min-height: 104px;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px !important;
+  border: 1px solid rgba(29, 105, 57, 0.16) !important;
+  background: rgba(241, 249, 243, 0.86) !important;
+}
+
+body[data-page="device"] .device-stat-card small {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+body[data-page="device"] .device-stat-card strong {
+  overflow-wrap: anywhere;
+}
+
+body[data-page="device"] .glasses-card {
+  display: grid;
+  grid-template-rows: auto minmax(160px, 1fr) auto;
+  align-items: center;
+  gap: 20px;
+  overflow: hidden;
+}
+
+body[data-page="device"] .device-visual-heading h2 {
+  margin: 8px 0 0;
+}
+
+body[data-page="device"] .device-glasses {
+  width: min(100%, 430px);
+  max-height: 230px;
+  margin: auto;
+  object-fit: contain;
+}
+
+body[data-page="device"] .device-sync-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding-top: 18px;
+  border-top: 1px solid rgba(29, 105, 57, 0.14);
+}
+
+body[data-page="device"] .device-sync-dot {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 10px;
+  border-radius: 50%;
+  background: #8ca196;
+  box-shadow: 0 0 0 5px rgba(140, 161, 150, 0.13);
+}
+
+body[data-page="device"] .device-sync-status {
+  margin: 0;
+}
+
+body[data-community-view="publish"] .community-publish-layout {
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 420px);
+  gap: 20px;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
+
+body[data-community-view="publish"] .community-publish-aside {
+  width: 100%;
+  padding: 20px;
+}
+
+body[data-community-view="publish"] .community-mini-note-list {
+  gap: 14px;
+}
+
+body[data-community-view="publish"] .community-mini-note-list .community-note-card {
+  grid-template-columns: 118px minmax(0, 1fr);
+}
+
+body[data-community-view="publish"] .community-mini-note-list .community-note-media,
+body[data-community-view="publish"] .community-mini-note-list .community-text-cover {
+  width: 118px;
+  min-height: 118px;
+}
+
+body[data-community-view="publish"] .community-mini-note-list .community-note-info > p,
+body[data-community-view="publish"] .community-mini-note-list .community-text-cover p {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+body[data-community-view="publish"] .community-mini-note-list .community-note-info {
+  align-content: start;
+  padding: 12px 14px;
+}
+
+#identify .result-card {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+#identify .result-card > div:not(.recognition-actions),
+#identify .result-card dl,
+#identify .result-card .observation-message,
+#identify .result-card .recognition-actions {
+  grid-column: 1;
+}
+
+/* The atlas image owns exactly the upper half; dense spacing keeps all copy visible below. */
+#atlas .bird-grid.is-marquee .bird-card {
+  height: 510px;
+  min-height: 510px;
+  max-height: 510px;
+}
+
+#atlas .bird-grid.is-marquee .bird-photo {
+  flex: 0 0 50%;
+  height: 50%;
+}
+
+#atlas .bird-grid.is-marquee .bird-card > div:last-child {
+  min-height: 0;
+  padding: 7px 11px 9px;
+}
+
+#atlas .bird-grid.is-marquee .bird-card h3 {
+  margin: 0 0 2px;
+  line-height: 1.2;
+}
+
+#atlas .bird-grid.is-marquee .bird-card > div > p {
+  margin: 0 0 2px;
+  line-height: 1.2;
+}
+
+#atlas .bird-grid.is-marquee .bird-clue {
+  padding: 3px 6px;
+  line-height: 1.2;
+}
+
+#atlas .bird-grid.is-marquee .tag-row {
+  gap: 3px;
+  margin-top: 2px;
+}
+
+#atlas .bird-grid.is-marquee .tag-row span {
+  padding: 2px 5px;
+  line-height: 1.2;
+}
+
+#atlas .bird-grid.is-marquee .atlas-card-actions {
+  min-height: 26px;
+  padding-top: 2px;
+}
+
+#atlas .bird-grid.is-marquee .source-link,
+#atlas .bird-grid.is-marquee .atlas-open {
+  min-height: 26px;
+  line-height: 1.2;
+}
+
+@media (max-width: 1100px) {
+  body[data-page="device"] .device-section-v2 {
+    grid-template-columns: 1fr;
+  }
+
+  body[data-community-view="publish"] .community-publish-layout {
+    grid-template-columns: 1fr;
+  }
+
+  body[data-community-view="publish"] .community-publish-aside {
+    position: static;
+  }
+}
+
+@media (max-width: 700px) {
+  body[data-page="home"] .hero {
+    width: calc(100% - 40px) !important;
+    padding-right: 20px !important;
+    padding-left: 20px !important;
+    border-radius: 32px !important;
+  }
+
+  .device-standalone-page {
+    padding-top: 36px;
+  }
+
+  body[data-page="device"] .device-section-v2 {
+    padding: 14px !important;
+  }
+
+  body[data-page="device"] .device-panel,
+  body[data-page="device"] .glasses-card {
+    padding: 24px !important;
+  }
+
+  body[data-page="device"] .device-panel-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  body[data-page="device"] .device-stats {
+    grid-template-columns: 1fr;
+  }
+
+  body[data-page="device"] .device-stat-card {
+    min-height: 90px;
+  }
+
+  #atlas .bird-grid.is-marquee .bird-card {
+    height: 487px;
+    min-height: 487px;
+    max-height: 487px;
+  }
+}
+
+/* Lowest visual layer: soft green light pools and slow contour-like ripples. */
+body,
+body[data-page="community"] {
+  background-color: #edf6ef;
+  background-image:
+    radial-gradient(circle, rgba(55, 145, 82, 0.14) 0%, rgba(74, 164, 101, 0.08) 24%, rgba(74, 164, 101, 0.025) 46%, transparent 68%),
+    radial-gradient(circle, rgba(89, 177, 111, 0.12) 0%, rgba(89, 177, 111, 0.055) 30%, rgba(89, 177, 111, 0.018) 50%, transparent 70%),
+    radial-gradient(circle, rgba(36, 126, 67, 0.09) 0%, rgba(36, 126, 67, 0.025) 46%, transparent 70%),
+    repeating-radial-gradient(ellipse at 50% 112%, transparent 0 50px, rgba(42, 132, 72, 0.012) 53px, rgba(42, 132, 72, 0.032) 58px, rgba(42, 132, 72, 0.012) 64px, transparent 69px 118px),
+    linear-gradient(180deg, #f4faf6 0%, #edf6ef 48%, #f5faf6 100%);
+  background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, no-repeat;
+  background-size: 72vmax 72vmax, 62vmax 62vmax, 48vmax 48vmax, 138% 76%, 100% 100%;
+  background-position: -18vmax -24vmax, calc(100% + 20vmax) 30%, 24% calc(100% + 18vmax), 50% 108%, center;
+  background-attachment: fixed;
+  animation: birdora-background-drift 24s ease-in-out infinite alternate;
+}
+
+.hero-intro span {
+  display: block;
+}
+
+@keyframes birdora-background-drift {
+  from {
+    background-position: -18vmax -24vmax, calc(100% + 20vmax) 30%, 24% calc(100% + 18vmax), 50% 108%, center;
+  }
+  to {
+    background-position: -13vmax -19vmax, calc(100% + 15vmax) 36%, 31% calc(100% + 14vmax), 54% 102%, center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body {
+    animation: none;
+  }
+}
+
+/* Green illustrations from Pictures decorate open margins without affecting layout. */
+main {
+  position: relative;
+  isolation: isolate;
+}
+
+main::before,
+main::after {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  display: block;
+  pointer-events: none;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+  mix-blend-mode: multiply;
+  filter: saturate(0.72);
+}
+
+main::before {
+  top: clamp(220px, 24vh, 360px);
+  right: 0;
+  width: clamp(120px, 14vw, 230px);
+  height: clamp(250px, 34vw, 470px);
+  background-image: url("./Pictures/flower/3.jpeg");
+  opacity: 0.13;
+  transform: rotate(5deg) translateX(24%);
+  -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 14%, #000 82%, transparent 100%);
+  mask-image: linear-gradient(180deg, transparent 0%, #000 14%, #000 82%, transparent 100%);
+}
+
+main::after {
+  bottom: clamp(40px, 8vh, 120px);
+  left: 0;
+  width: clamp(160px, 18vw, 290px);
+  aspect-ratio: 1;
+  background-image: url("./Pictures/flower/5.jpg");
+  opacity: 0.09;
+  transform: rotate(-8deg) translateX(-28%);
+  -webkit-mask-image: radial-gradient(circle, #000 42%, transparent 76%);
+  mask-image: radial-gradient(circle, #000 42%, transparent 76%);
+}
+
+main > * {
+  position: relative;
+  z-index: 1;
+}
+
+@media (max-width: 700px) {
+  main::before {
+    right: -28px;
+    width: 112px;
+    height: 260px;
+    opacity: 0.1;
+  }
+
+  main::after {
+    width: 150px;
+    opacity: 0.07;
+  }
+}

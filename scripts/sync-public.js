@@ -6,10 +6,18 @@ const publicDir = path.join(rootDir, "public");
 const publicFiles = [
   "index.html",
   "login.html",
+  "register.html",
   "community.html",
+  "explore.html",
+  "upload.html",
+  "profile.html",
+  "publish.html",
+  "device.html",
   "privacy.html",
   "terms.html",
   "styles.css",
+  "roadmap.css",
+  "design-system.css",
   "community-api.js",
   "observation-api.js",
   "community-post-card.css",
@@ -84,6 +92,7 @@ for (const file of publicFiles) {
 }
 
 copyDirectory(path.join(rootDir, "assets"), path.join(publicDir, "assets"));
+copyDirectory(path.join(rootDir, "Pictures"), path.join(publicDir, "Pictures"));
 
 console.log(`Synced public assets to ${publicDir}`);
 if (skippedAssetCount > 0) {

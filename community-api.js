@@ -18,10 +18,11 @@
 
     function normalizePost(post) {
       if (!post || typeof post !== "object") return post;
-      if (post.imageUrl && post.imageUrl.startsWith("/api/") && baseUrl) {
+      if (baseUrl && ((post.imageUrl && post.imageUrl.startsWith("/api/")) || (post.videoUrl && post.videoUrl.startsWith("/api/")))) {
         return {
           ...post,
-          imageUrl: `${baseUrl}${post.imageUrl}`,
+          imageUrl: post.imageUrl?.startsWith("/api/") ? `${baseUrl}${post.imageUrl}` : post.imageUrl || "",
+          videoUrl: post.videoUrl?.startsWith("/api/") ? `${baseUrl}${post.videoUrl}` : post.videoUrl || "",
         };
       }
       return post;

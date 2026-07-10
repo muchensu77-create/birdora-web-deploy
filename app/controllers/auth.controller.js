@@ -10,6 +10,10 @@ const userService = require("../services/user.service");
 
 const DEFAULT_AUTH_COOKIE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const MIN_PASSWORD_LENGTH = 8;
+const PROFILE_BIO_MAX_LENGTH = 280;
+const PROFILE_NICKNAME_MAX_LENGTH = 40;
+const PROFILE_AVATAR_MAX_BYTES = 600 * 1024;
+const PROFILE_GENDERS = new Set(["", "female", "male", "nonbinary", "prefer_not_to_say"]);
 
 function isValidEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -228,10 +232,67 @@ async function status(req, res) {
   });
 }
 
+function normalizeProfile(req) {
+  const nickname = String(req.body.nickname || "").trim().slice(0, PROFILE_NICKNAME_MAX_LENGTH);
+  const bio = String(req.body.bio || "").trim().slice(0, PROFILE_BIO_MAX_LENGTH);
+  const gender = String(req.body.gender || "").trim();
+  const rawAge = req.body.age;
+  const age = rawAge === "" || rawAge === null || rawAge === undefined ? null : Number(rawAge);
+  const avatarUrl = String(req.body.avatarUrl || "").trim();
+  if (!nickname || !PROFILE_GENDERS.has(gender) || (age !== null && (!Number.isInteger(age) || age < 13 || age > 100))) {
+    return null;
+  }
+  if (avatarUrl) {
+    const match = avatarUrl.match(/^data:image\/(?:jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/);
+    if (!match || Buffer.from(match[1], "base64").length > PROFILE_AVATAR_MAX_BYTES) return null;
+  }
+  return {
+    nickname,
+    bio,
+    gender,
+    age,
+    avatarUrl,
+    emailNotifications: req.body.emailNotifications !== false,
+    publicProfile: req.body.publicProfile !== false,
+  };
+}
+
+async function updateProfile(req, res) {
+  const profile = normalizeProfile(req);
+  if (!profile) {
+    res.status(400).json({ message: "profile fields are invalid" });
+    return;
+  }
+  const user = await userService.updateProfile(req.user.id, profile);
+  res.json({ user: userService.sanitizeUser(user) });
+}
+
+async function removeAccount(req, res) {
+  const password = String(req.body.password || "");
+  const confirmation = String(req.body.confirmation || "").trim();
+  if (confirmation !== "注销我的账号" || !password) {
+    res.status(400).json({ message: "account deletion confirmation is invalid" });
+    return;
+  }
+  const passwordMatches = await passwordService.verifyPassword(password, req.user.passwordHash);
+  if (!passwordMatches) {
+    res.status(401).json({ message: "current password is incorrect" });
+    return;
+  }
+  if (req.authSession?.payload?.jti) {
+    await tokenService.revokeToken({ jti: req.authSession.payload.jti, expiresAt: getTokenExpiryDate(req.authSession.payload) });
+  }
+  await userService.deleteUser(req.user.id);
+  clearAuthCookie(res);
+  res.status(204).end();
+}
+
 module.exports = {
   login,
   logout,
   me,
   register,
+  updateProfile,
+  removeAccount,
   status,
 };
