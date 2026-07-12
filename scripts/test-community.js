@@ -318,6 +318,13 @@ async function main() {
   const authorJar = await registerAndLogin(accounts.author);
   const readerJar = await registerAndLogin(accounts.reader);
 
+  const privateAuthorProfile = await request("/api/auth/profile", {
+    method: "PATCH",
+    cookieJar: authorJar,
+    json: { publicProfile: false },
+  });
+  assertStep("author can make profile private", privateAuthorProfile.status === 200 && privateAuthorProfile.body?.user?.publicProfile === false, `HTTP ${privateAuthorProfile.status}`);
+
   const authorObservation = await request("/api/observations", {
     method: "POST",
     cookieJar: authorJar,
@@ -418,6 +425,7 @@ async function main() {
   const readerPost = readerList.body?.posts?.find((post) => post.id === postId);
   assertStep("reader sees author post", readerList.status === 200 && readerPost, `HTTP ${readerList.status}`);
   assertStep("reader cannot manage author post", readerPost.canManage === false);
+  assertStep("private post author is masked for another user", readerPost.author === "Birdora 用户");
   assertStep("reader sees copy analysis", readerPost.analysis?.summary, "analysis summary present");
   assertStep("list returns comment count", Number.isFinite(Number(readerPost.commentCount)));
 
@@ -436,12 +444,14 @@ async function main() {
   });
   assertStep("anonymous can read post detail", anonymousDetail.status === 200 && anonymousDetail.body?.post?.id === postId, `HTTP ${anonymousDetail.status}`);
   assertStep("anonymous detail cannot manage", anonymousDetail.body?.post?.canManage === false);
+  assertStep("private post author is masked for anonymous viewers", anonymousDetail.body?.post?.author === "Birdora 用户");
 
   const authorDetail = await request(`/api/community/posts/${postId}`, {
     method: "GET",
     cookieJar: authorJar,
   });
   assertStep("author detail can manage", authorDetail.status === 200 && authorDetail.body?.post?.canManage === true, `HTTP ${authorDetail.status}`);
+  assertStep("private author still sees own nickname", authorDetail.body?.post?.author === accounts.author.nickname);
 
   const linkedPostDetail = await request(`/api/community/posts/${linkedPostId}`, {
     method: "GET",
@@ -465,6 +475,13 @@ async function main() {
     `HTTP ${reacted.status}`
   );
 
+  const privateReaderProfile = await request("/api/auth/profile", {
+    method: "PATCH",
+    cookieJar: readerJar,
+    json: { publicProfile: false },
+  });
+  assertStep("reader can make profile private", privateReaderProfile.status === 200 && privateReaderProfile.body?.user?.publicProfile === false, `HTTP ${privateReaderProfile.status}`);
+
   const commented = await request(`/api/community/posts/${postId}/comments`, {
     method: "POST",
     cookieJar: readerJar,
@@ -484,6 +501,8 @@ async function main() {
     json: { body: "作者补充：它当时停在靠近水面的枝条上。" },
   });
   assertStep("author adds second comment", authorCommented.status === 201, `HTTP ${authorCommented.status}`);
+  const readerCommentForAuthor = authorCommented.body?.post?.comments?.find((comment) => comment.id === readerCommentId);
+  assertStep("private comment author is masked for another user", readerCommentForAuthor?.author === "Birdora 用户");
 
   const badOriginComments = await request(`/api/community/posts/${postId}/comments?limit=1&offset=0`, {
     method: "GET",
@@ -566,6 +585,12 @@ async function main() {
   assertStep("question pagination returns page info", questionPage.status === 200 && questionPage.body?.pageInfo, `HTTP ${questionPage.status}`);
   assertStep("question pagination respects limit", questionPage.body?.questions?.length === 1);
   assertStep("question pagination count", questionPage.body?.pageInfo?.questionCount >= 1 || questionPage.body?.pageInfo?.total >= 1);
+
+  const questionPageForAuthor = await request(`/api/community/posts/${postId}/questions?limit=1&offset=0`, {
+    method: "GET",
+    cookieJar: authorJar,
+  });
+  assertStep("private question author is masked for another user", questionPageForAuthor.status === 200 && questionPageForAuthor.body?.questions?.[0]?.author === "Birdora 用户", `HTTP ${questionPageForAuthor.status}`);
 
   const blockedEdit = await request(`/api/community/posts/${postId}`, {
     method: "PATCH",

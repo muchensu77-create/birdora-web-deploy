@@ -17,6 +17,7 @@
     const previewClass = previewMode ? " feed-card-preview" : "";
     const isEditing = options.isEditing === true;
     const canInteract = options.canInteract !== false;
+    const canReact = options.canReact === true;
     const commentsOpen = options.commentsOpen === true;
     const commentPanelId = `comment-panel-${post.id}`;
     const feedback = options.feedback || {};
@@ -94,7 +95,7 @@
         `
         : "";
     const engagementActions =
-      canInteract && !isEditing
+      canInteract && canReact && !isEditing
         ? `
           <div class="engagement-bar" aria-label="帖子评价">
             <button class="feedback-action ${helpful.selected ? "is-selected" : ""}" type="button" data-post-reaction="${escapeHtml(post.id)}" data-reaction-type="helpful" aria-pressed="${String(helpful.selected)}">点赞 ${helpful.count}</button>

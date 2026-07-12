@@ -1,0 +1,22 @@
+{
+  "formatVersion": 1,
+  "capturePhase": "live-discovery",
+  "applicationRoot": "/var/www/birdora-web",
+  "databaseFile": "/var/lib/birdora/birdora.sqlite",
+  "dataDirectory": "/var/lib/birdora",
+  "communityUploadDirectory": "/var/lib/birdora/uploads/community",
+  "observationUploadDirectory": "/var/lib/birdora/uploads/observations",
+  "pm2Home": "/root/.pm2",
+  "siteName": "birdora.birdai-glasses.com",
+  "listenerPort": 3003,
+  "expectedWriterAppNames": [
+    "birdora-web-auth"
+  ],
+  "expectedAdjacentAppNames": [
+    "birdora-api",
+    "zhubao-api"
+  ],
+  "maximumMediaFilesPerRoot": 200000,
+  "maximumReportBytes": 8388608,
+  "approvedRuntimeIdentityFiles": []
+}

@@ -5,7 +5,14 @@ services:
     env_file:
       - .env
     environment:
+      HOST: 0.0.0.0
       DATABASE_FILE: /data/birdora.sqlite
+      DATA_DIRECTORY: /data
+      DATABASE_AUTO_MIGRATE: "false"
+      DATABASE_BACKUP_ENABLED: "true"
+      DATABASE_BACKUP_DIR: /data/backups
+      DATABASE_BACKUP_RETENTION: "10"
+      LEGACY_JSON_IMPORT_MODE: disabled
       PORT: 4000
     ports:
       - "4000:4000"
@@ -13,10 +20,36 @@ services:
     volumes:
       - birdora_data:/data
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/api/health').then((res)=>process.exit(res.ok?0:1)).catch(()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/api/health/ready').then((res)=>process.exit(res.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
       timeout: 5s
       retries: 3
+
+  # Development/rehearsal helper only. It does not provide the production
+  # Nginx maintenance, media rollback bundle, or atomic public-release gates.
+  # Run only inside an explicit disposable/staging maintenance window:
+  #   docker compose stop birdora-web
+  #   docker compose run --rm birdora-migrate npm run db:preflight
+  #   docker compose run --rm birdora-migrate
+  #   docker compose up -d birdora-web
+  birdora-migrate:
+    build:
+      context: .
+    profiles: ["maintenance"]
+    env_file:
+      - .env
+    environment:
+      DATABASE_FILE: /data/birdora.sqlite
+      DATA_DIRECTORY: /data
+      DATABASE_AUTO_MIGRATE: "false"
+      DATABASE_BACKUP_ENABLED: "true"
+      DATABASE_BACKUP_DIR: /data/backups
+      DATABASE_BACKUP_RETENTION: "10"
+      LEGACY_JSON_IMPORT_MODE: disabled
+    command: ["npm", "run", "db:migrate"]
+    restart: "no"
+    volumes:
+      - birdora_data:/data
 
 volumes:
   birdora_data:

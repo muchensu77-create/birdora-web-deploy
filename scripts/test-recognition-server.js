@@ -150,8 +150,15 @@ async function main() {
       )
     );
   } finally {
-    child.kill();
-    fs.rmSync(tempDir, { recursive: true, force: true });
+    if (child.exitCode === null) {
+      const closed = new Promise((resolve) => child.once("close", resolve));
+      child.kill();
+      await Promise.race([
+        closed,
+        new Promise((resolve) => setTimeout(resolve, 10_000)),
+      ]);
+    }
+    fs.rmSync(tempDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   }
 }
 

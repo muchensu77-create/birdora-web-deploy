@@ -15,6 +15,7 @@ function sanitizeUser(user) {
     avatarUrl: user.avatarUrl || "",
     emailNotifications: user.emailNotifications !== false,
     publicProfile: user.publicProfile !== false,
+    accountStatus: user.accountStatus || "active",
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
   };
@@ -45,7 +46,10 @@ async function createUser({ email, passwordHash, nickname }) {
     updatedAt: now,
   };
 
+  let transactionStarted = false;
   try {
+    db.exec("BEGIN IMMEDIATE");
+    transactionStarted = true;
     db.prepare(`
       INSERT INTO users (
         id,
@@ -63,7 +67,16 @@ async function createUser({ email, passwordHash, nickname }) {
       user.createdAt,
       user.updatedAt
     );
+    db.prepare(`
+      INSERT INTO notification_preferences (
+        user_id, in_app_enabled, likes_enabled, comments_enabled, follows_enabled,
+        moderation_enabled, system_enabled, email_enabled, updated_at
+      ) VALUES (?, 1, 1, 1, 1, 1, 1, 1, ?)
+    `).run(user.id, user.updatedAt);
+    db.exec("COMMIT");
+    transactionStarted = false;
   } catch (error) {
+    if (transactionStarted) db.exec("ROLLBACK");
     if (String(error.message).includes("UNIQUE constraint failed")) {
       const duplicateError = new Error("email is already registered");
       duplicateError.statusCode = 409;
@@ -78,22 +91,30 @@ async function createUser({ email, passwordHash, nickname }) {
 
 async function updateProfile(id, profile) {
   const db = getDatabase();
+  const columnMappings = {
+    nickname: ["nickname", (value) => value],
+    bio: ["bio", (value) => value],
+    gender: ["gender", (value) => value],
+    age: ["age", (value) => value],
+    avatarUrl: ["avatar_url", (value) => value],
+    emailNotifications: ["email_notifications", (value) => (value ? 1 : 0)],
+    publicProfile: ["public_profile", (value) => (value ? 1 : 0)],
+  };
+  const assignments = [];
+  const values = [];
+
+  for (const [field, [column, serialize]] of Object.entries(columnMappings)) {
+    if (!Object.prototype.hasOwnProperty.call(profile, field)) continue;
+    assignments.push(`${column} = ?`);
+    values.push(serialize(profile[field]));
+  }
+
+  if (!assignments.length) return findById(id);
+
   const now = new Date().toISOString();
-  db.prepare(`
-    UPDATE users
-    SET nickname = ?, bio = ?, gender = ?, age = ?, avatar_url = ?, email_notifications = ?, public_profile = ?, updated_at = ?
-    WHERE id = ?
-  `).run(
-    profile.nickname,
-    profile.bio,
-    profile.gender,
-    profile.age,
-    profile.avatarUrl,
-    profile.emailNotifications ? 1 : 0,
-    profile.publicProfile ? 1 : 0,
-    now,
-    id
-  );
+  assignments.push("updated_at = ?");
+  values.push(now, id);
+  db.prepare(`UPDATE users SET ${assignments.join(", ")} WHERE id = ?`).run(...values);
   return findById(id);
 }
 

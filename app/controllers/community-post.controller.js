@@ -1,12 +1,16 @@
 const communityPostService = require("../services/community-post.service");
+const {
+  COMMUNITY_IMAGE_MAX_BYTES: IMAGE_MAX_BYTES,
+  COMMUNITY_VIDEO_MAX_BYTES: VIDEO_MAX_BYTES,
+} = require("../config/capabilities.config");
 
 const TITLE_MAX_LENGTH = 80;
 const BODY_MAX_LENGTH = 600;
 const BIRD_MAX_LENGTH = 80;
+const LOCATION_MAX_LENGTH = 160;
+const VISIBILITIES = new Set(["public", "followers", "private"]);
 const COMMENT_MAX_LENGTH = 180;
 const QUESTION_MAX_LENGTH = 180;
-const IMAGE_MAX_BYTES = 1024 * 1024;
-const VIDEO_MAX_BYTES = 8 * 1024 * 1024;
 const POSTS_DEFAULT_LIMIT = 20;
 const POSTS_MAX_LIMIT = 100;
 const COMMENTS_DEFAULT_LIMIT = 10;
@@ -32,6 +36,13 @@ function normalizeOptionalId(value) {
   const text = value.trim();
   if (!text) return "";
   return text.length <= 120 ? text : null;
+}
+
+function normalizeOptionalText(value, maxLength) {
+  if (value === undefined || value === null || value === "") return "";
+  if (typeof value !== "string") return null;
+  const text = value.trim();
+  return text.length <= maxLength ? text : null;
 }
 
 function hasBytePrefix(buffer, bytes) {
@@ -62,15 +73,18 @@ function validatePostBody(req, res, options = {}) {
   const title = normalizeRequiredText(req.body.title, TITLE_MAX_LENGTH);
   const body = normalizeRequiredText(req.body.body, BODY_MAX_LENGTH);
   const bird = normalizeRequiredText(req.body.bird ?? "观鸟笔记", BIRD_MAX_LENGTH);
+  const locationText = normalizeOptionalText(req.body.locationText, LOCATION_MAX_LENGTH);
+  const visibility = String(req.body.visibility ?? "public").trim();
 
-  if (!title || !body || (!options.ignoreBird && !bird)) {
+  if (!title || !body || (!options.ignoreBird && !bird) || locationText === null || !VISIBILITIES.has(visibility)) {
     res.status(400).json({
-      message: `title and body are required and must not exceed ${TITLE_MAX_LENGTH}/${BODY_MAX_LENGTH} characters`,
+      message: "post fields are invalid",
+      code: "VALIDATION_ERROR",
     });
     return null;
   }
 
-  return { title, body, bird };
+  return { title, body, bird, locationText, visibility };
 }
 
 function validatePostImage(req, res) {
@@ -91,7 +105,7 @@ function validatePostImage(req, res) {
 
   const buffer = Buffer.from(match[2], "base64");
   if (!buffer.length || buffer.length > IMAGE_MAX_BYTES) {
-    res.status(400).json({ message: `image must be smaller than ${IMAGE_MAX_BYTES} bytes` });
+    res.status(400).json({ message: `image must not exceed ${IMAGE_MAX_BYTES} bytes` });
     return false;
   }
 
@@ -117,7 +131,7 @@ function validatePostVideo(req, res) {
   }
   const buffer = Buffer.from(match[2], "base64");
   if (!buffer.length || buffer.length > VIDEO_MAX_BYTES) {
-    res.status(400).json({ message: `video must be smaller than ${VIDEO_MAX_BYTES} bytes` });
+    res.status(400).json({ message: `video must not exceed ${VIDEO_MAX_BYTES} bytes` });
     return false;
   }
   const isMp4 = match[1] === "video/mp4" && buffer.length >= 12 && buffer.toString("ascii", 4, 8) === "ftyp";
@@ -204,6 +218,8 @@ async function update(req, res) {
     userId: req.user.id,
     title: postBody.title,
     body: postBody.body,
+    locationText: postBody.locationText,
+    visibility: postBody.visibility,
   });
   res.json({ post });
 }
@@ -285,16 +301,20 @@ async function react(req, res) {
 }
 
 async function image(req, res) {
-  const postImage = await communityPostService.getPostImage({ id: req.params.id });
+  const postImage = await communityPostService.getPostImage({ id: req.params.id, viewerId: req.user?.id || "" });
   res.set("Content-Type", postImage.mimeType);
-  res.set("Cache-Control", "public, max-age=31536000, immutable");
+  res.set("Cache-Control", postImage.publiclyCacheable
+    ? "public, max-age=31536000, immutable"
+    : "private, no-store");
   res.sendFile(postImage.filePath);
 }
 
 async function video(req, res) {
-  const postVideo = await communityPostService.getPostVideo({ id: req.params.id });
+  const postVideo = await communityPostService.getPostVideo({ id: req.params.id, viewerId: req.user?.id || "" });
   res.set("Content-Type", postVideo.mimeType);
-  res.set("Cache-Control", "public, max-age=31536000, immutable");
+  res.set("Cache-Control", postVideo.publiclyCacheable
+    ? "public, max-age=31536000, immutable"
+    : "private, no-store");
   res.sendFile(postVideo.filePath);
 }
 
@@ -312,4 +332,6 @@ module.exports = {
   removeComment,
   update,
   video,
+  validatePostImage,
+  validatePostVideo,
 };

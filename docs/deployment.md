@@ -1,301 +1,76 @@
-# Birdora 服务器部署说明
+# Birdora 网站部署入口（当前状态）
 
-更新日期：2026-07-01
+> **NO-GO：当前不得把仓库中的发布控制器直接用于承载真实数据的生产服务器。**
+> A/B 发布架构已进入代码与本地契约测试阶段，但 legacy 主机接管、真实无链接 pnpm 构件、目标 Ubuntu 锁语义以及完整故障注入仍未验收。
 
-本文档用于单机服务器部署。当前推荐形态：
+Birdora 是 Web 网站：Nginx 提供浏览器静态资源，Express API 只监听 `127.0.0.1:3003`。本文件不包含微信小程序发布步骤。
 
-- Nginx 只托管 `public/` 静态前端文件
-- Node.js 运行 Express 认证和社区 API
-- SQLite 保存认证和社区数据
-- PM2 管理 Node 进程
+## 权威文档
 
-如果部署到已经运行 `birdora-api` 和 `zhubao-api` 的服务器，必须先看防冲突计划：
+- [生产发布架构与维护手册](PRODUCTION_RELEASE_ARCHITECTURE.md)：当前目录、权限、签名、锁、激活状态机、恢复矩阵和维护清单。
+- [后端开发路线图](BACKEND_DEVELOPMENT_ROADMAP.md)：接口、数据库迁移和后续业务阶段。
+- [README](../README.md)：本地开发、测试和当前能力说明。
 
-```text
-docs/server-conflict-safe-plan.md
-```
+若旧文档、历史交接或服务器上的命令与上述架构冲突，以“失败关闭并停止操作”为准，不能凭旧 runbook 继续。
 
-## 1. 服务器要求
+## 已退役入口
 
-- Node.js `24.14.0` 或更高版本，建议为本项目单独安装到 `/opt/node-v24`
-- pnpm `11.x`
-- Nginx
-- PM2
-- HTTPS 证书
+以下两个旧脚本固定返回退出码 `78`，不会读取或修改生产状态：
 
-不要上传或提交本地 `node_modules`。
-不要把项目根目录作为 Nginx 静态根目录；只能托管 `public/`。
+- `deploy/scripts/preflight.sh`
+- `deploy/scripts/enable-https.sh`
 
-如果服务器全局 Node 低于 `24.14.0`，不要直接升级全局 Node，避免影响现有 PM2 服务。使用独立 Node 24：
+它们曾面向可变源码目录和旧 PM2/Nginx 拓扑，不能证明签名构件、部署锁、数据库锁、激活 journal 或 current marker，因此不能作为新流程的预检或 HTTPS 安装入口。
 
-```bash
-cd /tmp
-NODE_TARBALL="$(curl -fsSL https://nodejs.org/dist/latest-v24.x/SHASUMS256.txt | awk '/linux-x64.tar.xz/ {print $2; exit}')"
-NODE_DIR="${NODE_TARBALL%.tar.xz}"
-curl -fsSLO "https://nodejs.org/dist/latest-v24.x/$NODE_TARBALL"
-tar -xJf "$NODE_TARBALL" -C /opt
-ln -sfn "/opt/$NODE_DIR" /opt/node-v24
-/opt/node-v24/bin/node -v
-```
+也禁止以下旧做法：
 
-## 2. 部署目录和依赖
+- 在 `/var/www/birdora-web` 原地 `git pull`、安装依赖、构建或递归改权限；
+- 把生产 `.env`、SQLite、uploads、JWT secret 放进 release；
+- 直接执行 candidate 内的 `install-http.sh`；
+- 使用 `pm2 restart` 合并旧 cwd/环境，或手工启动第二个 SQLite writer；
+- 迁移后启动旧 revision 或把 runtime 指针盲目切回旧代码；
+- 绕开 maintenance、journal 或 marker 临时恢复写接口。
 
-准备部署目录：
+## 当前允许的本地验证
+
+下列命令只针对本地工作树和测试临时目录，不连接生产数据：
 
 ```bash
-mkdir -p /var/www/birdora-web
-chown -R root:www-data /var/www/birdora-web
-find /var/www/birdora-web -type d -exec chmod 755 {} \;
-find /var/www/birdora-web -type f ! -name ".env" -exec chmod 644 {} \;
+pnpm test
+pnpm test:atlas
+pnpm test:release-artifacts
+pnpm test:deployment-contracts
 ```
 
-上传源码到 `/var/www/birdora-web`，不要上传 `node_modules`、`.env`、本地数据库或日志。
-
-安装依赖：
+Linux 专项语义测试为：
 
 ```bash
-cd /var/www/birdora-web
-pnpm install --frozen-lockfile
+pnpm test:linux:deployment
 ```
 
-同步公开静态目录：
+非 Linux 环境会输出 `UNAVAILABLE` 并以 `77` 退出；这不是通过。该专项当前验证临时沙箱中的 `flock` 与 A/B 指针原子性，仍不代表 PM2/Nginx/固定生产路径集成已验收。
 
-```bash
-pnpm sync:public
-```
+所有写入型浏览器/API 测试必须使用隔离数据库和 uploads，不能把地址、数据库路径或环境配置指向正式站。
 
-也可以使用内置脚本完成预检和 HTTP 阶段安装：
+## 生产发布控制面（尚未授权执行）
 
-```bash
-cd /var/www/birdora-web
-bash deploy/scripts/preflight.sh
-bash deploy/scripts/install-http.sh
-```
+目标架构只接受：
 
-## 3. 环境变量
+1. 在生产机之外完成依赖物化、全部测试、生产依赖审计、构建证据、完整 manifest 和离线签名；
+2. 将不可变构件放到独立 `releases/<revision>-<digest>` 物理目录；
+3. 由 `/usr/local/libexec/birdora/run-with-production-env.js` 读取 `/etc/birdora` 的严格外置配置并取得全局部署锁；
+4. 在 maintenance 下停止旧 writer，持有数据库排他锁，固定 DB/媒体恢复材料，再显式迁移；
+5. 按 14 阶段 journal 推进 runtime、PM2、public、Nginx、只读公开验证与最终 marker；
+6. 只有 verified marker 已持久化且 journal 已安全清除后才恢复写入。
 
-生产环境必须设置。源码上传后可以从模板复制：
+这段描述是架构约束，不是现阶段的生产操作授权，也不替代 Ubuntu 演练和变更审批。
 
-```bash
-cd /var/www/birdora-web
-cp deploy/env/birdora-web-auth.env.example .env
-chmod 600 .env
-```
+## 解除 NO-GO 的最低条件
 
-然后编辑 `.env`，至少替换 `JWT_SECRET`。
+- 完成现有服务器到专用 `PM2_HOME`、immutable runtime/public pointers 和 control/protected 目录的只读盘点与 legacy adoption 演练；
+- 用真实 production artifact 证明 `node_modules` 已物化且无 symlink、hardlink、ACL、capability 或不可读文件；
+- 在同版本 Ubuntu 验证 `/proc/locks`、fdinfo、shared/exclusive `flock`、PM2、Nginx worker drain、loopback 与防火墙；
+- 使用脱敏 DB/媒体副本逐相位注入失败、SIGKILL 和重启，并完成 forward-fix 与离线恢复演练；
+- 留存 artifact digest、DB identity、journal/marker、两个指针和恢复结果，由非实现者复核。
 
-目标内容：
-
-```bash
-NODE_ENV=production
-NODE_INTERPRETER=/opt/node-v24/bin/node
-PORT=3003
-CORS_ORIGIN=https://birdora.birdai-glasses.com
-ALLOWED_ORIGINS=https://birdora.birdai-glasses.com
-JWT_SECRET=replace-with-a-long-random-secret-at-least-32-chars
-JWT_EXPIRES_IN=7d
-JWT_COOKIE_NAME=birdora_token
-AUTH_RATE_LIMIT=120
-DATABASE_FILE=/var/lib/birdora/birdora.sqlite
-COMMUNITY_UPLOAD_DIR=/var/lib/birdora/uploads/community
-TRUST_PROXY=1
-```
-
-注意：
-
-- `JWT_SECRET` 必须是强随机值。
-- 不要使用模板里的 `replace-with-*` 占位值；生产服务和安装脚本都会拒绝它。
-- `CORS_ORIGIN` 必须是前端正式域名。
-- `ALLOWED_ORIGINS` 用于写入接口 Origin / Referer 防护；生产建议与正式前端域名一致，多个前端域名用英文逗号分隔，不能使用 `*`。
-- `DATABASE_FILE` 建议放到 `/var/lib/birdora/` 这类可持久化、可备份的数据目录。
-- `COMMUNITY_UPLOAD_DIR` 可省略；默认会跟随 `DATABASE_FILE` 进入 `/var/lib/birdora/uploads/community`。
-- `TRUST_PROXY=1` 适用于 Nginx 反向代理到 Node.js 的单代理部署。
-
-## 4. 数据目录
-
-```bash
-sudo mkdir -p /var/lib/birdora
-sudo chown -R root:root /var/lib/birdora
-chmod 700 /var/lib/birdora
-```
-
-SQLite 数据库和社区图片目录会在服务启动或首次发帖时自动创建。
-如果 PM2 不是以 `root` 用户运行，需要把 `/var/lib/birdora` 的属主改成实际运行 PM2 的用户。
-
-## 5. DNS 和 HTTPS 证书
-
-先确认 DNS 已经指向服务器：
-
-```bash
-dig +short birdora.birdai-glasses.com
-```
-
-预期返回：
-
-```text
-39.106.221.224
-```
-
-DNS 未生效前不要申请证书。DNS 生效后，为 Birdora 单独申请证书：
-
-```bash
-cp deploy/nginx/birdora-pre-cert.conf /etc/nginx/sites-available/birdora.birdai-glasses.com
-test -e /etc/nginx/sites-enabled/birdora.birdai-glasses.com || ln -s /etc/nginx/sites-available/birdora.birdai-glasses.com /etc/nginx/sites-enabled/birdora.birdai-glasses.com
-nginx -t
-systemctl reload nginx
-curl -I http://birdora.birdai-glasses.com/
-certbot certonly --webroot -w /var/www/birdora-web/public -d birdora.birdai-glasses.com
-```
-
-证书申请完成后，用最终 HTTPS 模板替换 Birdora 站点配置：
-
-```bash
-cp deploy/nginx/birdora-https.conf /etc/nginx/sites-available/birdora.birdai-glasses.com
-```
-
-每次修改 Nginx 后都要执行：
-
-```bash
-nginx -t
-systemctl reload nginx
-```
-
-也可以在 DNS 生效后使用内置脚本申请证书并启用 HTTPS：
-
-```bash
-cd /var/www/birdora-web
-bash deploy/scripts/enable-https.sh
-```
-
-注意：
-
-- 不要修改 `jewelry-api.birdai-glasses.com` 的 Nginx server block。
-- 不要停止 `birdora-api`、`zhubao-api` 或 PostgreSQL。
-
-## 6. 启动后端
-
-开发式启动：
-
-```bash
-pnpm start
-```
-
-PM2 启动：
-
-```bash
-cd /var/www/birdora-web
-pm2 start ecosystem.config.cjs --update-env
-pm2 save
-```
-
-查看日志：
-
-```bash
-pm2 logs birdora-web-auth
-```
-
-## 7. Nginx 示例
-
-以下示例假设：
-
-- 域名：`birdora.birdai-glasses.com`
-- 项目目录：`/var/www/birdora-web`
-- 静态根目录：`/var/www/birdora-web/public`
-- Node 后端：`127.0.0.1:3003`
-
-```nginx
-server {
-  listen 80;
-  server_name birdora.birdai-glasses.com;
-  return 301 https://$host$request_uri;
-}
-
-server {
-  listen 443 ssl http2;
-  server_name birdora.birdai-glasses.com;
-
-  ssl_certificate /etc/letsencrypt/live/birdora.birdai-glasses.com/fullchain.pem;
-  ssl_certificate_key /etc/letsencrypt/live/birdora.birdai-glasses.com/privkey.pem;
-
-  root /var/www/birdora-web/public;
-  index index.html;
-
-  location ~ ^/(app|docs|scripts|node_modules|\.git)(/|$) {
-    return 404;
-  }
-
-  location ~ ^/(server\.js|package\.json|pnpm-lock\.yaml|ecosystem\.config\.cjs|README\.md|\.env) {
-    return 404;
-  }
-
-  location /api/ {
-    proxy_pass http://127.0.0.1:3003/api/;
-    proxy_http_version 1.1;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    # Keep browser Origin/Referer headers unchanged for write-request protection.
-  }
-
-  location / {
-    try_files $uri $uri/ =404;
-  }
-}
-```
-
-同域部署时，前端会默认请求 `/api/*`，cookie 在 HTTPS 下正常工作。
-
-## 8. 上线验证
-
-```bash
-curl -i https://birdora.birdai-glasses.com/api/health
-```
-
-浏览器验证：
-
-- 打开 `https://birdora.birdai-glasses.com/login.html`
-- 注册新账号
-- 登录后跳转首页
-- 刷新首页后保持登录
-- 点击退出登录
-- 登出后回到登录页
-
-后端测试：
-
-```bash
-AUTH_BASE_URL=https://birdora.birdai-glasses.com pnpm test:auth
-```
-
-## 9. 备份
-
-至少备份：
-
-```text
-/var/lib/birdora/birdora.sqlite
-/var/lib/birdora/birdora.sqlite-wal
-/var/lib/birdora/birdora.sqlite-shm
-/var/lib/birdora/uploads/community/
-```
-
-建议每天对 `/var/lib/birdora/` 整目录做一次快照，并在升级前手动备份。
-
-## 10. 回滚
-
-保留上一版代码目录和数据库备份。
-
-代码回滚：
-
-```bash
-pm2 stop birdora-web-auth
-cd /path/to/previous/birdora-web
-pnpm install --frozen-lockfile
-pm2 start ecosystem.config.cjs
-```
-
-数据库回滚：
-
-1. 停止 PM2 服务。
-2. 恢复 SQLite 备份文件和 `uploads/community/` 图片目录。
-3. 启动 PM2 服务。
-4. 重新验证登录注册和社区带图帖子读取流程。
+在这些证据齐全前，只继续本地开发和隔离演练，不连接、停止、迁移或重启真实生产服务。

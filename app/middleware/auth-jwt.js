@@ -32,14 +32,16 @@ async function resolveAuthSession(req) {
   }
 
   try {
-    const payload = jwt.verify(token, authConfig.jwtSecret);
+    const payload = jwt.verify(token, authConfig.jwtSecret, {
+      algorithms: ["HS256"],
+    });
     const revoked = await tokenService.isTokenRevoked(payload.jti);
     if (revoked) {
       return { authenticated: false, token, payload: null, user: null };
     }
 
     const user = await userService.findById(payload.sub);
-    if (!user) {
+    if (!user || user.accountStatus !== "active") {
       return { authenticated: false, token, payload: null, user: null };
     }
 

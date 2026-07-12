@@ -1,0 +1,1155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://birdora.birdai-glasses.com/schemas/legacy-adoption-evidence-v1.schema.json",
+  "title": "Birdora legacy adoption evidence v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "kind",
+    "reportId",
+    "capture",
+    "collector",
+    "exportPolicy",
+    "authorization",
+    "verdict",
+    "host",
+    "policy",
+    "sideEffectContract",
+    "controlState",
+    "pm2",
+    "listeners",
+    "database",
+    "uploads",
+    "nginx",
+    "runtimeSource",
+    "filesystem",
+    "consistency",
+    "checks",
+    "manualConfirmations",
+    "collectorErrors",
+    "processes",
+    "inventoryMetrics"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "birdora.legacy-adoption-evidence.v1" },
+    "kind": { "const": "birdora-legacy-inventory" },
+    "reportId": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "capture": { "$ref": "#/$defs/capture" },
+    "collector": { "$ref": "#/$defs/collector" },
+    "exportPolicy": { "$ref": "#/$defs/exportPolicy" },
+    "authorization": { "$ref": "#/$defs/authorization" },
+    "verdict": { "$ref": "#/$defs/verdict" },
+    "host": { "$ref": "#/$defs/host" },
+    "policy": { "$ref": "#/$defs/policy" },
+    "sideEffectContract": { "$ref": "#/$defs/sideEffectContract" },
+    "controlState": { "$ref": "#/$defs/controlState" },
+    "pm2": { "$ref": "#/$defs/pm2" },
+    "listeners": {
+      "type": "array",
+      "maxItems": 64,
+      "items": { "$ref": "#/$defs/listener" }
+    },
+    "database": { "$ref": "#/$defs/database" },
+    "uploads": { "$ref": "#/$defs/uploads" },
+    "nginx": { "$ref": "#/$defs/nginx" },
+    "runtimeSource": { "$ref": "#/$defs/runtimeSource" },
+    "filesystem": { "$ref": "#/$defs/filesystem" },
+    "consistency": { "$ref": "#/$defs/consistency" },
+    "checks": {
+      "type": "array",
+      "minItems": 25,
+      "maxItems": 25,
+      "prefixItems": [
+        { "allOf": [{ "$ref": "#/$defs/check" }, { "properties": { "id": { "const": "execution.linux-platform" }, "category": { "const": "execution" }, "blocking": { "const": true } } }] },
+        { "allOf": [{ "$ref": "#/$defs/check" }, { "properties": { "id": { "const": "execution.root-identity" }, "category": { "const": "execution" }, "blocking": { "const": true } } }] },
+        { "allOf": [{ "$ref": "#/$defs/check" }, { "properties": { "id": { "const": "execution.host-namespaces" }, "category": { "const": "execution" }, "blocking": { "const": true } } }] },
+        { "allOf": [{ "$ref": "#/$defs/check" }, { "properties": { "id": { "const": "filesystem.application-root" }, "category": { "const": "filesystem" }, "blocking": { "const": true } } }] },
+        { "allOf": [{ "$ref": "#/$defs/check" }, { "properties": { "id": { "const": "filesystem.data-root" }, "category": { "const": "filesystem" }, "blocking": { "const": true } } }] },
+        { "allOf": [{ "$ref": "#/$defs/check" }, { "properties": { "id": { "const": "filesystem.pm2-root" }, "category": { "const": "filesystem" }, "blocking": { "const": true } } }] },
+        { "allOf": [{ "$ref": "#/$defs/check" }, { "properties": { "id": { "const": "listener.single-loopback" }, "category": { "const": "listener" }, "blocking": { "const": true } } }] },
+        { "allOf": [{ "$ref": "#/$defs/check" }, { "properties": { "id": { "const": "listener.single-owner" }, "category": { "const": "listener" }, "blocking": { "const": true } } }] },
+        { "allOf": [{ "$ref": "#/$defs/check" }, { "properties": { "id": { "const": "runtime.listener-process" }, "category": { "const": "runtime" }, "blocking": { "const": true } } }] },
+        { "allOf": [{ "$ref": "#/$defs/check" }, { "properties": { "id": { "const": "runtime.identity-files" }, "category": { "const": "runtime" }, "blocking": { "const": true } } }] },
+        { "allOf": [{ "$ref": "#/$defs/check" }, { "properties": { "id": { "const": "database.identity" }, "category": { "const": "database" }, "blocking": { "const": true } } }] },
+        { "allOf": [{ "$ref": "#/$defs/check" }, { "properties": { "id": { "const": "database.listener-opener-binding" }, "category": { "const": "database" }, "blocking": { "const": true } } }] },
+        { "allOf": [{ "$ref": "#/$defs/check" }, { "properties": { "id": { "const": "database.quiesced-if-required" }, "category": { "const": "database" }, "blocking": { "const": true } } }] },
+        { "allOf": [{ "$ref": "#/$defs/check" }, { "properties": { "id": { "const": "database.logical-state-not-inspected" }, "category": { "const": "database" }, "blocking": { "const": false } } }] },
+        { "allOf": [{ "$ref": "#/$defs/check" }, { "properties": { "id": { "const": "uploads.community-safe" }, "category": { "const": "uploads" }, "blocking": { "const": true } } }] },
+        { "allOf": [{ "$ref": "#/$defs/check" }, { "properties": { "id": { "const": "uploads.observation-safe" }, "category": { "const": "uploads" }, "blocking": { "const": true } } }] },
+        { "allOf": [{ "$ref": "#/$defs/check" }, { "properties": { "id": { "const": "pm2.dump-safe" }, "category": { "const": "pm2" }, "blocking": { "const": true } } }] },
+        { "allOf": [{ "$ref": "#/$defs/check" }, { "properties": { "id": { "const": "pm2.persistence-entry" }, "category": { "const": "pm2" }, "blocking": { "const": true } } }] },
+        { "allOf": [{ "$ref": "#/$defs/check" }, { "properties": { "id": { "const": "pm2.environment-mapping" }, "category": { "const": "pm2" }, "blocking": { "const": true } } }] },
+        { "allOf": [{ "$ref": "#/$defs/check" }, { "properties": { "id": { "const": "nginx.disk-projection" }, "category": { "const": "nginx" }, "blocking": { "const": true } } }] },
+        { "allOf": [{ "$ref": "#/$defs/check" }, { "properties": { "id": { "const": "nginx.unexpanded-includes" }, "category": { "const": "nginx" }, "blocking": { "const": false } } }] },
+        { "allOf": [{ "$ref": "#/$defs/check" }, { "properties": { "id": { "const": "control.legacy-unmanaged" }, "category": { "const": "control" }, "blocking": { "const": true } } }] },
+        { "allOf": [{ "$ref": "#/$defs/check" }, { "properties": { "id": { "const": "consistency.two-pass" }, "category": { "const": "consistency" }, "blocking": { "const": true } } }] },
+        { "allOf": [{ "$ref": "#/$defs/check" }, { "properties": { "id": { "const": "redaction.export-contract" }, "category": { "const": "redaction" }, "blocking": { "const": true } } }] },
+        { "allOf": [{ "$ref": "#/$defs/check" }, { "properties": { "id": { "const": "manual.external-state" }, "category": { "const": "manual" }, "blocking": { "const": false } } }] }
+      ],
+      "items": false
+    },
+    "manualConfirmations": {
+      "type": "array",
+      "minItems": 9,
+      "maxItems": 9,
+      "prefixItems": [
+        { "allOf": [{ "$ref": "#/$defs/manualConfirmation" }, { "properties": { "id": { "const": "production-host-and-traffic-entry" } } }] },
+        { "allOf": [{ "$ref": "#/$defs/manualConfirmation" }, { "properties": { "id": { "const": "all-writers-and-service-managers" } } }] },
+        { "allOf": [{ "$ref": "#/$defs/manualConfirmation" }, { "properties": { "id": { "const": "external-port-3003-firewall" } } }] },
+        { "allOf": [{ "$ref": "#/$defs/manualConfirmation" }, { "properties": { "id": { "const": "business-data-baseline" } } }] },
+        { "allOf": [{ "$ref": "#/$defs/manualConfirmation" }, { "properties": { "id": { "const": "legacy-source-review" } } }] },
+        { "allOf": [{ "$ref": "#/$defs/manualConfirmation" }, { "properties": { "id": { "const": "data-path-mapping" } } }] },
+        { "allOf": [{ "$ref": "#/$defs/manualConfirmation" }, { "properties": { "id": { "const": "pm2-secret-lifecycle" } } }] },
+        { "allOf": [{ "$ref": "#/$defs/manualConfirmation" }, { "properties": { "id": { "const": "nginx-and-tls-external-state" } } }] },
+        { "allOf": [{ "$ref": "#/$defs/manualConfirmation" }, { "properties": { "id": { "const": "recovery-rehearsal" } } }] }
+      ],
+      "items": false
+    },
+    "collectorErrors": {
+      "type": "array",
+      "maxItems": 0
+    },
+    "processes": {
+      "type": "array",
+      "maxItems": 256,
+      "items": { "$ref": "#/$defs/processProjection" }
+    },
+    "inventoryMetrics": { "$ref": "#/$defs/inventoryMetrics" }
+  },
+  "$defs": {
+    "capture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["phase", "mode", "startedAt", "completedAt", "attempts", "complete"],
+      "properties": {
+        "phase": { "enum": ["live-discovery", "quiesced-binding"] },
+        "mode": { "const": "live-read-only" },
+        "startedAt": { "$ref": "#/$defs/canonicalTimestamp" },
+        "completedAt": { "$ref": "#/$defs/canonicalTimestamp" },
+        "attempts": { "type": "integer", "minimum": 1, "maximum": 3 },
+        "complete": { "const": true }
+      }
+    },
+    "collector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "formatVersion", "installedPath", "runtime"],
+      "properties": {
+        "name": { "const": "birdora-legacy-inventory" },
+        "formatVersion": { "const": 1 },
+        "installedPath": { "const": "/usr/local/libexec/birdora/legacy-inventory.js" },
+        "runtime": { "const": "node-v24" }
+      }
+    },
+    "exportPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rawSecretMaterialCaptured",
+        "rawProcessEnvironmentCaptured",
+        "rawCommandLineCaptured",
+        "rawPm2DumpCaptured",
+        "databaseOpened",
+        "databaseRowsCaptured",
+        "databaseSchemaCaptured",
+        "mediaContentCaptured",
+        "mediaFileNamesCaptured"
+      ],
+      "properties": {
+        "rawSecretMaterialCaptured": { "const": false },
+        "rawProcessEnvironmentCaptured": { "const": false },
+        "rawCommandLineCaptured": { "const": false },
+        "rawPm2DumpCaptured": { "const": false },
+        "databaseOpened": { "const": false },
+        "databaseRowsCaptured": { "const": false },
+        "databaseSchemaCaptured": { "const": false },
+        "mediaContentCaptured": { "const": false },
+        "mediaFileNamesCaptured": { "const": false }
+      }
+    },
+    "authorization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["inventoryOnly", "adoptionAuthorized", "mutationAuthorized"],
+      "properties": {
+        "inventoryOnly": { "const": true },
+        "adoptionAuthorized": { "const": false },
+        "mutationAuthorized": { "const": false }
+      }
+    },
+    "verdict": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["automatedState", "authorizesMutation", "authorizesAdoption"],
+      "properties": {
+        "automatedState": {
+          "enum": [
+            "BLOCKED",
+            "DISCOVERY_COMPLETE_REQUIRES_QUIESCED_RECAPTURE",
+            "AWAITING_MANUAL"
+          ]
+        },
+        "authorizesMutation": { "const": false },
+        "authorizesAdoption": { "const": false }
+      }
+    },
+    "host": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "platform",
+        "architecture",
+        "kernelRelease",
+        "bootId",
+        "rootUid",
+        "hostPidNamespace",
+        "hostMountNamespace",
+        "hostNetworkNamespace",
+        "hostUserNamespace",
+        "initProcessClass",
+        "containerMarkersPresent",
+        "hostEnvironmentCandidate"
+      ],
+      "properties": {
+        "platform": { "const": "linux" },
+        "architecture": {
+          "type": "string",
+          "pattern": "^[a-z0-9_-]{1,32}$"
+        },
+        "kernelRelease": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._+~-]{1,128}$"
+        },
+        "bootId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "rootUid": { "const": true },
+        "hostPidNamespace": { "const": true },
+        "hostMountNamespace": { "const": true },
+        "hostNetworkNamespace": { "const": true },
+        "hostUserNamespace": { "const": true },
+        "initProcessClass": { "const": "systemd-or-init" },
+        "containerMarkersPresent": { "const": false },
+        "hostEnvironmentCandidate": { "const": true }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "formatVersion",
+        "capturePhase",
+        "applicationRoot",
+        "databaseFile",
+        "dataDirectory",
+        "communityUploadDirectory",
+        "observationUploadDirectory",
+        "pm2Home",
+        "siteName",
+        "listenerPort",
+        "expectedWriterAppNames",
+        "expectedAdjacentAppNames",
+        "maximumMediaFilesPerRoot",
+        "maximumReportBytes",
+        "approvedRuntimeIdentityFiles"
+      ],
+      "properties": {
+        "formatVersion": { "const": 1 },
+        "capturePhase": { "enum": ["live-discovery", "quiesced-binding"] },
+        "applicationRoot": { "const": "/var/www/birdora-web" },
+        "databaseFile": {
+          "enum": [
+            "/var/lib/birdora/birdora.sqlite",
+            "/var/www/birdora-web/app/data/birdora.sqlite"
+          ]
+        },
+        "dataDirectory": {
+          "enum": ["/var/lib/birdora", "/var/www/birdora-web/app/data"]
+        },
+        "communityUploadDirectory": {
+          "enum": [
+            "/var/lib/birdora/uploads/community",
+            "/var/www/birdora-web/app/data/uploads/community"
+          ]
+        },
+        "observationUploadDirectory": {
+          "enum": [
+            "/var/lib/birdora/uploads/observations",
+            "/var/www/birdora-web/app/data/uploads/observations"
+          ]
+        },
+        "pm2Home": { "enum": ["/root/.pm2", "/var/lib/birdora/pm2"] },
+        "siteName": { "const": "birdora.birdai-glasses.com" },
+        "listenerPort": { "const": 3003 },
+        "expectedWriterAppNames": { "$ref": "#/$defs/appNameArray" },
+        "expectedAdjacentAppNames": { "$ref": "#/$defs/appNameArray" },
+        "maximumMediaFilesPerRoot": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "maximumReportBytes": {
+          "type": "integer",
+          "minimum": 1024,
+          "maximum": 16777216
+        },
+        "approvedRuntimeIdentityFiles": {
+          "type": "array",
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "enum": ["server.js", "package.json", "app/db/database.js"]
+          }
+        }
+      }
+    },
+    "sideEffectContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sqliteConnectionOpened",
+        "pm2CliUsed",
+        "pm2RpcConnected",
+        "externalCommandsExecuted",
+        "networkRequestsMade",
+        "signalsSent",
+        "serviceStateChanged",
+        "productionFilesWritten",
+        "reportFileWritten"
+      ],
+      "properties": {
+        "sqliteConnectionOpened": { "const": false },
+        "pm2CliUsed": { "const": false },
+        "pm2RpcConnected": { "const": false },
+        "externalCommandsExecuted": { "const": false },
+        "networkRequestsMade": { "const": false },
+        "signalsSent": { "const": false },
+        "serviceStateChanged": { "const": false },
+        "productionFilesWritten": { "const": false },
+        "reportFileWritten": { "const": true }
+      }
+    },
+    "controlState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "activationPending",
+        "currentRelease",
+        "runtimePointer",
+        "releaseRoot",
+        "publicPointer",
+        "publicReleaseRoot",
+        "maintenanceFlag",
+        "databaseLock",
+        "deploymentLock",
+        "managedStatePresent",
+        "filesParsed"
+      ],
+      "properties": {
+        "activationPending": { "$ref": "#/$defs/pathMetadata" },
+        "currentRelease": { "$ref": "#/$defs/pathMetadata" },
+        "runtimePointer": { "$ref": "#/$defs/pathMetadata" },
+        "releaseRoot": { "$ref": "#/$defs/pathMetadata" },
+        "publicPointer": { "$ref": "#/$defs/pathMetadata" },
+        "publicReleaseRoot": { "$ref": "#/$defs/pathMetadata" },
+        "maintenanceFlag": { "$ref": "#/$defs/pathMetadata" },
+        "databaseLock": { "$ref": "#/$defs/pathMetadata" },
+        "deploymentLock": { "$ref": "#/$defs/pathMetadata" },
+        "managedStatePresent": { "type": "boolean" },
+        "filesParsed": { "const": false }
+      }
+    },
+    "pm2": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "home",
+        "homeTrusted",
+        "primary",
+        "backup",
+        "selected",
+        "selectedProjection",
+        "cliUsed",
+        "rpcConnected",
+        "rawDumpExported"
+      ],
+      "properties": {
+        "home": { "$ref": "#/$defs/pathMetadata" },
+        "homeTrusted": { "type": "boolean" },
+        "primary": { "$ref": "#/$defs/pm2DumpEvidence" },
+        "backup": { "$ref": "#/$defs/pm2DumpEvidence" },
+        "selected": {
+          "oneOf": [
+            { "const": "primary" },
+            { "type": "null" }
+          ]
+        },
+        "selectedProjection": {
+          "oneOf": [
+            { "$ref": "#/$defs/pm2DumpProjection" },
+            { "type": "null" }
+          ]
+        },
+        "cliUsed": { "const": false },
+        "rpcConnected": { "const": false },
+        "rawDumpExported": { "const": false }
+      }
+    },
+    "listener": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["family", "addressClass", "port", "state", "socketInode", "ownerPids"],
+      "properties": {
+        "family": { "enum": ["ipv4", "ipv6"] },
+        "addressClass": { "enum": ["loopback", "wildcard", "other"] },
+        "port": { "const": 3003 },
+        "state": { "const": "LISTEN" },
+        "socketInode": { "$ref": "#/$defs/unsignedDecimalString" },
+        "ownerPids": {
+          "type": "array",
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/pid" }
+        }
+      }
+    },
+    "database": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "sqliteConnectionOpened",
+        "logicalState",
+        "headerRead",
+        "schemaRead",
+        "rowsRead",
+        "sidecars",
+        "openers"
+      ],
+      "properties": {
+        "path": { "$ref": "#/$defs/pathMetadata" },
+        "sqliteConnectionOpened": { "const": false },
+        "logicalState": { "const": "not_inspected" },
+        "headerRead": { "const": false },
+        "schemaRead": { "const": false },
+        "rowsRead": { "const": false },
+        "sidecars": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["wal", "shm", "journal"],
+          "properties": {
+            "wal": { "$ref": "#/$defs/pathMetadata" },
+            "shm": { "$ref": "#/$defs/pathMetadata" },
+            "journal": { "$ref": "#/$defs/pathMetadata" }
+          }
+        },
+        "openers": {
+          "type": "array",
+          "maxItems": 256,
+          "items": { "$ref": "#/$defs/databaseOpener" }
+        }
+      }
+    },
+    "uploads": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["community", "observation"],
+      "properties": {
+        "community": { "$ref": "#/$defs/mediaSummary" },
+        "observation": { "$ref": "#/$defs/mediaSummary" }
+      }
+    },
+    "nginx": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "available",
+        "enabled",
+        "diskProjection",
+        "selectedDiskSource",
+        "enabledSymlinkTargetsAvailable",
+        "activeRuntimeState",
+        "configurationTestExecuted",
+        "serviceStateChanged"
+      ],
+      "properties": {
+        "available": { "$ref": "#/$defs/nginxFileEvidence" },
+        "enabled": { "$ref": "#/$defs/nginxFileEvidence" },
+        "diskProjection": {
+          "oneOf": [
+            { "$ref": "#/$defs/nginxDiskProjection" },
+            { "type": "null" }
+          ]
+        },
+        "selectedDiskSource": {
+          "oneOf": [
+            { "enum": ["enabled-physical-file", "available-file"] },
+            { "type": "null" }
+          ]
+        },
+        "enabledSymlinkTargetsAvailable": { "type": "boolean" },
+        "activeRuntimeState": { "const": "not_inspected" },
+        "configurationTestExecuted": { "const": false },
+        "serviceStateChanged": { "const": false }
+      }
+    },
+    "runtimeSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "root",
+        "rootTrusted",
+        "identityFiles",
+        "identityFileSetComplete",
+        "gitMetadata",
+        "gitCommandExecuted",
+        "claimedRevision"
+      ],
+      "properties": {
+        "root": { "$ref": "#/$defs/pathMetadata" },
+        "rootTrusted": { "type": "boolean" },
+        "identityFiles": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": { "$ref": "#/$defs/identityFile" }
+        },
+        "identityFileSetComplete": { "type": "boolean" },
+        "gitMetadata": { "$ref": "#/$defs/pathMetadata" },
+        "gitCommandExecuted": { "const": false },
+        "claimedRevision": { "type": "null" }
+      }
+    },
+    "filesystem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fixedPathsOnly", "application", "data", "pm2"],
+      "properties": {
+        "fixedPathsOnly": { "const": true },
+        "application": { "$ref": "#/$defs/rootSummary" },
+        "data": { "$ref": "#/$defs/rootSummary" },
+        "pm2": { "$ref": "#/$defs/rootSummary" }
+      }
+    },
+    "consistency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stable", "snapshotsCompared", "attempts", "internalTokensExported"],
+      "properties": {
+        "stable": { "const": true },
+        "snapshotsCompared": { "const": 2 },
+        "attempts": { "type": "integer", "minimum": 1, "maximum": 3 },
+        "internalTokensExported": { "const": false }
+      }
+    },
+    "inventoryMetrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "processCount",
+        "inspectedDescriptorCount",
+        "transientProcessRaceCount",
+        "transientDescriptorRaceCount",
+        "descriptorScanComplete"
+      ],
+      "properties": {
+        "processCount": { "type": "integer", "minimum": 1, "maximum": 131072 },
+        "inspectedDescriptorCount": { "type": "integer", "minimum": 0, "maximum": 262144 },
+        "transientProcessRaceCount": { "type": "integer", "minimum": 0, "maximum": 131072 },
+        "transientDescriptorRaceCount": { "type": "integer", "minimum": 0, "maximum": 262144 },
+        "descriptorScanComplete": { "type": "boolean" }
+      }
+    },
+    "check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "category", "result", "blocking", "reason"],
+      "properties": {
+        "id": {
+          "enum": [
+            "execution.linux-platform",
+            "execution.root-identity",
+            "execution.host-namespaces",
+            "filesystem.application-root",
+            "filesystem.data-root",
+            "filesystem.pm2-root",
+            "listener.single-loopback",
+            "listener.single-owner",
+            "runtime.listener-process",
+            "runtime.identity-files",
+            "database.identity",
+            "database.listener-opener-binding",
+            "database.quiesced-if-required",
+            "database.logical-state-not-inspected",
+            "uploads.community-safe",
+            "uploads.observation-safe",
+            "pm2.dump-safe",
+            "pm2.persistence-entry",
+            "pm2.environment-mapping",
+            "nginx.disk-projection",
+            "nginx.unexpanded-includes",
+            "control.legacy-unmanaged",
+            "consistency.two-pass",
+            "redaction.export-contract",
+            "manual.external-state"
+          ]
+        },
+        "category": {
+          "enum": [
+            "execution",
+            "filesystem",
+            "listener",
+            "runtime",
+            "database",
+            "uploads",
+            "pm2",
+            "nginx",
+            "control",
+            "consistency",
+            "redaction",
+            "manual"
+          ]
+        },
+        "result": { "enum": ["PASS", "FAIL", "UNKNOWN", "MANUAL_REQUIRED", "REDACTED", "NA"] },
+        "blocking": { "type": "boolean" },
+        "reason": {
+          "enum": [
+            "confirmed",
+            "mismatch",
+            "unsafe-path",
+            "unavailable",
+            "not-applicable-live-phase",
+            "not-applicable-quiesced-phase",
+            "writer-present",
+            "not-inspected",
+            "unexpected-process",
+            "environment-mismatch",
+            "managed-state-present",
+            "redacted-by-design",
+            "manual-confirmation-required"
+          ]
+        }
+      }
+    },
+    "manualConfirmation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "status", "reason"],
+      "properties": {
+        "id": {
+          "enum": [
+            "production-host-and-traffic-entry",
+            "all-writers-and-service-managers",
+            "external-port-3003-firewall",
+            "business-data-baseline",
+            "legacy-source-review",
+            "data-path-mapping",
+            "pm2-secret-lifecycle",
+            "nginx-and-tls-external-state",
+            "recovery-rehearsal"
+          ]
+        },
+        "status": { "const": "PENDING" },
+        "reason": { "type": "string", "minLength": 1, "maxLength": 512 }
+      }
+    },
+    "processProjection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pid",
+        "processDirectoryDevice",
+        "processDirectoryInode",
+        "startTimeTicks",
+        "parentPid",
+        "state",
+        "identity",
+        "executableClass",
+        "workingDirectoryClass",
+        "command",
+        "environment"
+      ],
+      "properties": {
+        "pid": { "$ref": "#/$defs/pid" },
+        "processDirectoryDevice": { "$ref": "#/$defs/unsignedDecimalString" },
+        "processDirectoryInode": { "$ref": "#/$defs/unsignedDecimalString" },
+        "startTimeTicks": { "$ref": "#/$defs/unsignedDecimalString" },
+        "parentPid": { "type": "integer", "minimum": 0, "maximum": 4194304 },
+        "state": { "type": "string", "pattern": "^[A-Z]$" },
+        "identity": { "$ref": "#/$defs/processIdentity" },
+        "executableClass": {
+          "enum": ["managed-node-v24", "system-node", "other-executable", "deleted-executable", "invalid"]
+        },
+        "workingDirectoryClass": {
+          "enum": [
+            "application-root",
+            "managed-current",
+            "inside-application-root",
+            "outside-application-root",
+            "invalid"
+          ]
+        },
+        "command": { "$ref": "#/$defs/commandProjection" },
+        "environment": { "$ref": "#/$defs/processEnvironment" }
+      }
+    },
+    "processIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["uid", "effectiveUid", "gid", "effectiveGid"],
+      "properties": {
+        "uid": { "$ref": "#/$defs/unsignedDecimalString" },
+        "effectiveUid": { "$ref": "#/$defs/unsignedDecimalString" },
+        "gid": { "$ref": "#/$defs/unsignedDecimalString" },
+        "effectiveGid": { "$ref": "#/$defs/unsignedDecimalString" }
+      }
+    },
+    "commandProjection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "argumentCount",
+        "approvedEntrypointIsExecutedScript",
+        "secretLikeArgumentPresent",
+        "rawArgumentsExported"
+      ],
+      "properties": {
+        "argumentCount": { "type": "integer", "minimum": 0, "maximum": 4096 },
+        "approvedEntrypointIsExecutedScript": { "type": "boolean" },
+        "secretLikeArgumentPresent": { "type": "boolean" },
+        "rawArgumentsExported": { "const": false }
+      }
+    },
+    "processEnvironment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "recordCount",
+        "malformedRecordCount",
+        "unknownKeyCount",
+        "dangerousRuntimeKeyPresent",
+        "safeKeys",
+        "sensitivePresence",
+        "valuesExported"
+      ],
+      "properties": {
+        "recordCount": { "type": "integer", "minimum": 0, "maximum": 16384 },
+        "malformedRecordCount": { "type": "integer", "minimum": 0, "maximum": 16384 },
+        "unknownKeyCount": { "type": "integer", "minimum": 0, "maximum": 16384 },
+        "dangerousRuntimeKeyPresent": { "type": "boolean" },
+        "safeKeys": { "$ref": "#/$defs/safeEnvironmentKeys" },
+        "sensitivePresence": { "$ref": "#/$defs/sensitivePresence" },
+        "valuesExported": { "const": false }
+      }
+    },
+    "safeEnvironmentKeys": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "NODE_ENV",
+        "HOST",
+        "PORT",
+        "DATABASE_FILE",
+        "DATA_DIRECTORY",
+        "COMMUNITY_UPLOAD_DIR",
+        "OBSERVATION_UPLOAD_DIR",
+        "PM2_HOME"
+      ],
+      "properties": {
+        "NODE_ENV": { "$ref": "#/$defs/environmentKeyResult" },
+        "HOST": { "$ref": "#/$defs/environmentKeyResult" },
+        "PORT": { "$ref": "#/$defs/environmentKeyResult" },
+        "DATABASE_FILE": { "$ref": "#/$defs/environmentKeyResult" },
+        "DATA_DIRECTORY": { "$ref": "#/$defs/environmentKeyResult" },
+        "COMMUNITY_UPLOAD_DIR": { "$ref": "#/$defs/environmentKeyResult" },
+        "OBSERVATION_UPLOAD_DIR": { "$ref": "#/$defs/environmentKeyResult" },
+        "PM2_HOME": { "$ref": "#/$defs/environmentKeyResult" }
+      }
+    },
+    "environmentKeyResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["present", "matchesExpected"],
+      "properties": {
+        "present": { "type": "boolean" },
+        "matchesExpected": { "type": "boolean" }
+      }
+    },
+    "sensitivePresence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "jwtOrSessionSecret",
+        "tokenOrCredential",
+        "password",
+        "cookieOrAuthorization",
+        "privateKey"
+      ],
+      "properties": {
+        "jwtOrSessionSecret": { "type": "boolean" },
+        "tokenOrCredential": { "type": "boolean" },
+        "password": { "type": "boolean" },
+        "cookieOrAuthorization": { "type": "boolean" },
+        "privateKey": { "type": "boolean" }
+      }
+    },
+    "databaseOpener": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["process", "descriptorCount", "accessModes", "writableDescriptorPresent"],
+      "properties": {
+        "process": { "$ref": "#/$defs/processProjection" },
+        "descriptorCount": { "type": "integer", "minimum": 1, "maximum": 262144 },
+        "accessModes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": { "enum": ["read-only", "write-only", "read-write", "unknown"] }
+        },
+        "writableDescriptorPresent": { "type": "boolean" }
+      }
+    },
+    "mediaSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "root",
+        "fileCount",
+        "directoryCount",
+        "totalBytes",
+        "symlinkCount",
+        "hardlinkCount",
+        "specialCount",
+        "unreadableCount",
+        "nestedMountCount",
+        "crossDeviceEntryCount",
+        "maximumFileLimitReached",
+        "namesExported",
+        "contentRead"
+      ],
+      "properties": {
+        "root": { "$ref": "#/$defs/pathMetadata" },
+        "fileCount": { "type": "integer", "minimum": 0, "maximum": 1000000 },
+        "directoryCount": { "$ref": "#/$defs/boundedMediaCount" },
+        "totalBytes": { "$ref": "#/$defs/unsignedDecimalString" },
+        "symlinkCount": { "$ref": "#/$defs/boundedMediaCount" },
+        "hardlinkCount": { "$ref": "#/$defs/boundedMediaCount" },
+        "specialCount": { "$ref": "#/$defs/boundedMediaCount" },
+        "unreadableCount": { "$ref": "#/$defs/boundedMediaCount" },
+        "nestedMountCount": { "$ref": "#/$defs/boundedMediaCount" },
+        "crossDeviceEntryCount": { "$ref": "#/$defs/boundedMediaCount" },
+        "maximumFileLimitReached": { "type": "boolean" },
+        "namesExported": { "const": false },
+        "contentRead": { "const": false }
+      }
+    },
+    "pm2DumpEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["metadata", "usable", "projection"],
+      "properties": {
+        "metadata": { "$ref": "#/$defs/pathMetadata" },
+        "usable": { "type": "boolean" },
+        "projection": {
+          "oneOf": [
+            { "$ref": "#/$defs/pm2DumpProjection" },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "pm2DumpProjection": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["validJsonArray"],
+          "properties": {
+            "validJsonArray": { "const": false }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "validJsonArray",
+            "processCount",
+            "approvedProcessCount",
+            "unexpectedProcessCount",
+            "writerProcessCount",
+            "adjacentProcessCount",
+            "processes",
+            "rawDumpExported",
+            "rawDumpDigestExported"
+          ],
+          "properties": {
+            "validJsonArray": { "const": true },
+            "processCount": { "type": "integer", "minimum": 0, "maximum": 1024 },
+            "approvedProcessCount": { "type": "integer", "minimum": 0, "maximum": 1024 },
+            "unexpectedProcessCount": { "type": "integer", "minimum": 0, "maximum": 1024 },
+            "writerProcessCount": { "type": "integer", "minimum": 0, "maximum": 1024 },
+            "adjacentProcessCount": { "type": "integer", "minimum": 0, "maximum": 1024 },
+            "processes": {
+              "type": "array",
+              "maxItems": 1024,
+              "items": { "$ref": "#/$defs/pm2Process" }
+            },
+            "rawDumpExported": { "const": false },
+            "rawDumpDigestExported": { "const": false }
+          }
+        }
+      ]
+    },
+    "pm2Process": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["malformed", "approvedName", "writerName", "adjacentName"],
+          "properties": {
+            "malformed": { "const": true },
+            "approvedName": { "const": false },
+            "writerName": { "const": false },
+            "adjacentName": { "const": false }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "malformed",
+            "approvedName",
+            "approvedNameValue",
+            "writerName",
+            "adjacentName",
+            "statusClass",
+            "workingDirectoryClass",
+            "executionPathApproved",
+            "environment"
+          ],
+          "properties": {
+            "malformed": { "const": false },
+            "approvedName": { "type": "boolean" },
+            "approvedNameValue": {
+              "oneOf": [
+                { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" },
+                { "type": "null" }
+              ]
+            },
+            "writerName": { "type": "boolean" },
+            "adjacentName": { "type": "boolean" },
+            "statusClass": {
+              "enum": ["online", "stopped", "errored", "stopping", "launching", "unknown"]
+            },
+            "workingDirectoryClass": {
+              "enum": [
+                "application-root",
+                "managed-current",
+                "inside-application-root",
+                "outside-application-root",
+                "invalid"
+              ]
+            },
+            "executionPathApproved": { "type": "boolean" },
+            "environment": { "$ref": "#/$defs/pm2Environment" }
+          }
+        }
+      ]
+    },
+    "pm2Environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "recordCount",
+        "malformed",
+        "unknownKeyCount",
+        "dangerousRuntimeKeyPresent",
+        "safeKeys",
+        "sensitivePresence",
+        "valuesExported"
+      ],
+      "properties": {
+        "recordCount": { "type": "integer", "minimum": 0, "maximum": 16384 },
+        "malformed": { "type": "boolean" },
+        "unknownKeyCount": { "type": "integer", "minimum": 0, "maximum": 16384 },
+        "dangerousRuntimeKeyPresent": { "type": "boolean" },
+        "safeKeys": { "$ref": "#/$defs/safeEnvironmentKeys" },
+        "sensitivePresence": { "$ref": "#/$defs/sensitivePresence" },
+        "valuesExported": { "const": false }
+      }
+    },
+    "nginxFileEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["metadata", "readable"],
+      "properties": {
+        "metadata": { "$ref": "#/$defs/pathMetadata" },
+        "readable": { "type": "boolean" }
+      }
+    },
+    "nginxDiskProjection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "configuredServerNamePresent",
+        "loopbackProxyPresent",
+        "wildcardApplicationProxyPresent",
+        "tlsListenerPresent",
+        "unexpandedIncludePresent",
+        "configurationBytes",
+        "rawConfigurationExported",
+        "configurationDigestExported"
+      ],
+      "properties": {
+        "configuredServerNamePresent": { "type": "boolean" },
+        "loopbackProxyPresent": { "type": "boolean" },
+        "wildcardApplicationProxyPresent": { "type": "boolean" },
+        "tlsListenerPresent": { "type": "boolean" },
+        "unexpandedIncludePresent": { "type": "boolean" },
+        "configurationBytes": { "type": "integer", "minimum": 0, "maximum": 1048576 },
+        "rawConfigurationExported": { "const": false },
+        "configurationDigestExported": { "const": false }
+      }
+    },
+    "identityFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "metadata", "sha256"],
+      "properties": {
+        "name": {
+          "enum": [
+            "server.js",
+            "package.json",
+            "app/db/database.js"
+          ]
+        },
+        "metadata": { "$ref": "#/$defs/pathMetadata" },
+        "sha256": {
+          "oneOf": [
+            { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "rootSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["metadata", "physicalDirectory", "ancestors"],
+      "properties": {
+        "metadata": { "$ref": "#/$defs/pathMetadata" },
+        "physicalDirectory": { "type": "boolean" },
+        "ancestors": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": { "$ref": "#/$defs/pathAncestor" }
+        }
+      }
+    },
+    "pathAncestor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["depthFromRoot", "metadata"],
+      "properties": {
+        "depthFromRoot": { "type": "integer", "minimum": 0, "maximum": 31 },
+        "metadata": { "$ref": "#/$defs/pathMetadata" }
+      }
+    },
+    "pathMetadata": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "exists",
+            "type",
+            "canonicalMatchesRequested",
+            "uid",
+            "gid",
+            "mode",
+            "nlink",
+            "device",
+            "inode",
+            "bytes",
+            "mtimeNs",
+            "ctimeNs",
+            "groupOrOtherWritable"
+          ],
+          "properties": {
+            "exists": { "const": true },
+            "type": { "enum": ["symlink", "directory", "file", "special"] },
+            "canonicalMatchesRequested": { "type": "boolean" },
+            "uid": { "$ref": "#/$defs/unsignedDecimalString" },
+            "gid": { "$ref": "#/$defs/unsignedDecimalString" },
+            "mode": { "type": "integer", "minimum": 0, "maximum": 4095 },
+            "nlink": { "$ref": "#/$defs/unsignedDecimalString" },
+            "device": { "$ref": "#/$defs/unsignedDecimalString" },
+            "inode": { "$ref": "#/$defs/unsignedDecimalString" },
+            "bytes": { "$ref": "#/$defs/unsignedDecimalString" },
+            "mtimeNs": { "$ref": "#/$defs/unsignedDecimalString" },
+            "ctimeNs": { "$ref": "#/$defs/unsignedDecimalString" },
+            "groupOrOtherWritable": { "type": "boolean" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["exists", "type"],
+          "properties": {
+            "exists": { "const": false },
+            "type": { "const": "missing" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["exists", "type", "errorCode"],
+          "properties": {
+            "exists": { "const": null },
+            "type": { "const": "unreadable" },
+            "errorCode": { "type": "string", "pattern": "^[A-Z0-9_]{2,64}$" }
+          }
+        }
+      ]
+    },
+    "appNameArray": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+      }
+    },
+    "canonicalTimestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+    },
+    "pid": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 4194304
+    },
+    "unsignedDecimalString": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 32,
+      "pattern": "^(?:0|[1-9][0-9]*)$"
+    },
+    "boundedMediaCount": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1000000
+    }
+  }
+}

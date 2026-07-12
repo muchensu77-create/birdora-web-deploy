@@ -3,6 +3,8 @@ const fs = require("fs");
 const path = require("path");
 
 const { getDatabase } = require("../db/database");
+const cursorService = require("./cursor.service");
+const notificationService = require("./notification.service");
 const { recordImageWriteMetric } = require("./image-write-metrics");
 const observationService = require("./observation.service");
 
@@ -99,6 +101,13 @@ function hasAnyKeyword(text, keywords) {
   return keywords.some((keyword) => text.includes(keyword));
 }
 
+function visibleAuthor(row, viewerId = "") {
+  const isOwner = Boolean(viewerId && row.user_id === viewerId);
+  return Number(row.author_public_profile) === 1 || isOwner
+    ? row.author
+    : "Birdora 用户";
+}
+
 function analyzePostCopy({ title, body, bird, hasImage }) {
   const text = `${title} ${body}`;
   const hasNamedBird = Boolean(bird && bird !== "观鸟笔记" && text.includes(bird));
@@ -180,7 +189,7 @@ function mapInteractionRow(row, viewerId = "") {
   return {
     id: row.id,
     body: row.body,
-    author: row.author,
+    author: visibleAuthor(row, viewerId),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     canManage: Boolean(viewerId && row.user_id === viewerId),
@@ -227,6 +236,7 @@ function mapPostRow(row, viewerId = "", interactions = {}) {
 
   return {
     id: row.id,
+    authorId: row.user_id,
     observationId: row.observation_id || "",
     observationSummary: mapObservationSummary(row),
     title: row.title,
@@ -239,11 +249,23 @@ function mapPostRow(row, viewerId = "", interactions = {}) {
       suggestions: parseJsonArray(row.analysis_suggestions),
       updatedAt: row.analysis_updated_at || "",
     },
-    author: row.author,
+    author: visibleAuthor(row, viewerId),
+    authorAvatarUrl: Number(row.author_public_profile) === 1 || row.user_id === viewerId
+      ? row.author_avatar_url || ""
+      : "",
+    viewerFollowsAuthor: Boolean(row.viewer_follows_author),
+    locationText: row.location_text || "",
+    visibility: row.visibility || "public",
+    status: row.status || "published",
+    moderationStatus: row.moderation_status || "approved",
+    publishedAt: row.published_at || row.created_at,
+    version: Number(row.version) || 1,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     canManage: Boolean(viewerId && row.user_id === viewerId),
     feedback: interactions.feedback || createEmptyFeedback(),
+    likeCount: Number(interactions.like?.count) || 0,
+    viewerHasLiked: interactions.like?.selected === true,
     commentCount,
     commentPreview: comments,
     comments,
@@ -268,6 +290,13 @@ function selectPostById(db, id) {
       posts.title,
       posts.body,
       posts.bird,
+      posts.location_text,
+      posts.visibility,
+      posts.status,
+      posts.moderation_status,
+      posts.published_at,
+      posts.deleted_at,
+      posts.version,
       posts.analysis_summary,
       posts.analysis_score,
       posts.analysis_tags,
@@ -276,6 +305,8 @@ function selectPostById(db, id) {
       posts.created_at,
       posts.updated_at,
       users.nickname AS author,
+      users.avatar_url AS author_avatar_url,
+      users.public_profile AS author_public_profile,
       images.storage_path AS image_storage_path,
       images.original_name AS image_original_name,
       images.mime_type AS image_mime_type,
@@ -338,6 +369,7 @@ function fetchInteractions(db, postIds, viewerId = "", options = {}) {
       postId,
       {
         feedback: createEmptyFeedback(),
+        like: { count: 0, selected: false },
         comments: [],
         commentCount: 0,
         questions: [],
@@ -373,7 +405,8 @@ function fetchInteractions(db, postIds, viewerId = "", options = {}) {
         body,
         created_at,
         updated_at,
-        author
+        author,
+        author_public_profile
       FROM (
         SELECT
           comments.id,
@@ -383,6 +416,7 @@ function fetchInteractions(db, postIds, viewerId = "", options = {}) {
           comments.created_at,
           comments.updated_at,
           users.nickname AS author,
+          users.public_profile AS author_public_profile,
           ROW_NUMBER() OVER (
             PARTITION BY comments.post_id
             ORDER BY comments.created_at DESC, comments.id DESC
@@ -423,7 +457,8 @@ function fetchInteractions(db, postIds, viewerId = "", options = {}) {
         body,
         created_at,
         updated_at,
-        author
+        author,
+        author_public_profile
       FROM (
         SELECT
           questions.id,
@@ -433,6 +468,7 @@ function fetchInteractions(db, postIds, viewerId = "", options = {}) {
           questions.created_at,
           questions.updated_at,
           users.nickname AS author,
+          users.public_profile AS author_public_profile,
           ROW_NUMBER() OVER (
             PARTITION BY questions.post_id
             ORDER BY questions.created_at DESC, questions.id DESC
@@ -450,6 +486,26 @@ function fetchInteractions(db, postIds, viewerId = "", options = {}) {
     }
   }
 
+  const likeRows = db.prepare(`
+    SELECT
+      post_id,
+      COUNT(*) AS like_count,
+      SUM(CASE WHEN user_id = ? THEN 1 ELSE 0 END) AS viewer_selected
+    FROM community_post_likes
+    WHERE post_id IN (${placeholders})
+    GROUP BY post_id
+  `).all(viewerId, ...postIds);
+
+  for (const row of likeRows) {
+    const detail = detailsByPostId.get(row.post_id);
+    if (!detail) continue;
+    detail.like = {
+      count: Number(row.like_count) || 0,
+      selected: Boolean(row.viewer_selected),
+    };
+    detail.feedback.helpful = { ...detail.like };
+  }
+
   const reactionRows = db.prepare(`
     SELECT
       post_id,
@@ -457,13 +513,13 @@ function fetchInteractions(db, postIds, viewerId = "", options = {}) {
       COUNT(*) AS reaction_count,
       SUM(CASE WHEN user_id = ? THEN 1 ELSE 0 END) AS viewer_selected
     FROM community_post_reactions
-    WHERE post_id IN (${placeholders})
+    WHERE post_id IN (${placeholders}) AND reaction_type = 'curious'
     GROUP BY post_id, reaction_type
   `).all(viewerId, ...postIds);
 
   for (const row of reactionRows) {
     const detail = detailsByPostId.get(row.post_id);
-    if (!detail || !REACTION_TYPES.has(row.reaction_type)) continue;
+    if (!detail || row.reaction_type !== "curious") continue;
 
     detail.feedback[row.reaction_type] = {
       count: Number(row.reaction_count) || 0,
@@ -495,13 +551,45 @@ function fetchInteractions(db, postIds, viewerId = "", options = {}) {
 
 function hydratePostRows(db, rows, viewerId = "", options = {}) {
   const postIds = rows.map((row) => row.id);
+  const authorIds = [...new Set(rows.map((row) => row.user_id).filter(Boolean))];
+  const followedAuthorIds = new Set();
+  if (viewerId && authorIds.length) {
+    const placeholders = authorIds.map(() => "?").join(", ");
+    const followedRows = db.prepare(`
+      SELECT followed_user_id
+      FROM user_follows
+      WHERE follower_user_id = ? AND followed_user_id IN (${placeholders})
+    `).all(viewerId, ...authorIds);
+    for (const row of followedRows) followedAuthorIds.add(row.followed_user_id);
+  }
   const interactionsByPostId = fetchInteractions(db, postIds, viewerId, options);
-  return rows.map((row) => mapPostRow(row, viewerId, interactionsByPostId.get(row.id)));
+  return rows.map((row) => mapPostRow({
+    ...row,
+    viewer_follows_author: followedAuthorIds.has(row.user_id),
+  }, viewerId, interactionsByPostId.get(row.id)));
+}
+
+function canViewPostRow(db, row, viewerId = "") {
+  if (!row || row.status === "deleted" || row.deleted_at) return false;
+  if (viewerId && row.user_id === viewerId) return true;
+  if (row.status !== "published" || row.moderation_status !== "approved") return false;
+  if (row.visibility === "public") return true;
+  if (row.visibility !== "followers" || !viewerId) return false;
+  return Boolean(db.prepare(`
+    SELECT 1
+    FROM user_follows
+    WHERE follower_user_id = ? AND followed_user_id = ?
+  `).get(viewerId, row.user_id));
+}
+
+function requireVisiblePostRow(db, row, viewerId = "") {
+  if (!canViewPostRow(db, row, viewerId)) throw createPostNotFoundError();
+  return row;
 }
 
 function getPostForViewer(db, id, viewerId = "", options = {}) {
   const row = selectPostById(db, id);
-  if (!row) throw createPostNotFoundError();
+  requireVisiblePostRow(db, row, viewerId);
 
   return hydratePostRows(db, [row], viewerId, options)[0];
 }
@@ -518,6 +606,12 @@ async function listPosts({ viewerId = "", limit = 50, offset = 0 } = {}) {
       posts.title,
       posts.body,
       posts.bird,
+      posts.location_text,
+      posts.visibility,
+      posts.status,
+      posts.moderation_status,
+      posts.published_at,
+      posts.version,
       posts.analysis_summary,
       posts.analysis_score,
       posts.analysis_tags,
@@ -526,6 +620,8 @@ async function listPosts({ viewerId = "", limit = 50, offset = 0 } = {}) {
       posts.created_at,
       posts.updated_at,
       users.nickname AS author,
+      users.avatar_url AS author_avatar_url,
+      users.public_profile AS author_public_profile,
       images.storage_path AS image_storage_path,
       images.original_name AS image_original_name,
       images.mime_type AS image_mime_type,
@@ -546,9 +642,24 @@ async function listPosts({ viewerId = "", limit = 50, offset = 0 } = {}) {
     LEFT JOIN community_post_images AS images ON images.post_id = posts.id
     LEFT JOIN community_post_videos AS videos ON videos.post_id = posts.id
     LEFT JOIN observations ON observations.id = posts.observation_id
+    WHERE posts.status = 'published'
+      AND posts.moderation_status = 'approved'
+      AND posts.deleted_at IS NULL
+      AND (
+        posts.visibility = 'public'
+        OR posts.user_id = ?
+        OR (
+          posts.visibility = 'followers'
+          AND EXISTS (
+            SELECT 1 FROM user_follows AS follows
+            WHERE follows.follower_user_id = ?
+              AND follows.followed_user_id = posts.user_id
+          )
+        )
+      )
     ORDER BY posts.created_at DESC, posts.id DESC
     LIMIT ? OFFSET ?
-  `).all(safeLimit + 1, safeOffset);
+  `).all(viewerId, viewerId, safeLimit + 1, safeOffset);
 
   const hasMore = rows.length > safeLimit;
   const pageRows = hasMore ? rows.slice(0, safeLimit) : rows;
@@ -562,6 +673,175 @@ async function listPosts({ viewerId = "", limit = 50, offset = 0 } = {}) {
       hasMore,
     },
   };
+}
+
+function queryCursorPosts(db, {
+  scope,
+  whereSql,
+  params,
+  viewerId,
+  limit = 20,
+  cursor = "",
+}) {
+  const safeLimit = Math.max(1, Math.min(50, Number(limit) || 20));
+  const decodedCursor = cursorService.decodeCursor(cursor, scope);
+  const sortExpression = "COALESCE(NULLIF(posts.published_at, ''), posts.created_at)";
+  const cursorSql = decodedCursor
+    ? `AND (${sortExpression} < ? OR (${sortExpression} = ? AND posts.id < ?))`
+    : "";
+  const cursorParams = decodedCursor
+    ? [decodedCursor.sortTime, decodedCursor.sortTime, decodedCursor.id]
+    : [];
+  const rows = db.prepare(`
+    SELECT
+      posts.id,
+      posts.user_id,
+      posts.observation_id,
+      posts.title,
+      posts.body,
+      posts.bird,
+      posts.location_text,
+      posts.visibility,
+      posts.status,
+      posts.moderation_status,
+      posts.published_at,
+      posts.version,
+      posts.analysis_summary,
+      posts.analysis_score,
+      posts.analysis_tags,
+      posts.analysis_suggestions,
+      posts.analysis_updated_at,
+      posts.created_at,
+      posts.updated_at,
+      users.nickname AS author,
+      users.avatar_url AS author_avatar_url,
+      users.public_profile AS author_public_profile,
+      images.storage_path AS image_storage_path,
+      images.original_name AS image_original_name,
+      images.mime_type AS image_mime_type,
+      images.size_bytes AS image_size_bytes,
+      videos.storage_path AS video_storage_path,
+      videos.original_name AS video_original_name,
+      videos.mime_type AS video_mime_type,
+      videos.size_bytes AS video_size_bytes,
+      observations.id AS observation_summary_id,
+      observations.selected_species_name AS observation_selected_species_name,
+      observations.selected_species_scientific_name AS observation_selected_species_scientific_name,
+      observations.confidence AS observation_confidence,
+      observations.observed_at AS observation_observed_at,
+      observations.source AS observation_source,
+      observations.created_at AS observation_created_at,
+      ${sortExpression} AS feed_sort_time
+    FROM community_posts AS posts
+    JOIN users ON users.id = posts.user_id
+    LEFT JOIN community_post_images AS images ON images.post_id = posts.id
+    LEFT JOIN community_post_videos AS videos ON videos.post_id = posts.id
+    LEFT JOIN observations ON observations.id = posts.observation_id
+    WHERE ${whereSql}
+      ${cursorSql}
+    ORDER BY feed_sort_time DESC, posts.id DESC
+    LIMIT ?
+  `).all(...params, ...cursorParams, safeLimit + 1);
+
+  const hasMore = rows.length > safeLimit;
+  const pageRows = hasMore ? rows.slice(0, safeLimit) : rows;
+  const last = pageRows.at(-1);
+  return {
+    posts: hydratePostRows(db, pageRows, viewerId, { commentPreviewLimit: 3 }),
+    pageInfo: {
+      limit: safeLimit,
+      hasMore,
+      nextCursor: hasMore && last
+        ? cursorService.encodeCursor(scope, { sortTime: last.feed_sort_time, id: last.id })
+        : null,
+    },
+  };
+}
+
+async function listFeed({ type = "recommended", viewerId = "", limit = 20, cursor = "" } = {}) {
+  if (!new Set(["recommended", "following"]).has(type)) {
+    const error = new Error("feed type must be recommended or following");
+    error.statusCode = 400;
+    error.code = "INVALID_FEED_TYPE";
+    throw error;
+  }
+  if (type === "following" && !viewerId) {
+    const error = new Error("Unauthorized");
+    error.statusCode = 401;
+    error.code = "AUTH_REQUIRED";
+    throw error;
+  }
+  const db = getDatabase();
+  const eligible = `
+    posts.status = 'published'
+    AND posts.moderation_status = 'approved'
+    AND posts.deleted_at IS NULL
+  `;
+  if (type === "following") {
+    return queryCursorPosts(db, {
+      scope: "feed:following",
+      whereSql: `${eligible}
+        AND posts.visibility IN ('public', 'followers')
+        AND EXISTS (
+          SELECT 1 FROM user_follows AS follows
+          WHERE follows.follower_user_id = ?
+            AND follows.followed_user_id = posts.user_id
+        )`,
+      params: [viewerId],
+      viewerId,
+      limit,
+      cursor,
+    });
+  }
+  return queryCursorPosts(db, {
+    scope: "feed:recommended",
+    whereSql: `${eligible}
+      AND (
+        posts.visibility = 'public'
+        OR posts.user_id = ?
+        OR (
+          posts.visibility = 'followers'
+          AND EXISTS (
+            SELECT 1 FROM user_follows AS follows
+            WHERE follows.follower_user_id = ?
+              AND follows.followed_user_id = posts.user_id
+          )
+        )
+      )`,
+    params: [viewerId, viewerId],
+    viewerId,
+    limit,
+    cursor,
+  });
+}
+
+async function listPostsByAuthor({ authorId, viewerId = "", limit = 20, cursor = "" }) {
+  const db = getDatabase();
+  const ownerView = Boolean(viewerId && viewerId === authorId);
+  const visibilitySql = ownerView
+    ? "posts.status <> 'deleted' AND posts.deleted_at IS NULL"
+    : `posts.status = 'published'
+       AND posts.moderation_status = 'approved'
+       AND posts.deleted_at IS NULL
+       AND (
+         posts.visibility = 'public'
+         OR (
+           posts.visibility = 'followers'
+           AND EXISTS (
+             SELECT 1 FROM user_follows AS follows
+             WHERE follows.follower_user_id = ?
+               AND follows.followed_user_id = posts.user_id
+           )
+         )
+       )`;
+  return queryCursorPosts(db, {
+    scope: `user-posts:${authorId}`,
+    whereSql: `posts.user_id = ? AND ${visibilitySql}`,
+    params: ownerView ? [authorId] : [authorId, viewerId],
+    viewerId,
+    limit,
+    cursor,
+  });
 }
 
 function getCommentsPage(db, postId, viewerId = "", limit = 10, offset = 0) {
@@ -581,7 +861,8 @@ function getCommentsPage(db, postId, viewerId = "", limit = 10, offset = 0) {
       comments.body,
       comments.created_at,
       comments.updated_at,
-      users.nickname AS author
+      users.nickname AS author,
+      users.public_profile AS author_public_profile
     FROM community_post_comments AS comments
     JOIN users ON users.id = comments.user_id
     WHERE comments.post_id = ?
@@ -621,7 +902,8 @@ function getQuestionsPage(db, postId, viewerId = "", limit = 10, offset = 0) {
       questions.body,
       questions.created_at,
       questions.updated_at,
-      users.nickname AS author
+      users.nickname AS author,
+      users.public_profile AS author_public_profile
     FROM community_post_questions AS questions
     JOIN users ON users.id = questions.user_id
     WHERE questions.post_id = ?
@@ -654,7 +936,7 @@ async function getPostDetails({
 } = {}) {
   const db = getDatabase();
   const row = selectPostById(db, id);
-  if (!row) throw createPostNotFoundError();
+  requireVisiblePostRow(db, row, viewerId);
 
   const post = hydratePostRows(db, [row], viewerId, { commentPreviewLimit: 0, questionPreviewLimit: 0 })[0];
   const commentsPage = getCommentsPage(db, id, viewerId, commentsLimit, commentsOffset);
@@ -673,14 +955,14 @@ async function getPostDetails({
 async function listCommentsForPost({ postId, viewerId = "", limit = 10, offset = 0 } = {}) {
   const db = getDatabase();
   const row = selectPostById(db, postId);
-  if (!row) throw createPostNotFoundError();
+  requireVisiblePostRow(db, row, viewerId);
   return getCommentsPage(db, postId, viewerId, limit, offset);
 }
 
 async function listQuestionsForPost({ postId, viewerId = "", limit = 10, offset = 0 } = {}) {
   const db = getDatabase();
   const row = selectPostById(db, postId);
-  if (!row) throw createPostNotFoundError();
+  requireVisiblePostRow(db, row, viewerId);
   return getQuestionsPage(db, postId, viewerId, limit, offset);
 }
 
@@ -798,7 +1080,17 @@ function removeImageFile(storageFile) {
   fs.rmSync(resolvedPath, { force: true });
 }
 
-async function createPost({ userId, observationId = "", title, body, bird, image, video }) {
+async function createPost({
+  userId,
+  observationId = "",
+  title,
+  body,
+  bird,
+  locationText = "",
+  visibility = "public",
+  image,
+  video,
+}) {
   const db = getDatabase();
   const now = new Date().toISOString();
   const id = crypto.randomUUID();
@@ -825,6 +1117,13 @@ async function createPost({ userId, observationId = "", title, body, bird, image
         title,
         body,
         bird,
+        location_text,
+        visibility,
+        status,
+        moderation_status,
+        moderation_source,
+        published_at,
+        version,
         analysis_summary,
         analysis_score,
         analysis_tags,
@@ -832,7 +1131,7 @@ async function createPost({ userId, observationId = "", title, body, bird, image
         analysis_updated_at,
         created_at,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'published', 'approved', 'direct_publish', ?, 1, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       userId,
@@ -840,6 +1139,9 @@ async function createPost({ userId, observationId = "", title, body, bird, image
       title,
       body,
       bird,
+      locationText,
+      visibility,
+      now,
       analysis.summary,
       analysis.score,
       JSON.stringify(analysis.tags),
@@ -866,6 +1168,183 @@ async function createPost({ userId, observationId = "", title, body, bird, image
   return getPostForViewer(db, id, userId);
 }
 
+function createServiceError(message, statusCode, code) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  error.code = code;
+  return error;
+}
+
+function hashPublishRequest({ draftId, version, image, video }) {
+  const media = image || video;
+  const mediaHash = media?.buffer
+    ? crypto.createHash("sha256").update(media.buffer).digest("hex")
+    : "";
+  return crypto.createHash("sha256").update(JSON.stringify({
+    draftId,
+    version,
+    mediaKind: image ? "image" : video ? "video" : "none",
+    mediaMimeType: media?.mimeType || "",
+    mediaHash,
+  })).digest("hex");
+}
+
+function resolveCompletedPublish(db, record, requestHash, userId) {
+  if (!record) return null;
+  if (record.request_hash !== requestHash) {
+    throw createServiceError(
+      "idempotency key was already used for a different publish request",
+      409,
+      "IDEMPOTENCY_KEY_REUSED"
+    );
+  }
+  if (record.state !== "completed" || !record.resource_id) {
+    throw createServiceError("publish request is still being processed", 409, "IDEMPOTENCY_IN_PROGRESS");
+  }
+  return getPostForViewer(db, record.resource_id, userId);
+}
+
+async function publishDraft({
+  draftId,
+  userId,
+  version,
+  idempotencyKey,
+  image,
+  video,
+}) {
+  const db = getDatabase();
+  const scope = "draft.publish";
+  const requestHash = hashPublishRequest({ draftId, version, image, video });
+  const existingRecord = db.prepare(`
+    SELECT request_hash, state, resource_id
+    FROM idempotency_records
+    WHERE user_id = ? AND scope = ? AND key = ?
+  `).get(userId, scope, idempotencyKey);
+  const completed = resolveCompletedPublish(db, existingRecord, requestHash, userId);
+  if (completed) return completed;
+
+  const draft = db.prepare(`
+    SELECT * FROM post_drafts
+    WHERE id = ? AND user_id = ? AND consumed_at IS NULL
+  `).get(draftId, userId);
+  if (!draft) throw createServiceError("draft not found", 404, "DRAFT_NOT_FOUND");
+  if (Number(draft.version) !== version) {
+    throw createServiceError("draft was changed by another session", 409, "DRAFT_VERSION_CONFLICT");
+  }
+  if (!String(draft.title || "").trim() || !String(draft.body || "").trim()) {
+    throw createServiceError("title and body are required before publishing", 400, "DRAFT_INCOMPLETE");
+  }
+  if (image && video) {
+    throw createServiceError("a post can include either one image or one video", 400, "VALIDATION_ERROR");
+  }
+  if (draft.observation_id) {
+    observationService.getOwnedObservationRow(db, draft.observation_id, userId);
+  }
+
+  const now = new Date().toISOString();
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+  const postId = crypto.randomUUID();
+  const analysis = analyzePostCopy({
+    title: draft.title,
+    body: draft.body,
+    bird: draft.bird,
+    hasImage: Boolean(image || video),
+  });
+  let preparedImage = null;
+  let preparedVideo = null;
+  let transactionStarted = false;
+
+  try {
+    preparedImage = preparePostImage(image);
+    preparedVideo = preparePostVideo(video);
+    db.exec("BEGIN IMMEDIATE");
+    transactionStarted = true;
+
+    const concurrentRecord = db.prepare(`
+      SELECT request_hash, state, resource_id
+      FROM idempotency_records
+      WHERE user_id = ? AND scope = ? AND key = ?
+    `).get(userId, scope, idempotencyKey);
+    const concurrentCompleted = resolveCompletedPublish(db, concurrentRecord, requestHash, userId);
+    if (concurrentCompleted) {
+      db.exec("ROLLBACK");
+      transactionStarted = false;
+      removeImageFile(preparedImage?.storageFile);
+      removeImageFile(preparedVideo?.storageFile);
+      return concurrentCompleted;
+    }
+
+    const lockedDraft = db.prepare(`
+      SELECT * FROM post_drafts
+      WHERE id = ? AND user_id = ? AND consumed_at IS NULL
+    `).get(draftId, userId);
+    if (!lockedDraft) throw createServiceError("draft not found", 404, "DRAFT_NOT_FOUND");
+    if (Number(lockedDraft.version) !== version) {
+      throw createServiceError("draft was changed by another session", 409, "DRAFT_VERSION_CONFLICT");
+    }
+
+    db.prepare(`
+      INSERT INTO idempotency_records (
+        user_id, scope, key, request_hash, state, status_code, response_json,
+        resource_id, expires_at, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, 'processing', NULL, NULL, NULL, ?, ?, ?)
+    `).run(userId, scope, idempotencyKey, requestHash, expiresAt, now, now);
+
+    db.prepare(`
+      INSERT INTO community_posts (
+        id, user_id, observation_id, title, body, bird, location_text, visibility,
+        status, moderation_status, moderation_source, published_at, version,
+        analysis_summary, analysis_score, analysis_tags, analysis_suggestions,
+        analysis_updated_at, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'published', 'approved', 'draft_publish', ?, 1, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      postId,
+      userId,
+      lockedDraft.observation_id,
+      lockedDraft.title,
+      lockedDraft.body,
+      lockedDraft.bird,
+      lockedDraft.location_text,
+      lockedDraft.visibility,
+      now,
+      analysis.summary,
+      analysis.score,
+      JSON.stringify(analysis.tags),
+      JSON.stringify(analysis.suggestions),
+      analysis.updatedAt,
+      now,
+      now
+    );
+    insertPostImage(db, postId, preparedImage);
+    insertPostVideo(db, postId, preparedVideo);
+
+    const consumed = db.prepare(`
+      UPDATE post_drafts
+      SET consumed_at = ?, updated_at = ?
+      WHERE id = ? AND user_id = ? AND consumed_at IS NULL AND version = ?
+    `).run(now, now, draftId, userId, version);
+    if (consumed.changes !== 1) {
+      throw createServiceError("draft was changed by another session", 409, "DRAFT_VERSION_CONFLICT");
+    }
+
+    db.prepare(`
+      UPDATE idempotency_records
+      SET state = 'completed', status_code = 201, response_json = ?, resource_id = ?, updated_at = ?
+      WHERE user_id = ? AND scope = ? AND key = ? AND state = 'processing'
+    `).run(JSON.stringify({ postId }), postId, now, userId, scope, idempotencyKey);
+    db.exec("COMMIT");
+    transactionStarted = false;
+  } catch (error) {
+    if (transactionStarted) db.exec("ROLLBACK");
+    removeImageFile(preparedImage?.storageFile);
+    removeImageFile(preparedVideo?.storageFile);
+    if (isMissingObservationConstraintError(error)) throw createObservationLinkConflictError();
+    throw error;
+  }
+
+  return getPostForViewer(db, postId, userId);
+}
+
 function getOwnedPost(db, id, userId) {
   const row = selectPostById(db, id);
   if (!row) throw createPostNotFoundError();
@@ -879,7 +1358,7 @@ function getOwnedPost(db, id, userId) {
   return row;
 }
 
-async function updatePost({ id, userId, title, body }) {
+async function updatePost({ id, userId, title, body, locationText = "", visibility = "public" }) {
   const db = getDatabase();
   const existingPost = getOwnedPost(db, id, userId);
   const updatedAt = new Date().toISOString();
@@ -887,7 +1366,7 @@ async function updatePost({ id, userId, title, body }) {
     title,
     body,
     bird: existingPost.bird,
-    hasImage: Boolean(existingPost.image_storage_path),
+    hasImage: Boolean(existingPost.image_storage_path || existingPost.video_storage_path),
   });
 
   db.prepare(`
@@ -895,6 +1374,9 @@ async function updatePost({ id, userId, title, body }) {
     SET
       title = ?,
       body = ?,
+      location_text = ?,
+      visibility = ?,
+      version = version + 1,
       analysis_summary = ?,
       analysis_score = ?,
       analysis_tags = ?,
@@ -905,6 +1387,8 @@ async function updatePost({ id, userId, title, body }) {
   `).run(
     title,
     body,
+    locationText,
+    visibility,
     analysis.summary,
     analysis.score,
     JSON.stringify(analysis.tags),
@@ -928,8 +1412,10 @@ async function deletePost({ id, userId }) {
   removeImageFile(video?.storage_path);
 }
 
-async function getPostImage({ id }) {
+async function getPostImage({ id, viewerId = "" }) {
   const db = getDatabase();
+  const post = selectPostById(db, id);
+  requireVisiblePostRow(db, post, viewerId);
   const image = db.prepare(`
     SELECT
       storage_path,
@@ -952,33 +1438,61 @@ async function getPostImage({ id }) {
     mimeType: image.mime_type,
     originalName: image.original_name,
     sizeBytes: image.size_bytes,
+    publiclyCacheable: post.visibility === "public",
   };
 }
 
-async function getPostVideo({ id }) {
+async function getPostVideo({ id, viewerId = "" }) {
   const db = getDatabase();
+  const post = selectPostById(db, id);
+  requireVisiblePostRow(db, post, viewerId);
   const video = db.prepare(`SELECT storage_path, original_name, mime_type, size_bytes FROM community_post_videos WHERE post_id = ?`).get(id);
   if (!video) throw createPostNotFoundError();
   const resolvedPath = path.resolve(UPLOAD_DIR, video.storage_path);
   if (!resolvedPath.startsWith(`${path.resolve(UPLOAD_DIR)}${path.sep}`) || !fs.existsSync(resolvedPath)) throw createPostNotFoundError();
-  return { filePath: resolvedPath, mimeType: video.mime_type, originalName: video.original_name, sizeBytes: video.size_bytes };
+  return {
+    filePath: resolvedPath,
+    mimeType: video.mime_type,
+    originalName: video.original_name,
+    sizeBytes: video.size_bytes,
+    publiclyCacheable: post.visibility === "public",
+  };
 }
 
 async function createComment({ postId, userId, body }) {
   const db = getDatabase();
+  const postRow = selectPostById(db, postId);
+  if (!postRow) throw createPostNotFoundError();
   getPostForViewer(db, postId, userId);
   const now = new Date().toISOString();
-
-  db.prepare(`
-    INSERT INTO community_post_comments (
-      id,
-      post_id,
-      user_id,
-      body,
-      created_at,
-      updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?)
-  `).run(crypto.randomUUID(), postId, userId, body, now, now);
+  const commentId = crypto.randomUUID();
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    db.prepare(`
+      INSERT INTO community_post_comments (
+        id,
+        post_id,
+        user_id,
+        body,
+        created_at,
+        updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?)
+    `).run(commentId, postId, userId, body, now, now);
+    notificationService.createNotification(db, {
+      recipientUserId: postRow.user_id,
+      actorUserId: userId,
+      type: "post_commented",
+      entityType: "post",
+      entityId: postId,
+      payload: { postTitle: postRow.title, commentId },
+      dedupeKey: `post_commented:${commentId}:${postRow.user_id}`,
+      now,
+    });
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
 
   return getPostForViewer(db, postId, userId);
 }
@@ -1034,6 +1548,13 @@ async function toggleReaction({ postId, userId, reactionType }) {
   const db = getDatabase();
   getPostForViewer(db, postId, userId);
 
+  if (reactionType === "helpful") {
+    const existingLike = db.prepare(`
+      SELECT 1 FROM community_post_likes WHERE post_id = ? AND user_id = ?
+    `).get(postId, userId);
+    return setPostLike({ postId, userId, liked: !existingLike });
+  }
+
   const existing = db.prepare(`
     SELECT 1
     FROM community_post_reactions
@@ -1059,6 +1580,50 @@ async function toggleReaction({ postId, userId, reactionType }) {
   return getPostForViewer(db, postId, userId);
 }
 
+async function setPostLike({ postId, userId, liked }) {
+  const db = getDatabase();
+  const postRow = selectPostById(db, postId);
+  if (!postRow) throw createPostNotFoundError();
+  getPostForViewer(db, postId, userId);
+  const now = new Date().toISOString();
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    if (liked) {
+      db.prepare(`
+        INSERT INTO community_post_likes (post_id, user_id, created_at)
+        VALUES (?, ?, ?)
+        ON CONFLICT(post_id, user_id) DO NOTHING
+      `).run(postId, userId, now);
+      db.prepare(`
+        INSERT INTO community_post_reactions (post_id, user_id, reaction_type, created_at)
+        VALUES (?, ?, 'helpful', ?)
+        ON CONFLICT(post_id, user_id, reaction_type) DO NOTHING
+      `).run(postId, userId, now);
+      notificationService.createNotification(db, {
+        recipientUserId: postRow.user_id,
+        actorUserId: userId,
+        type: "post_liked",
+        entityType: "post",
+        entityId: postId,
+        payload: { postTitle: postRow.title },
+        dedupeKey: `post_liked:${postId}:${userId}:${postRow.user_id}`,
+        now,
+      });
+    } else {
+      db.prepare("DELETE FROM community_post_likes WHERE post_id = ? AND user_id = ?").run(postId, userId);
+      db.prepare(`
+        DELETE FROM community_post_reactions
+        WHERE post_id = ? AND user_id = ? AND reaction_type = 'helpful'
+      `).run(postId, userId);
+    }
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+  return getPostForViewer(db, postId, userId);
+}
+
 module.exports = {
   createPost,
   createComment,
@@ -1070,7 +1635,11 @@ module.exports = {
   getPostDetails,
   listCommentsForPost,
   listQuestionsForPost,
+  listFeed,
   listPosts,
+  listPostsByAuthor,
+  publishDraft,
+  setPostLike,
   toggleReaction,
   updatePost,
 };

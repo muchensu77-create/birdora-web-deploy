@@ -10,13 +10,17 @@ const userService = require("../services/user.service");
 
 const DEFAULT_AUTH_COOKIE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const MIN_PASSWORD_LENGTH = 8;
+const EMAIL_MAX_BYTES = 254;
+const PASSWORD_MAX_BYTES = 72;
+const LOGIN_PASSWORD_MAX_BYTES = 1024;
 const PROFILE_BIO_MAX_LENGTH = 280;
 const PROFILE_NICKNAME_MAX_LENGTH = 40;
 const PROFILE_AVATAR_MAX_BYTES = 600 * 1024;
 const PROFILE_GENDERS = new Set(["", "female", "male", "nonbinary", "prefer_not_to_say"]);
 
 function isValidEmail(email) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  return Buffer.byteLength(email, "utf8") <= EMAIL_MAX_BYTES
+    && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
 function getTokenExpiryDate(payload) {
@@ -28,12 +32,11 @@ function issueAuthToken(user) {
   const jti = crypto.randomUUID();
   const token = jwt.sign(
     {
-      email: user.email,
-      nickname: user.nickname,
       jti,
     },
     authConfig.jwtSecret,
     {
+      algorithm: "HS256",
       subject: user.id,
       expiresIn: authConfig.jwtExpiresIn,
     }
@@ -108,6 +111,14 @@ function setAuthTimingHeader(res, timings, totalStart) {
 async function register(req, res) {
   const totalStart = performance.now();
   const timings = [];
+  if (
+    typeof req.body.email !== "string"
+    || typeof req.body.password !== "string"
+    || (req.body.nickname !== undefined && req.body.nickname !== null && typeof req.body.nickname !== "string")
+  ) {
+    res.status(400).json({ message: "registration fields are invalid", code: "INVALID_REGISTRATION" });
+    return;
+  }
   const email = String(req.body.email || "").trim().toLowerCase();
   const password = String(req.body.password || "").trim();
   const nickname = String(req.body.nickname || "").trim();
@@ -127,6 +138,22 @@ async function register(req, res) {
     return;
   }
 
+  if (Buffer.byteLength(password, "utf8") > PASSWORD_MAX_BYTES) {
+    res.status(400).json({
+      message: `password must not exceed ${PASSWORD_MAX_BYTES} UTF-8 bytes`,
+      code: "INVALID_PASSWORD",
+    });
+    return;
+  }
+
+  if (nickname.length > PROFILE_NICKNAME_MAX_LENGTH) {
+    res.status(400).json({
+      message: `nickname must not exceed ${PROFILE_NICKNAME_MAX_LENGTH} characters`,
+      code: "INVALID_NICKNAME",
+    });
+    return;
+  }
+
   const existingUser = await measureTiming(timings, "auth_db_lookup", () =>
     userService.findByEmail(email)
   );
@@ -143,7 +170,7 @@ async function register(req, res) {
     userService.createUser({
       email,
       passwordHash,
-      nickname,
+      nickname: nickname || email.split("@", 1)[0].slice(0, PROFILE_NICKNAME_MAX_LENGTH),
     })
   );
 
@@ -160,11 +187,21 @@ async function register(req, res) {
 async function login(req, res) {
   const totalStart = performance.now();
   const timings = [];
+  if (typeof req.body.email !== "string" || typeof req.body.password !== "string") {
+    res.status(400).json({ message: "login fields are invalid", code: "INVALID_LOGIN" });
+    return;
+  }
   const email = String(req.body.email || "").trim().toLowerCase();
   const password = String(req.body.password || "").trim();
 
   if (!email || !password) {
     res.status(400).json({ message: "email and password are required" });
+    return;
+  }
+
+
+  if (!isValidEmail(email) || Buffer.byteLength(password, "utf8") > LOGIN_PASSWORD_MAX_BYTES) {
+    res.status(400).json({ message: "login fields are invalid", code: "INVALID_LOGIN" });
     return;
   }
 
@@ -232,35 +269,71 @@ async function status(req, res) {
   });
 }
 
-function normalizeProfile(req) {
-  const nickname = String(req.body.nickname || "").trim().slice(0, PROFILE_NICKNAME_MAX_LENGTH);
-  const bio = String(req.body.bio || "").trim().slice(0, PROFILE_BIO_MAX_LENGTH);
-  const gender = String(req.body.gender || "").trim();
-  const rawAge = req.body.age;
-  const age = rawAge === "" || rawAge === null || rawAge === undefined ? null : Number(rawAge);
-  const avatarUrl = String(req.body.avatarUrl || "").trim();
-  if (!nickname || !PROFILE_GENDERS.has(gender) || (age !== null && (!Number.isInteger(age) || age < 13 || age > 100))) {
-    return null;
+function hasOwn(value, field) {
+  return Object.prototype.hasOwnProperty.call(value, field);
+}
+
+function normalizeClearableText(value, maxLength) {
+  if (value === null) return "";
+  if (typeof value !== "string") return null;
+  const normalized = value.trim();
+  return normalized.length <= maxLength ? normalized : null;
+}
+
+function normalizeProfile(body) {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return null;
+
+  const profile = {};
+
+  if (hasOwn(body, "nickname")) {
+    if (typeof body.nickname !== "string") return null;
+    const nickname = body.nickname.trim();
+    if (!nickname || nickname.length > PROFILE_NICKNAME_MAX_LENGTH) return null;
+    profile.nickname = nickname;
   }
-  if (avatarUrl) {
-    const match = avatarUrl.match(/^data:image\/(?:jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/);
-    if (!match || Buffer.from(match[1], "base64").length > PROFILE_AVATAR_MAX_BYTES) return null;
+
+  if (hasOwn(body, "bio")) {
+    const bio = normalizeClearableText(body.bio, PROFILE_BIO_MAX_LENGTH);
+    if (bio === null) return null;
+    profile.bio = bio;
   }
-  return {
-    nickname,
-    bio,
-    gender,
-    age,
-    avatarUrl,
-    emailNotifications: req.body.emailNotifications !== false,
-    publicProfile: req.body.publicProfile !== false,
-  };
+
+  if (hasOwn(body, "gender")) {
+    const gender = normalizeClearableText(body.gender, 40);
+    if (gender === null || !PROFILE_GENDERS.has(gender)) return null;
+    profile.gender = gender;
+  }
+
+  if (hasOwn(body, "age")) {
+    const rawAge = body.age;
+    const age = rawAge === "" || rawAge === null ? null : Number(rawAge);
+    if (age !== null && (!Number.isInteger(age) || age < 13 || age > 100)) return null;
+    profile.age = age;
+  }
+
+  if (hasOwn(body, "avatarUrl")) {
+    const avatarUrl = normalizeClearableText(body.avatarUrl, Number.POSITIVE_INFINITY);
+    if (avatarUrl === null) return null;
+    if (avatarUrl) {
+      const match = avatarUrl.match(/^data:image\/(?:jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/);
+      if (!match || Buffer.from(match[1], "base64").length > PROFILE_AVATAR_MAX_BYTES) return null;
+    }
+    profile.avatarUrl = avatarUrl;
+  }
+
+  for (const field of ["emailNotifications", "publicProfile"]) {
+    if (!hasOwn(body, field)) continue;
+    if (typeof body[field] !== "boolean") return null;
+    profile[field] = body[field];
+  }
+
+  return profile;
 }
 
 async function updateProfile(req, res) {
-  const profile = normalizeProfile(req);
+  const profile = normalizeProfile(req.body);
   if (!profile) {
-    res.status(400).json({ message: "profile fields are invalid" });
+    res.status(400).json({ message: "profile fields are invalid", code: "INVALID_PROFILE" });
     return;
   }
   const user = await userService.updateProfile(req.user.id, profile);
@@ -268,6 +341,10 @@ async function updateProfile(req, res) {
 }
 
 async function removeAccount(req, res) {
+  if (typeof req.body.password !== "string" || typeof req.body.confirmation !== "string") {
+    res.status(400).json({ message: "account deletion confirmation is invalid" });
+    return;
+  }
   const password = String(req.body.password || "");
   const confirmation = String(req.body.confirmation || "").trim();
   if (confirmation !== "注销我的账号" || !password) {

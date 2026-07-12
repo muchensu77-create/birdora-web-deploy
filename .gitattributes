@@ -1,0 +1,7 @@
+*.sh text eol=lf
+app/db/migrations/*.js text eol=lf
+deploy/scripts/legacy-inventory.js text eol=lf
+deploy/scripts/legacy-inventory-lib.js text eol=lf
+scripts/evaluate-legacy-adoption-evidence.js text eol=lf
+scripts/test-legacy-adoption-evidence.js text eol=lf
+scripts/test-legacy-inventory-linux-semantics.js text eol=lf

@@ -10,12 +10,19 @@ function renderHomeObservationDate() {
 renderHomeObservationDate();
 
 const STORAGE_KEYS = {
-  loggedIn: "birdoraLoggedIn",
-  authUser: "birdora-auth-user",
   comments: "birdora-post-comments",
   communityTab: "birdora-community-tab",
   deviceConnected: "birdora-device-connected",
 };
+const LEGACY_AUTH_STORAGE_KEYS = ["birdoraLoggedIn", "birdora-auth-user"];
+
+// Authentication is restored from the HttpOnly session cookie via /api/auth/status.
+// Remove legacy browser copies because they may contain an email or profile fields.
+try {
+  LEGACY_AUTH_STORAGE_KEYS.forEach((key) => window.localStorage.removeItem(key));
+} catch {
+  // Storage may be unavailable; the server session remains the source of truth.
+}
 
 const APP_PAGES = new Set(["home", "community", "explore", "profile", "upload", "publish", "device"]);
 const AUTH_API_BASE_URL = resolveAuthApiBaseUrl();
@@ -26,6 +33,32 @@ const AUTH_ROUTES = {
   me: "/api/auth/me",
   status: "/api/auth/status",
 };
+const CAPABILITIES_ROUTE = "/api/v1/capabilities";
+const CAPABILITIES_UNAVAILABLE_REASON = "无法确认服务端功能状态，为保障数据安全，此操作已停用。";
+const DEFAULT_COMMUNITY_IMAGE_MAX_BYTES = 1024 * 1024;
+const DEFAULT_COMMUNITY_VIDEO_MAX_BYTES = 8 * 1024 * 1024;
+const SAFE_CAPABILITY_DEFAULTS = Object.freeze({
+  accountDeletion: false,
+  communityPublish: false,
+  communityPostEdit: false,
+  communityLegacyLike: false,
+  socialFeedV1: false,
+  canonicalLike: false,
+  cloudDrafts: false,
+  notifications: false,
+  sse: false,
+});
+let runtimeCapabilities = {
+  status: "loading",
+  features: { ...SAFE_CAPABILITY_DEFAULTS },
+  limits: {
+    communityImageBytes: DEFAULT_COMMUNITY_IMAGE_MAX_BYTES,
+    communityVideoBytes: DEFAULT_COMMUNITY_VIDEO_MAX_BYTES,
+  },
+  disabledReasons: {},
+  error: "",
+};
+let runtimeCapabilitiesPromise = null;
 const API_REQUEST_TIMEOUT_MS =
   Number(window.BIRDORA_API_REQUEST_TIMEOUT_MS) > 0
     ? Number(window.BIRDORA_API_REQUEST_TIMEOUT_MS)
@@ -215,54 +248,6 @@ const fallbackBirdProfiles = [
 ];
 
 let birds = fallbackBirdProfiles.map(normalizeBirdProfile);
-
-const recommendedPosts = [
-  {
-    id: "post-egret-morning",
-    title: "今天在湿地看到白鹭整理羽毛",
-    body: "距离很远拍下来的，识别后才发现它正在浅滩边觅食。站了很久，动作特别优雅。",
-    bird: "白鹭",
-    time: "09:42",
-    author: "西溪观察员",
-    source: "recommended",
-  },
-  {
-    id: "post-bulbul-park",
-    title: "公园里的白头鹎",
-    body: "它一直在香樟树上叫，眼镜同步的位置很准，连续记录到了三次停枝和一次低飞。",
-    bird: "白头鹎",
-    time: "昨天",
-    author: "晨光巡园者",
-    source: "recommended",
-  },
-  {
-    id: "post-kingfisher-river",
-    title: "河边等到一只贴水飞过的翠鸟",
-    body: "等了二十分钟才拍到，速度非常快，几乎是一道蓝绿色的闪光，最后停在一根枯枝上。",
-    bird: "翠鸟",
-    time: "昨天",
-    author: "溪流守望者",
-    source: "recommended",
-  },
-  {
-    id: "post-swallow-rain",
-    title: "雨前低空飞行的家燕群",
-    body: "傍晚天气闷热，家燕在很低的位置来回穿梭，抓拍时能明显看到尾羽的分叉轮廓。",
-    bird: "家燕",
-    time: "2 天前",
-    author: "云边观鸟",
-    source: "recommended",
-  },
-  {
-    id: "post-moorhen-lake",
-    title: "荷叶边的黑水鸡",
-    body: "原本以为只是水面阴影，仔细看才发现是黑水鸡在荷叶缝里慢慢穿过，嘴和额甲特别醒目。",
-    bird: "黑水鸡",
-    time: "3 天前",
-    author: "湖岸小队",
-    source: "recommended",
-  },
-];
 
 const birdGrid = document.querySelector("#birdGrid");
 const birdSearch = document.querySelector("#birdSearch");
@@ -548,6 +533,185 @@ function resolveAuthApiBaseUrl() {
   return "";
 }
 
+function isCapabilityEnabled(feature) {
+  return runtimeCapabilities.status === "ready" && runtimeCapabilities.features[feature] === true;
+}
+
+function getCapabilityDisabledReason(feature) {
+  if (isCapabilityEnabled(feature)) return "";
+  if (runtimeCapabilities.status !== "ready") {
+    return CAPABILITIES_UNAVAILABLE_REASON;
+  }
+  return runtimeCapabilities.disabledReasons[feature] || "服务端暂未开放此功能。";
+}
+
+function getCommunityUploadLimit(kind) {
+  const fallback = kind === "video"
+    ? DEFAULT_COMMUNITY_VIDEO_MAX_BYTES
+    : DEFAULT_COMMUNITY_IMAGE_MAX_BYTES;
+  const key = kind === "video" ? "communityVideoBytes" : "communityImageBytes";
+  const configured = Number(runtimeCapabilities.limits[key]);
+  return Number.isSafeInteger(configured) && configured > 0
+    ? Math.min(configured, fallback)
+    : fallback;
+}
+
+async function loadRuntimeCapabilities() {
+  if (runtimeCapabilitiesPromise) return runtimeCapabilitiesPromise;
+
+  runtimeCapabilitiesPromise = (async () => {
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT_MS);
+    try {
+      const response = await fetch(`${AUTH_API_BASE_URL}${CAPABILITIES_ROUTE}`, {
+        method: "GET",
+        credentials: "include",
+        headers: { Accept: "application/json" },
+        signal: controller.signal,
+      });
+      if (!response.ok) {
+        throw new Error(`能力配置请求失败：${response.status}`);
+      }
+
+      const payload = await response.json();
+      const data = payload?.data;
+      if (!data || typeof data !== "object" || !data.features || typeof data.features !== "object") {
+        throw new Error("能力配置返回格式不正确。");
+      }
+
+      const features = { ...SAFE_CAPABILITY_DEFAULTS };
+      Object.keys(features).forEach((feature) => {
+        features[feature] = data.features[feature] === true;
+      });
+      const disabledReasons = {};
+      if (data.disabledReasons && typeof data.disabledReasons === "object") {
+        Object.keys(features).forEach((feature) => {
+          if (typeof data.disabledReasons[feature] === "string" && data.disabledReasons[feature].trim()) {
+            disabledReasons[feature] = data.disabledReasons[feature].trim();
+          }
+        });
+      }
+
+      runtimeCapabilities = {
+        status: "ready",
+        features,
+        limits: {
+          communityImageBytes: Number(data.limits?.communityImageBytes) || DEFAULT_COMMUNITY_IMAGE_MAX_BYTES,
+          communityVideoBytes: Number(data.limits?.communityVideoBytes) || DEFAULT_COMMUNITY_VIDEO_MAX_BYTES,
+        },
+        disabledReasons,
+        error: "",
+      };
+    } catch (error) {
+      runtimeCapabilities = {
+        status: "error",
+        features: { ...SAFE_CAPABILITY_DEFAULTS },
+        limits: {
+          communityImageBytes: DEFAULT_COMMUNITY_IMAGE_MAX_BYTES,
+          communityVideoBytes: DEFAULT_COMMUNITY_VIDEO_MAX_BYTES,
+        },
+        disabledReasons: {},
+        error: error?.message || "能力配置加载失败。",
+      };
+    } finally {
+      window.clearTimeout(timeoutId);
+    }
+
+    return runtimeCapabilities;
+  })();
+
+  return runtimeCapabilitiesPromise;
+}
+
+function setCapabilityControlledDisabled(control, disabled, reason = "") {
+  if (!control) return;
+  if (disabled) {
+    if (control.dataset.capabilityDisabled !== "true") {
+      control.dataset.capabilityOriginalTitle = control.getAttribute("title") || "";
+      control.dataset.capabilityOriginalAriaLabel = control.getAttribute("aria-label") || "";
+    }
+    control.disabled = true;
+    control.dataset.capabilityDisabled = "true";
+    control.title = reason;
+    control.setAttribute("aria-label", `${control.textContent?.trim() || "此操作"}：${reason}`);
+    return;
+  }
+  if (control.dataset.capabilityDisabled === "true") {
+    control.disabled = false;
+  }
+  const originalTitle = control.dataset.capabilityOriginalTitle || "";
+  const originalAriaLabel = control.dataset.capabilityOriginalAriaLabel || "";
+  if (originalTitle) control.title = originalTitle;
+  else control.removeAttribute("title");
+  if (originalAriaLabel) control.setAttribute("aria-label", originalAriaLabel);
+  else control.removeAttribute("aria-label");
+  delete control.dataset.capabilityDisabled;
+  delete control.dataset.capabilityOriginalTitle;
+  delete control.dataset.capabilityOriginalAriaLabel;
+}
+
+function setCapabilityMessage(target, message = "") {
+  if (!target) return;
+  const previous = target.dataset.capabilityMessage || "";
+  if (message) {
+    if (!target.textContent.trim() || target.textContent.trim() === previous) {
+      target.textContent = message;
+    }
+    target.dataset.capabilityMessage = message;
+    return;
+  }
+  if (previous && target.textContent.trim() === previous) {
+    target.textContent = "";
+  }
+  delete target.dataset.capabilityMessage;
+}
+
+function applyRuntimeCapabilityControls() {
+  const canPublish = isCapabilityEnabled("communityPublish");
+  const publishReason = getCapabilityDisabledReason("communityPublish");
+  document.querySelectorAll('#postForm [type="submit"], [data-observation-share], [data-community-publish-submit]').forEach((control) => {
+    setCapabilityControlledDisabled(control, !canPublish, publishReason);
+  });
+  setCapabilityMessage(document.querySelector("#postMessage"), canPublish ? "" : publishReason);
+  setCapabilityMessage(document.querySelector("[data-community-publish-reason]"), canPublish ? "" : publishReason);
+
+  const canEdit = isCapabilityEnabled("communityPostEdit");
+  const editReason = getCapabilityDisabledReason("communityPostEdit");
+  document.querySelectorAll("[data-post-edit], [data-post-edit-form] [type=submit]").forEach((control) => {
+    setCapabilityControlledDisabled(control, !canEdit, editReason);
+  });
+  document.querySelectorAll("[data-post-edit-message]").forEach((message) => {
+    setCapabilityMessage(message, canEdit ? "" : editReason);
+  });
+
+  const canUseLegacyLike = isCapabilityEnabled("communityLegacyLike");
+  const legacyLikeReason = getCapabilityDisabledReason("communityLegacyLike");
+  document.querySelectorAll("[data-workspace-like], [data-post-reaction]").forEach((control) => {
+    setCapabilityControlledDisabled(control, !canUseLegacyLike, legacyLikeReason);
+  });
+
+  const canDeleteAccount = isCapabilityEnabled("accountDeletion");
+  const accountReason = getCapabilityDisabledReason("accountDeletion");
+  [
+    document.querySelector("[data-profile-delete]"),
+    document.querySelector("#profileDeletePassword"),
+    document.querySelector("#profileDeleteConfirmation"),
+  ].forEach((control) => setCapabilityControlledDisabled(control, !canDeleteAccount, accountReason));
+  setCapabilityMessage(
+    document.querySelector("[data-profile-account-capability]"),
+    canDeleteAccount ? "" : accountReason
+  );
+}
+
+function refreshCapabilityDependentUi() {
+  renderCurrentFeed();
+  renderObservationList();
+  updateRecognitionActions();
+  renderCommunityWorkspace();
+  renderProfileCenter();
+  applyRuntimeCapabilityControls();
+}
+
 function normalizeAuthUser(user) {
   if (!user || typeof user.email !== "string" || !user.email.trim()) {
     return null;
@@ -563,6 +727,12 @@ function normalizeAuthUser(user) {
     id: user.id,
     email,
     nickname,
+    bio: typeof user.bio === "string" ? user.bio : "",
+    gender: typeof user.gender === "string" ? user.gender : "",
+    age: user.age ?? null,
+    avatarUrl: typeof user.avatarUrl === "string" ? user.avatarUrl : "",
+    publicProfile: typeof user.publicProfile === "boolean" ? user.publicProfile : true,
+    emailNotifications: typeof user.emailNotifications === "boolean" ? user.emailNotifications : true,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
   };
@@ -573,11 +743,10 @@ function rememberAuthUser(user) {
   if (!normalizedUser) return null;
 
   try {
-    window.localStorage.setItem(STORAGE_KEYS.loggedIn, "true");
+    LEGACY_AUTH_STORAGE_KEYS.forEach((key) => window.localStorage.removeItem(key));
   } catch {
-    // The auth cookie is the source of truth; localStorage only restores display state.
+    // The auth cookie is the source of truth; no user profile is stored in the browser.
   }
-  saveStorage(STORAGE_KEYS.authUser, normalizedUser);
   currentUser = normalizedUser;
   renderUserChrome();
   return normalizedUser;
@@ -585,8 +754,7 @@ function rememberAuthUser(user) {
 
 function clearAuthState() {
   try {
-    window.localStorage.removeItem(STORAGE_KEYS.loggedIn);
-    window.localStorage.removeItem(STORAGE_KEYS.authUser);
+    LEGACY_AUTH_STORAGE_KEYS.forEach((key) => window.localStorage.removeItem(key));
   } catch {
     // Keep rendering even if browser storage is blocked.
   }
@@ -727,42 +895,34 @@ async function fetchAuthStatus() {
   }
 }
 
-function getAuthUser() {
-  return safeParseStorage(STORAGE_KEYS.authUser, null);
-}
-
-function isLoggedIn() {
-  try {
-    return window.localStorage.getItem(STORAGE_KEYS.loggedIn) === "true";
-  } catch {
-    return false;
-  }
-}
-
-function getValidatedAuthUser() {
-  if (!isLoggedIn()) {
-    return null;
-  }
-
-  return normalizeAuthUser(getAuthUser());
-}
+let authStateSyncPromise = null;
 
 async function syncAuthState() {
-  const status = await fetchAuthStatus();
+  if (authStateSyncPromise) return authStateSyncPromise;
 
-  if (status.authenticated && status.user) {
-    rememberAuthUser(status.user);
+  authStateSyncPromise = (async () => {
+    const status = await fetchAuthStatus();
+
+    if (status.authenticated && status.user) {
+      rememberAuthUser(status.user);
+      return status;
+    }
+
+    if (status.authUnavailable) {
+      currentUser = null;
+      renderUserChrome();
+      return status;
+    }
+
+    clearAuthState();
     return status;
-  }
+  })();
 
-  if (status.authUnavailable) {
-    currentUser = null;
-    renderUserChrome();
-    return status;
+  try {
+    return await authStateSyncPromise;
+  } finally {
+    authStateSyncPromise = null;
   }
-
-  clearAuthState();
-  return status;
 }
 
 function escapeHtml(value) {
@@ -858,21 +1018,8 @@ async function loadCommunityPosts(options = {}) {
   renderCurrentFeed();
 }
 
-function isExampleCommunityPost(post) {
-  return post?.source === "recommended" || post?.isExample === true;
-}
-
-function getExamplePosts() {
-  return recommendedPosts.map((post) => ({
-    ...post,
-    isExample: true,
-  }));
-}
-
 function getHomePreviewPosts() {
-  const posts = communityPosts.slice(0, 3);
-  if (posts.length >= 3) return posts;
-  return [...posts, ...getExamplePosts().slice(0, 3 - posts.length)];
+  return communityPosts.slice(0, 3);
 }
 
 function formatPostTime(post) {
@@ -1097,6 +1244,7 @@ function renderObservationList() {
   }
 
   observationList.innerHTML = observations.map(renderObservationCard).join("");
+  applyRuntimeCapabilityControls();
 }
 
 function updateSpeciesSummaryFromObservations() {
@@ -1259,14 +1407,14 @@ function buildFeedCard(post, options = {}) {
   const questions = getPostQuestions(post);
   const commentCount = Number(post.commentCount ?? comments.length) || 0;
   const questionCount = Number(post.questionCount ?? questions.length) || questions.length;
-  const isExample = isExampleCommunityPost(post);
   return window.BirdoraCommunityPostCard.renderPostCard(post, {
     preview: previewMode,
     isEditing: editingPostId === post.id,
     commentsOpen: expandedComments.has(post.id),
-    canInteract: isPersistedCommunityPost(post) && !isExample,
+    canInteract: isPersistedCommunityPost(post),
+    canReact: isPersistedCommunityPost(post) && isCapabilityEnabled("communityLegacyLike"),
     canOpenDetails: true,
-    isExample,
+    isExample: false,
     displayBody: previewMode ? truncateText(post.body, 88) : post.body,
     author: post.author || post.bird,
     time: formatPostTime(post),
@@ -1285,7 +1433,9 @@ function buildFeedCard(post, options = {}) {
 function renderHomeFeed() {
   if (!feed) return;
   const previewPosts = getHomePreviewPosts();
-  feed.innerHTML = previewPosts.map((post) => buildFeedCard(post, { preview: true })).join("");
+  feed.innerHTML = previewPosts.length
+    ? previewPosts.map((post) => buildFeedCard(post, { preview: true })).join("")
+    : `<article class="feed-card empty-feed-card"><h3>暂无社区分享</h3><p>真实观鸟笔记发布后会显示在这里。</p></article>`;
   syncHomeCommunityReveal();
 }
 
@@ -1325,8 +1475,7 @@ function renderCommunityFeed() {
   }
 
   const posts = activeCommunityTab === "mine" ? userPosts : communityPosts;
-  const examplePosts = activeCommunityTab === "recommended" ? getExamplePosts() : [];
-  if (!posts.length && !examplePosts.length) {
+  if (!posts.length) {
     communityFeed.innerHTML = `
       <article class="feed-card empty-feed-card">
         <h3>${activeCommunityTab === "mine" ? "还没有你发布的帖子" : "暂无推荐帖子"}</h3>
@@ -1345,18 +1494,7 @@ function renderCommunityFeed() {
       </article>
     `
     : "";
-  const realPostsHtml = posts.map((post) => buildFeedCard(post)).join("");
-  const examplePostsHtml = examplePosts.length
-    ? `
-      <article class="feed-card empty-feed-card sample-feed-card" aria-label="示例推荐说明">
-        <h3>Birdora 示例内容</h3>
-        <p>下面是内置示例推荐，用于展示社区笔记样式，不代表真实用户发布。</p>
-      </article>
-      ${examplePosts.map((post) => buildFeedCard(post)).join("")}
-    `
-    : "";
-
-  communityFeed.innerHTML = `${realPostsHtml}${loadMore}${examplePostsHtml}`;
+  communityFeed.innerHTML = `${posts.map((post) => buildFeedCard(post)).join("")}${loadMore}`;
 }
 
 function renderCurrentFeed() {
@@ -1365,6 +1503,7 @@ function renderCurrentFeed() {
   } else {
     renderHomeFeed();
   }
+  applyRuntimeCapabilityControls();
 }
 
 function syncCommunityPostState(nextPost = null, removedPostId = "") {
@@ -1409,6 +1548,10 @@ function getCommentMutationMessage(error, fallback) {
 }
 
 function startEditingPost(postId) {
+  if (!isCapabilityEnabled("communityPostEdit")) {
+    window.alert(getCapabilityDisabledReason("communityPostEdit"));
+    return;
+  }
   const post = communityPosts.find((item) => item.id === postId);
   if (!post?.canManage) return;
   editingPostId = postId;
@@ -1425,6 +1568,13 @@ function cancelEditingPost(postId) {
 }
 
 async function submitPostEdit(form) {
+  if (!isCapabilityEnabled("communityPostEdit")) {
+    setCapabilityMessage(
+      form.querySelector("[data-post-edit-message]"),
+      getCapabilityDisabledReason("communityPostEdit")
+    );
+    return;
+  }
   const postId = form.dataset.postEditForm;
   const titleField = form.elements.title;
   const bodyField = form.elements.body;
@@ -1502,7 +1652,7 @@ function normalizeCommentsPageInfo(pageInfo = {}, comments = []) {
 }
 
 function findCommunityPost(postId) {
-  return communityPosts.find((post) => post.id === postId) || getExamplePosts().find((post) => post.id === postId) || null;
+  return communityPosts.find((post) => post.id === postId) || null;
 }
 
 function getPostDetailBackdrop() {
@@ -1537,8 +1687,7 @@ function renderPostDetail() {
   }
 
   const post = detailPost || findCommunityPost(activeDetailPostId);
-  const isExample = isExampleCommunityPost(post);
-  const canInteract = Boolean(post && isPersistedCommunityPost(post) && !isExample);
+  const canInteract = Boolean(post && isPersistedCommunityPost(post));
   const loadingOnly = detailLoadState === "loading" && !post;
   const image = post?.imageUrl
     ? `
@@ -1561,7 +1710,7 @@ function renderPostDetail() {
         <button class="comment-send" type="button" data-detail-comment-submit="${escapeHtml(post.id)}">发送</button>
       </div>
     `
-    : `<p class="comment-empty">${isExample ? "示例内容仅供浏览，不能评论或互动。" : "登录后可以参与评论。"}</p>`;
+    : `<p class="comment-empty">登录后可以参与评论。</p>`;
   const commentsHtml = formatInteractionList(detailComments, "还没有评论，来写一句吧。", {
     postId: post?.id || "",
     canDelete: true,
@@ -1578,14 +1727,13 @@ function renderPostDetail() {
           <button class="post-action" type="button" data-post-detail-retry="${escapeHtml(activeDetailPostId)}">重新加载</button>
         `
         : "";
-  const exampleBadge = isExample ? `<span class="post-badge">Birdora 示例内容</span>` : "";
-  const body = loadingOnly
-    ? statusMessage
+  const body = loadingOnly || !post
+    ? statusMessage || `<p class="post-detail-message is-error">帖子详情暂时不可用。</p>`
     : `
       <article class="post-detail-card" data-post-detail-card="${escapeHtml(post.id)}">
         <header class="post-detail-head">
           <div>
-            <div class="feed-meta"><span>${escapeHtml(post.author || post.bird || "Birdora")}</span><span>${escapeHtml(formatPostTime(post))}</span>${exampleBadge}</div>
+            <div class="feed-meta"><span>${escapeHtml(post.author || post.bird || "Birdora")}</span><span>${escapeHtml(formatPostTime(post))}</span></div>
             <h2 id="postDetailTitle">${escapeHtml(post.title)}</h2>
           </div>
           <button class="post-detail-close" type="button" aria-label="关闭帖子详情" data-post-detail-close>关闭</button>
@@ -1620,11 +1768,9 @@ async function openPostDetail(postId) {
   detailPost = localPost;
   detailComments = getPostComments(localPost || {});
   detailCommentsPageInfo = normalizeCommentsPageInfo(localPost?.commentsPageInfo, detailComments);
-  detailLoadState = isExampleCommunityPost(localPost) ? "ready" : "loading";
+  detailLoadState = "loading";
   detailLoadMessage = "";
   renderPostDetail();
-
-  if (isExampleCommunityPost(localPost)) return;
 
   try {
     const post = await communityApi.get(postId, { limit: COMMENT_PAGE_SIZE, offset: 0 });
@@ -1651,7 +1797,7 @@ async function openPostDetail(postId) {
 }
 
 async function loadDetailComments(options = {}) {
-  if (!detailPost || isExampleCommunityPost(detailPost)) return;
+  if (!detailPost) return;
   const append = options.append === true;
   const offset = append ? detailCommentsPageInfo.nextOffset : 0;
   detailLoadState = "loading";
@@ -1880,6 +2026,10 @@ async function submitQuestion(postId, trigger = null) {
 }
 
 async function togglePostReaction(postId, reactionType, trigger = null) {
+  if (!isCapabilityEnabled("communityLegacyLike")) {
+    applyRuntimeCapabilityControls();
+    return;
+  }
   if (!requireLoginForAction()) return;
 
   if (trigger) trigger.disabled = true;
@@ -3441,9 +3591,11 @@ function updateRecognitionActions() {
   }
 
   if (shareDetectedButton) {
-    const canShare = recognitionSaved && !recognitionAlreadyShared;
+    const canPublish = isCapabilityEnabled("communityPublish");
+    const canShare = canPublish && recognitionSaved && !recognitionAlreadyShared;
     shareDetectedButton.disabled = !canShare;
     shareDetectedButton.setAttribute("aria-disabled", String(!canShare));
+    shareDetectedButton.title = canPublish ? "" : getCapabilityDisabledReason("communityPublish");
     shareDetectedButton.textContent = recognitionAlreadyShared
       ? "已发布"
       : recognitionSaved
@@ -3849,6 +4001,10 @@ async function saveCurrentObservation() {
 
 async function publishObservationToCommunity(observation, trigger = null) {
   if (!observation) return;
+  if (!isCapabilityEnabled("communityPublish")) {
+    setObservationMessage(getCapabilityDisabledReason("communityPublish"));
+    return;
+  }
   if (!requireLoginForAction()) return;
 
   const button = trigger || null;
@@ -3931,6 +4087,12 @@ function initPublishing() {
     postForm.addEventListener("submit", async (event) => {
       event.preventDefault();
 
+      if (!isCapabilityEnabled("communityPublish")) {
+        setPostMessage(getCapabilityDisabledReason("communityPublish"));
+        applyRuntimeCapabilityControls();
+        return;
+      }
+
       if (!requireLoginForAction()) return;
 
       const title = normalizeUserText(postTitle.value, POST_TITLE_MAX_LENGTH);
@@ -3970,7 +4132,7 @@ function initPublishing() {
           clearAuthState();
         }
       } finally {
-        submitButton.disabled = false;
+        submitButton.disabled = !isCapabilityEnabled("communityPublish");
       }
     });
   }
@@ -4002,6 +4164,11 @@ function initPublishing() {
   if (shareDetectedButton) {
     updateRecognitionActions();
     shareDetectedButton.addEventListener("click", async () => {
+      if (!isCapabilityEnabled("communityPublish")) {
+        setObservationMessage(getCapabilityDisabledReason("communityPublish"));
+        applyRuntimeCapabilityControls();
+        return;
+      }
       if (!requireLoginForAction()) return;
 
       if (lastRecognitionStatus !== "success") {
@@ -4520,13 +4687,18 @@ async function initAuthenticatedPage() {
   initHomeCommunityReveal();
   initSoftReveal();
 
-  syncAuthState()
+  Promise.all([loadRuntimeCapabilities(), syncAuthState()])
     .then(async () => {
-      await loadCommunityPosts();
+      if (feed || communityFeed) {
+        await loadCommunityPosts();
+      }
       await loadMyObservations();
       syncCommunityTabs();
       renderCurrentFeed();
       syncHomeCommunityReveal();
+      await loadCommunityWorkspaceData();
+      renderProfileCenter();
+      applyRuntimeCapabilityControls();
     })
     .catch(() => {
       renderUserChrome();
@@ -4610,38 +4782,18 @@ function initTopbarScrollHide() {
 initApp();
 
 /* Community workspace: the community page has its own compact sub-routes. */
-const COMMUNITY_VIEWS = new Set(["recommended", "following", "publish", "messages"]);
-const COMMUNITY_DRAFT_KEY = "birdora-community-composer-draft";
-const COMMUNITY_MEDIA_MAX_BYTES = 8 * 1024 * 1024;
+const COMMUNITY_VIEWS = new Set(["recommended", "following", "publish", "messages", "personal"]);
+const COMMUNITY_DRAFT_KEY_PREFIX = "birdora-community-composer-draft";
 let communityWorkspacePosts = [];
 let communityWorkspaceMediaUrl = "";
-
-const communityDemoPosts = [
-  {
-    id: "demo-egret", title: "雨后湿地的白鹭", body: "水面刚安静下来，它从芦苇边慢慢走出。", author: "西溪观察员", likes: 128,
-    imageUrl: "./assets/birds/egret.jpg", kind: "image",
-  },
-  {
-    id: "demo-kingfisher", title: "河湾的一抹蓝", body: "等了二十分钟，终于看到翠鸟贴着水面飞过。", author: "小河边", likes: 86,
-    imageUrl: "./assets/birds/kingfisher.jpg", kind: "image",
-  },
-  {
-    id: "demo-text", title: "第一次听见夜鹭的叫声", body: "傍晚沿湖走到旧桥边，声音从树冠里传来。没有拍到照片，但这段安静的等待很值得记住。", author: "晚风记录", likes: 53,
-    kind: "text",
-  },
-  {
-    id: "demo-photo", title: "荷叶间的黑水鸡", body: "", author: "湖畔小队", likes: 71,
-    imageUrl: "./assets/birds/egret.jpg", kind: "image-only",
-  },
-  {
-    id: "demo-note", title: "适合新手的观鸟时间", body: "清晨六点半到八点，光线柔和，公园里也更安静。带上望远镜和一瓶水就够了。", author: "晨光步道", likes: 96,
-    kind: "text",
-  },
-  {
-    id: "demo-river", title: "桥下遇见家燕", body: "", author: "溪流守望", likes: 44,
-    imageUrl: "./assets/birds/kingfisher.jpg", kind: "image-only",
-  },
-];
+let communityWorkspaceLoadState = "loading";
+let communityWorkspaceLoadMessage = "";
+let communityWorkspaceStats = null;
+let communityWorkspaceDraft = null;
+let communityWorkspacePublishKey = "";
+let communityWorkspaceNotifications = [];
+let communityWorkspaceNotificationState = "loading";
+let communityWorkspaceNotificationMessage = "";
 
 function getCommunityWorkspaceView() {
   const view = new URLSearchParams(window.location.search).get("view") || "recommended";
@@ -4653,16 +4805,13 @@ function escapeCommunityText(value) {
 }
 
 function getCommunityWorkspacePosts(view) {
-  const apiPosts = communityWorkspacePosts.map((post) => ({
+  return communityWorkspacePosts.map((post) => ({
     ...post,
-    likes: Number(post.feedback?.helpful?.count) || 0,
+    likes: Number(post.likeCount ?? post.feedback?.helpful?.count) || 0,
+    liked: post.viewerHasLiked === true || post.feedback?.helpful?.selected === true,
+    isPersisted: Boolean(post.id && post.createdAt),
     kind: post.videoUrl ? "video" : post.imageUrl ? "image" : "text",
   }));
-  const demos = view === "following"
-    ? communityDemoPosts.filter((post) => ["西溪观察员", "小河边", "晚风记录"].includes(post.author))
-    : communityDemoPosts;
-  const merged = [...apiPosts, ...demos];
-  return view === "recommended" ? merged.sort(() => Math.random() - 0.5) : merged;
 }
 
 function renderCommunityMedia(post) {
@@ -4677,13 +4826,26 @@ function renderCommunityMedia(post) {
 
 function renderCommunityNoteCard(post) {
   const hasBody = Boolean(post.body && post.kind !== "text");
+  const canLike = post.isPersisted === true && isCapabilityEnabled("canonicalLike");
+  const likeDisabledReason = post.isPersisted === true
+    ? getCapabilityDisabledReason("canonicalLike")
+    : "此内容不支持持久化点赞";
+  const canFollow = Boolean(
+    post.authorId
+    && !post.canManage
+    && post.isPersisted
+    && isCapabilityEnabled("socialFeedV1")
+  );
+  const followAction = canFollow
+    ? `<button type="button" class="community-follow-action ${post.viewerFollowsAuthor ? "is-following" : ""}" data-workspace-follow="${escapeCommunityText(post.authorId)}" aria-pressed="${String(Boolean(post.viewerFollowsAuthor))}">${post.viewerFollowsAuthor ? "已关注" : "关注"}</button>`
+    : "";
   return `
     <article class="community-note-card" data-workspace-post="${escapeCommunityText(post.id)}">
       ${renderCommunityMedia(post)}
       <div class="community-note-info">
         <h2>${escapeCommunityText(post.title)}</h2>
         ${hasBody ? `<p>${escapeCommunityText(post.body)}</p>` : ""}
-        <div class="community-note-meta"><span>${escapeCommunityText(post.author || "Birdora 用户")}</span><button type="button" data-workspace-like="${escapeCommunityText(post.id)}" aria-label="点赞 ${escapeCommunityText(post.title)}">赞 ${Number(post.likes) || 0}</button></div>
+        <div class="community-note-meta"><span>${escapeCommunityText(post.author || "Birdora 用户")}</span>${followAction}<button type="button" data-workspace-like="${escapeCommunityText(post.id)}" class="${post.liked ? "is-liked" : ""}" aria-pressed="${String(Boolean(post.liked))}" aria-label="点赞 ${escapeCommunityText(post.title)}" ${canLike ? "" : `disabled title="${escapeCommunityText(likeDisabledReason)}"`}>赞 ${Number(post.likes) || 0}</button></div>
       </div>
     </article>
   `;
@@ -4692,15 +4854,35 @@ function renderCommunityNoteCard(post) {
 function renderCommunityFeedView(view) {
   const label = view === "following" ? "关注" : "推荐";
   const copy = view === "following" ? "你关注的观鸟者最近分享" : "来自 Birdora 社区的观鸟记录";
+  const posts = getCommunityWorkspacePosts(view);
+  if ((view === "recommended" || view === "following") && communityWorkspaceLoadState === "loading") {
+    return `<header class="community-view-heading"><p>${label}</p><h1>今天的观鸟笔记</h1><span>${copy}</span></header><div class="community-empty-state" role="status"><h2>正在加载社区内容</h2><p>正在读取真实用户发布的观鸟记录。</p></div>`;
+  }
+  if ((view === "recommended" || view === "following") && communityWorkspaceLoadState === "error") {
+    return `<header class="community-view-heading"><p>${label}</p><h1>今天的观鸟笔记</h1><span>${copy}</span></header><div class="community-empty-state"><h2>社区内容暂时无法加载</h2><p>${escapeCommunityText(communityWorkspaceLoadMessage)}</p></div>`;
+  }
+  const emptyState = view === "following"
+    ? `<div class="community-empty-state"><h2>还没有关注动态</h2><p>关注其他观鸟者后，他们公开或面向关注者发布的笔记会出现在这里。</p></div>`
+    : `<div class="community-empty-state"><h2>暂无公开笔记</h2><p>真实用户发布的观鸟记录会按服务端顺序显示在这里。</p></div>`;
   return `
     <header class="community-view-heading"><p>${label}</p><h1>${view === "following" ? "关注的人正在观察" : "今天的观鸟笔记"}</h1><span>${copy}</span></header>
-    <div class="community-note-grid">${getCommunityWorkspacePosts(view).map(renderCommunityNoteCard).join("")}</div>
+    <div class="community-note-grid">${posts.length ? posts.map(renderCommunityNoteCard).join("") : emptyState}</div>
   `;
 }
 
+function getCommunityDraftKey() {
+  if (!currentUser?.id) return null;
+  return `${COMMUNITY_DRAFT_KEY_PREFIX}:${encodeURIComponent(String(currentUser.id))}`;
+}
+
 function getCommunityDraft() {
+  if (isCapabilityEnabled("cloudDrafts")) {
+    return communityWorkspaceDraft || {};
+  }
+  const draftKey = getCommunityDraftKey();
+  if (!draftKey) return {};
   try {
-    return JSON.parse(window.localStorage.getItem(COMMUNITY_DRAFT_KEY) || "{}");
+    return JSON.parse(window.localStorage.getItem(draftKey) || "{}");
   } catch {
     return {};
   }
@@ -4709,17 +4891,20 @@ function getCommunityDraft() {
 function renderCommunityPublishView() {
   const draft = getCommunityDraft();
   const previewPosts = getCommunityWorkspacePosts("recommended").slice(0, 3);
+  const canPublish = isCapabilityEnabled("communityPublish");
+  const publishReason = getCapabilityDisabledReason("communityPublish");
   return `
     <header class="community-view-heading"><p>发布</p><h1>分享一次观察</h1><span>图片、视频和文字都可以成为一条观鸟笔记。</span></header>
     <div class="community-publish-layout">
     <form class="community-composer" id="communityComposer" novalidate>
       <label class="community-field"><span>标题</span><input id="communityComposerTitle" maxlength="80" required placeholder="给这次观察起个标题" value="${escapeCommunityText(draft.title)}" /></label>
-      <label class="community-field"><span>地点</span><input id="communityComposerLocation" maxlength="80" placeholder="例如：杭州 · 西湖公园" value="${escapeCommunityText(draft.location)}" /></label>
+      <label class="community-field"><span>地点</span><input id="communityComposerLocation" maxlength="160" placeholder="例如：杭州 · 西湖公园" value="${escapeCommunityText(draft.locationText || draft.location)}" /></label>
+      <label class="community-field"><span>谁可以看</span><select id="communityComposerVisibility"><option value="public" ${draft.visibility === "public" || !draft.visibility ? "selected" : ""}>所有人</option><option value="followers" ${draft.visibility === "followers" ? "selected" : ""}>仅关注者</option><option value="private" ${draft.visibility === "private" ? "selected" : ""}>仅自己</option></select></label>
       <label class="community-field community-field-wide"><span>正文</span><textarea id="communityComposerBody" maxlength="600" required placeholder="写下鸟种、天气、环境，或当时让你记住的细节。">${escapeCommunityText(draft.body)}</textarea></label>
-      <label class="community-media-picker" for="communityMedia"><input id="communityMedia" type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" /><span class="community-media-picker-icon">+</span><strong>添加图片或视频</strong><small>图片、MP4 或 WebM，最大 8MB</small></label>
+      <label class="community-media-picker" for="communityMedia"><input id="communityMedia" type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" /><span class="community-media-picker-icon">+</span><strong>添加图片或视频</strong><small>图片最大 1 MiB；MP4 或 WebM 视频最大 8 MiB</small></label>
       <div class="community-media-preview" id="communityMediaPreview" hidden></div>
-      <p class="community-composer-message" id="communityComposerMessage" aria-live="polite"></p>
-      <div class="community-composer-actions"><button class="secondary-btn" type="button" data-community-save-draft>存草稿</button><button class="primary-btn" type="submit">发布笔记</button></div>
+      <p class="community-composer-message" id="communityComposerMessage" data-community-publish-reason aria-live="polite">${canPublish ? "" : escapeCommunityText(publishReason)}</p>
+      <div class="community-composer-actions"><button class="secondary-btn" type="button" data-community-save-draft>存草稿</button><button class="primary-btn" type="submit" data-community-publish-submit ${canPublish ? "" : "disabled"}>发布笔记</button></div>
     </form>
     <aside class="community-publish-aside" aria-label="其他观鸟者的笔记">
       <div class="community-publish-aside-head"><div><p>正在分享</p><h2>他人的观察</h2></div><a href="./community.html?view=recommended">更多</a></div>
@@ -4730,24 +4915,64 @@ function renderCommunityPublishView() {
 }
 
 function renderCommunityMessagesView() {
-  const messages = [
-    ["点赞", "溪流守望赞了你的《清晨遇见白鹭》", "刚刚"],
-    ["关注", "林间观察开始关注你", "今天 09:12"],
-    ["评论", "晨光步道评论：这个位置光线真好", "昨天"],
-    ["系统", "你的发布已同步到社区推荐流", "7 月 8 日"],
-  ];
+  if (!currentUser) {
+    const createdAt = notification.createdAt
+      ? new Date(notification.createdAt).toLocaleString("zh-CN", { hour12: false })
+      : "";
+    return `
+      <header class="community-view-heading"><p>消息</p><h1>最近互动</h1><span>与观鸟伙伴保持联系。</span></header>
+      <div class="community-empty-state"><h2>登录后查看消息</h2><p>点赞、评论和新关注都会集中显示在这里。</p><a class="primary-btn link-btn" href="${escapeCommunityText(getLoginUrl())}">登录</a></div>
+    `;
+  }
+  if (!isCapabilityEnabled("notifications")) {
+    return `
+      <header class="community-view-heading"><p>消息</p><h1>最近互动</h1><span>与观鸟伙伴保持联系。</span></header>
+      <div class="community-empty-state"><h2>消息中心尚未开放</h2><p>${escapeCommunityText(getCapabilityDisabledReason("notifications"))}</p></div>
+    `;
+  }
+  if (communityWorkspaceNotificationState === "loading") {
+    return `<header class="community-view-heading"><p>消息</p><h1>最近互动</h1><span>与观鸟伙伴保持联系。</span></header><div class="community-empty-state" role="status"><h2>正在加载消息</h2></div>`;
+  }
+  if (communityWorkspaceNotificationState === "error") {
+    return `<header class="community-view-heading"><p>消息</p><h1>最近互动</h1><span>与观鸟伙伴保持联系。</span></header><div class="community-empty-state"><h2>消息暂时无法加载</h2><p>${escapeCommunityText(communityWorkspaceNotificationMessage)}</p></div>`;
+  }
+  const notificationCopy = {
+    user_followed: "关注了你",
+    post_liked: "赞了你的观鸟笔记",
+    post_commented: "评论了你的观鸟笔记",
+    comment_replied: "回复了你的评论",
+    post_moderation_updated: "你的笔记审核状态已更新",
+    system_announcement: "系统通知",
+  };
+  const cards = communityWorkspaceNotifications.map((notification) => {
+    const actor = notification.actor?.nickname || "Birdora";
+    const title = notification.payload?.postTitle || "";
+    return `
+      <article class="community-note-card ${notification.readAt ? "is-read" : "is-unread"}">
+        <div class="community-note-info">
+          <h2>${escapeCommunityText(actor)} ${escapeCommunityText(notificationCopy[notification.type] || "发来一条消息")}</h2>
+          ${title ? `<p>${escapeCommunityText(title)}</p>` : ""}
+          <div class="community-note-meta"><span>${escapeCommunityText(createdAt)}</span>${notification.readAt ? "<span>已读</span>" : `<button type="button" data-community-notification-read="${escapeCommunityText(notification.id)}">标为已读</button>`}</div>
+        </div>
+      </article>
+    `;
+  }).join("");
   return `
     <header class="community-view-heading"><p>消息</p><h1>最近互动</h1><span>与观鸟伙伴保持联系。</span></header>
-    <div class="community-message-list">${messages.map(([type, text, time]) => `<article class="community-message"><span class="community-message-type">${type}</span><p>${text}</p><time>${time}</time></article>`).join("")}</div>
+    ${communityWorkspaceNotifications.some((item) => !item.readAt) ? `<div class="community-composer-actions"><button class="secondary-btn" type="button" data-community-notifications-read-all>全部标为已读</button></div>` : ""}
+    <div class="community-note-grid">${cards || `<div class="community-empty-state"><h2>暂无新消息</h2><p>新的点赞、评论和关注会显示在这里。</p></div>`}</div>
   `;
 }
 
 function renderCommunityPersonalView() {
   const name = currentUser?.nickname || "访客";
-  const ownPosts = communityWorkspacePosts.filter((post) => post.canManage);
+  const ownPosts = getCommunityWorkspacePosts("personal").filter((post) => post.canManage);
+  if (communityWorkspaceLoadState === "loading") {
+    return `<header class="community-view-heading"><p>个人</p><h1>${escapeCommunityText(name)}的观鸟页</h1></header><div class="community-empty-state" role="status"><h2>正在加载你的笔记</h2></div>`;
+  }
   return `
     <header class="community-view-heading"><p>个人</p><h1>${escapeCommunityText(name)}的观鸟页</h1><span>${currentUser ? "管理你的公开笔记和互动。" : "登录后可管理你的笔记和互动。"}</span></header>
-    <section class="community-person-card"><strong>${ownPosts.length}</strong><span>已发布笔记</span><a class="secondary-btn link-btn" href="${escapeCommunityText(currentUser ? "./community.html?view=publish" : getLoginUrl())}">${currentUser ? "写一条笔记" : "登录"}</a></section>
+    <section class="community-person-card"><strong>${Number(communityWorkspaceStats?.posts ?? ownPosts.length)}</strong><span>已发布笔记</span><span>${Number(communityWorkspaceStats?.followers) || 0} 位粉丝 · 关注 ${Number(communityWorkspaceStats?.following) || 0} 人</span><a class="secondary-btn link-btn" href="${escapeCommunityText(currentUser ? "./community.html?view=publish" : getLoginUrl())}">${currentUser ? "写一条笔记" : "登录"}</a></section>
     <div class="community-note-grid">${ownPosts.length ? ownPosts.map(renderCommunityNoteCard).join("") : `<div class="community-empty-state"><h2>还没有公开笔记</h2><p>从一次观察开始，留下你的观鸟记录。</p></div>`}</div>
   `;
 }
@@ -4765,8 +4990,10 @@ function renderCommunityWorkspace() {
   panel.innerHTML = view === "recommended" || view === "following"
     ? renderCommunityFeedView(view)
     : view === "publish" ? renderCommunityPublishView()
+    : view === "personal" ? renderCommunityPersonalView()
     : renderCommunityMessagesView();
   bindCommunityWorkspaceView();
+  applyRuntimeCapabilityControls();
 }
 
 function renderCommunityMediaPreview(file) {
@@ -4786,13 +5013,29 @@ function renderCommunityMediaPreview(file) {
 
 function readCommunityMedia(file) {
   if (!file) return Promise.resolve(null);
-  if (file.size > COMMUNITY_MEDIA_MAX_BYTES) return Promise.reject(new Error("图片或视频请控制在 8MB 以内。"));
-  const allowed = new Set(["image/jpeg", "image/png", "image/webp", "video/mp4", "video/webm"]);
-  if (!allowed.has(file.type)) return Promise.reject(new Error("请选择 JPG、PNG、WebP、MP4 或 WebM 文件。"));
+  const imageTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
+  const videoTypes = new Set(["video/mp4", "video/webm"]);
+  const isImage = imageTypes.has(file.type);
+  const isVideo = videoTypes.has(file.type);
+  if (!isImage && !isVideo) {
+    return Promise.reject(new Error("请选择 JPG、PNG、WebP、MP4 或 WebM 文件。"));
+  }
+  if (isImage && !/\.(?:jpe?g|png|webp)$/i.test(file.name || "")) {
+    return Promise.reject(new Error("图片扩展名必须是 JPG、JPEG、PNG 或 WebP。"));
+  }
+  if (isVideo && !/\.(?:mp4|webm)$/i.test(file.name || "")) {
+    return Promise.reject(new Error("视频扩展名必须是 MP4 或 WebM。"));
+  }
+  if (isImage && file.size > getCommunityUploadLimit("image")) {
+    return Promise.reject(new Error("图片请控制在 1 MiB 以内。"));
+  }
+  if (isVideo && file.size > getCommunityUploadLimit("video")) {
+    return Promise.reject(new Error("视频请控制在 8 MiB 以内。"));
+  }
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(
-      file.type.startsWith("video/")
+      isVideo
         ? { videoDataUrl: String(reader.result || ""), videoName: file.name }
         : { imageDataUrl: String(reader.result || ""), imageName: file.name }
     );
@@ -4801,16 +5044,66 @@ function readCommunityMedia(file) {
   });
 }
 
-function saveCommunityDraft() {
-  const title = document.querySelector("#communityComposerTitle")?.value.trim() || "";
-  const location = document.querySelector("#communityComposerLocation")?.value.trim() || "";
-  const body = document.querySelector("#communityComposerBody")?.value.trim() || "";
-  try {
-    window.localStorage.setItem(COMMUNITY_DRAFT_KEY, JSON.stringify({ title, location, body }));
+function getCommunityComposerFields() {
+  return {
+    title: document.querySelector("#communityComposerTitle")?.value.trim() || "",
+    locationText: document.querySelector("#communityComposerLocation")?.value.trim() || "",
+    body: document.querySelector("#communityComposerBody")?.value.trim() || "",
+    bird: "观鸟笔记",
+    visibility: document.querySelector("#communityComposerVisibility")?.value || "public",
+  };
+}
+
+function communityDraftMatches(draft, fields) {
+  return Boolean(draft)
+    && ["title", "body", "bird", "locationText", "visibility"]
+      .every((field) => String(draft[field] || "") === String(fields[field] || ""));
+}
+
+async function persistCommunityCloudDraft(fields) {
+  if (communityDraftMatches(communityWorkspaceDraft, fields)) return communityWorkspaceDraft;
+  communityWorkspacePublishKey = "";
+  communityWorkspaceDraft = communityWorkspaceDraft?.id
+    ? await communityApi.updateDraft(
+      communityWorkspaceDraft.id,
+      communityWorkspaceDraft.version,
+      fields
+    )
+    : await communityApi.createDraft(fields);
+  return communityWorkspaceDraft;
+}
+
+async function saveCommunityDraft() {
+  const message = document.querySelector("#communityComposerMessage");
+  if (!currentUser) {
+    if (message) message.textContent = "登录后才能保存个人草稿。";
+    return;
+  }
+  const fields = getCommunityComposerFields();
+  if (isCapabilityEnabled("cloudDrafts")) {
+    if (message) message.textContent = "正在保存云草稿...";
+    try {
+      await persistCommunityCloudDraft(fields);
+      if (message) message.textContent = "云草稿已保存，可在其他设备继续编辑。媒体文件请在发布前重新选择。";
+    } catch (error) {
+      if (message) message.textContent = getCommunityMutationMessage(error, "云草稿保存失败，请稍后重试。");
+    }
+    return;
+  }
+  const draftKey = getCommunityDraftKey();
+  if (!draftKey) {
     const message = document.querySelector("#communityComposerMessage");
+    if (message) message.textContent = "登录后才能在当前浏览器保存个人草稿。";
+    return;
+  }
+  try {
+    window.localStorage.setItem(draftKey, JSON.stringify({
+      title: fields.title,
+      location: fields.locationText,
+      body: fields.body,
+    }));
     if (message) message.textContent = "草稿已保存在当前浏览器。媒体文件请在发布前重新选择。";
   } catch {
-    const message = document.querySelector("#communityComposerMessage");
     if (message) message.textContent = "草稿保存失败，请检查浏览器存储权限。";
   }
 }
@@ -4821,53 +5114,205 @@ function bindCommunityWorkspaceView() {
   document.querySelector("[data-community-save-draft]")?.addEventListener("click", saveCommunityDraft);
   document.querySelector("#communityComposer")?.addEventListener("submit", async (event) => {
     event.preventDefault();
+    const message = document.querySelector("#communityComposerMessage");
+    if (!isCapabilityEnabled("communityPublish")) {
+      message.textContent = getCapabilityDisabledReason("communityPublish");
+      applyRuntimeCapabilityControls();
+      return;
+    }
     if (!currentUser) {
       window.location.assign(getLoginUrl());
       return;
     }
-    const title = document.querySelector("#communityComposerTitle").value.trim();
-    const location = document.querySelector("#communityComposerLocation").value.trim();
-    const body = document.querySelector("#communityComposerBody").value.trim();
-    const message = document.querySelector("#communityComposerMessage");
+    const fields = getCommunityComposerFields();
+    const { title, body } = fields;
     const submit = event.currentTarget.querySelector('[type="submit"]');
     if (!title || !body) {
       message.textContent = !title ? "请填写标题。" : "请写下正文内容。";
+      return;
+    }
+    if (body.length > POST_BODY_MAX_LENGTH) {
+      message.textContent = `正文超过 ${POST_BODY_MAX_LENGTH} 字，请缩短后再发布。`;
       return;
     }
     submit.disabled = true;
     message.textContent = "正在发布...";
     try {
       const media = await readCommunityMedia(mediaInput?.files?.[0]);
-      const newPost = await communityApi.create({ title, body: location ? `${body}\n地点：${location}` : body, bird: "观鸟笔记", ...(media || {}) });
+      let newPost;
+      if (isCapabilityEnabled("cloudDrafts")) {
+        const draft = await persistCommunityCloudDraft(fields);
+        if (!communityWorkspacePublishKey) {
+          communityWorkspacePublishKey = window.crypto?.randomUUID
+            ? `publish-${window.crypto.randomUUID()}`
+            : `publish-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        }
+        newPost = await communityApi.publishDraft(
+          draft.id,
+          draft.version,
+          communityWorkspacePublishKey,
+          media || {}
+        );
+        communityWorkspaceDraft = null;
+        communityWorkspacePublishKey = "";
+      } else {
+        newPost = await communityApi.create({ ...fields, ...(media || {}) });
+      }
       communityWorkspacePosts.unshift(newPost);
-      window.localStorage.removeItem(COMMUNITY_DRAFT_KEY);
+      const draftKey = getCommunityDraftKey();
+      if (draftKey) window.localStorage.removeItem(draftKey);
       window.history.replaceState({}, "", "./community.html?view=personal");
       renderCommunityWorkspace();
     } catch (error) {
       message.textContent = getCommunityMutationMessage(error, "发布失败，请稍后重试。");
     } finally {
-      submit.disabled = false;
+      submit.disabled = !isCapabilityEnabled("communityPublish");
     }
   });
   document.querySelectorAll("[data-workspace-like]").forEach((button) => {
-    button.addEventListener("click", () => {
-      button.classList.toggle("is-liked");
-      const current = Number(button.textContent.replace(/\D/g, "")) || 0;
-      button.textContent = `赞 ${current + (button.classList.contains("is-liked") ? 1 : -1)}`;
-    });
+    button.addEventListener("click", () => toggleCommunityWorkspaceLike(button.dataset.workspaceLike, button));
   });
+  document.querySelectorAll("[data-workspace-follow]").forEach((button) => {
+    button.addEventListener("click", () => toggleCommunityWorkspaceFollow(button.dataset.workspaceFollow, button));
+  });
+  document.querySelectorAll("[data-community-notification-read]").forEach((button) => {
+    button.addEventListener("click", () => markCommunityNotificationRead(button.dataset.communityNotificationRead, button));
+  });
+  document.querySelector("[data-community-notifications-read-all]")?.addEventListener("click", markAllCommunityNotificationsRead);
+}
+
+async function markCommunityNotificationRead(notificationId, button) {
+  if (!notificationId || button?.disabled) return;
+  if (button) button.disabled = true;
+  try {
+    const result = await communityApi.markNotificationRead(notificationId);
+    communityWorkspaceNotifications = communityWorkspaceNotifications.map((notification) => (
+      notification.id === notificationId ? { ...notification, readAt: result?.readAt || new Date().toISOString() } : notification
+    ));
+    renderCommunityWorkspace();
+  } catch (error) {
+    if (button) button.disabled = false;
+    window.alert(getCommunityMutationMessage(error, "消息状态更新失败，请稍后重试。"));
+  }
+}
+
+async function markAllCommunityNotificationsRead() {
+  try {
+    await communityApi.markAllNotificationsRead();
+    const readAt = new Date().toISOString();
+    communityWorkspaceNotifications = communityWorkspaceNotifications.map((notification) => ({
+      ...notification,
+      readAt: notification.readAt || readAt,
+    }));
+    renderCommunityWorkspace();
+  } catch (error) {
+    window.alert(getCommunityMutationMessage(error, "消息状态更新失败，请稍后重试。"));
+  }
+}
+
+async function toggleCommunityWorkspaceLike(postId, button) {
+  const post = communityWorkspacePosts.find((item) => item.id === postId);
+  if (!post?.createdAt || button.disabled) return;
+  if (!isCapabilityEnabled("canonicalLike")) {
+    applyRuntimeCapabilityControls();
+    return;
+  }
+  if (!requireLoginForAction()) return;
+
+  button.disabled = true;
+  button.setAttribute("aria-busy", "true");
+  try {
+    const currentlyLiked = post.viewerHasLiked === true || post.feedback?.helpful?.selected === true;
+    const updatedPost = await communityApi.setLike(postId, !currentlyLiked);
+    const postIndex = communityWorkspacePosts.findIndex((item) => item.id === postId);
+    if (postIndex >= 0) {
+      communityWorkspacePosts.splice(postIndex, 1, updatedPost);
+    }
+    renderCommunityWorkspace();
+  } catch (error) {
+    button.disabled = false;
+    button.removeAttribute("aria-busy");
+    window.alert(getCommunityMutationMessage(error, "点赞失败，请稍后重试。"));
+    if (error?.status === 401) {
+      clearAuthState();
+    }
+  }
+}
+
+async function toggleCommunityWorkspaceFollow(authorId, button) {
+  if (!authorId || button.disabled || !requireLoginForAction()) return;
+  const currentlyFollowing = button.getAttribute("aria-pressed") === "true";
+  button.disabled = true;
+  try {
+    const profile = await communityApi.setFollow(authorId, !currentlyFollowing);
+    communityWorkspacePosts = communityWorkspacePosts
+      .map((post) => post.authorId === authorId
+        ? { ...post, viewerFollowsAuthor: profile?.viewer?.isFollowing === true }
+        : post)
+      .filter((post) => getCommunityWorkspaceView() !== "following" || post.viewerFollowsAuthor);
+    renderCommunityWorkspace();
+  } catch (error) {
+    button.disabled = false;
+    window.alert(getCommunityMutationMessage(error, "关注操作失败，请稍后重试。"));
+  }
+}
+
+async function loadCommunityWorkspaceData() {
+  if (page !== "community" || !document.querySelector("[data-community-workspace]")) return;
+  const view = getCommunityWorkspaceView();
+  communityWorkspaceLoadState = "loading";
+  if (view === "messages") communityWorkspaceNotificationState = "loading";
+  renderCommunityWorkspace();
+  const request = view === "personal"
+    ? communityApi.listMyPosts({ limit: 30 })
+    : view === "messages" || view === "publish"
+      ? communityApi.listFeed("recommended", { limit: 3 })
+      : communityApi.listFeed(view, { limit: 30 });
+  request.then((result) => {
+    communityWorkspacePosts = result.posts || [];
+    communityWorkspaceLoadState = "ready";
+    communityWorkspaceLoadMessage = "";
+    renderCommunityWorkspace();
+  }).catch((error) => {
+    communityWorkspaceLoadState = "error";
+    communityWorkspaceLoadMessage = withRequestId(error?.message || "社区内容加载失败，请稍后重试。", error);
+    renderCommunityWorkspace();
+  });
+  if (view === "personal") {
+    communityApi.getMyStats().then((stats) => {
+      communityWorkspaceStats = stats;
+      renderCommunityWorkspace();
+    }).catch(() => {});
+  }
+  if (view === "publish" && currentUser && isCapabilityEnabled("cloudDrafts")) {
+    communityApi.listDrafts({ limit: 1 }).then((result) => {
+      communityWorkspaceDraft = result.drafts?.[0] || null;
+      renderCommunityWorkspace();
+    }).catch((error) => {
+      communityWorkspaceLoadMessage = withRequestId(error?.message || "云草稿加载失败。", error);
+      renderCommunityWorkspace();
+    });
+  }
+  if (view === "messages" && currentUser && isCapabilityEnabled("notifications")) {
+    communityApi.listNotifications({ limit: 30 }).then((result) => {
+      communityWorkspaceNotifications = result.notifications || [];
+      communityWorkspaceNotificationState = "ready";
+      communityWorkspaceNotificationMessage = "";
+      renderCommunityWorkspace();
+    }).catch((error) => {
+      communityWorkspaceNotificationState = "error";
+      communityWorkspaceNotificationMessage = withRequestId(error?.message || "消息加载失败，请稍后重试。", error);
+      renderCommunityWorkspace();
+    });
+  } else if (view === "messages") {
+    communityWorkspaceNotificationState = "ready";
+  }
 }
 
 function initCommunityWorkspace() {
   if (page !== "community" || !document.querySelector("[data-community-workspace]")) return;
   renderCommunityWorkspace();
-  communityApi.list({ limit: 30 }).then((result) => {
-    communityWorkspacePosts = result.posts || [];
-    renderCommunityWorkspace();
-  }).catch(() => {
-    renderCommunityWorkspace();
-  });
-  window.addEventListener("popstate", renderCommunityWorkspace);
+  window.addEventListener("popstate", loadCommunityWorkspaceData);
 }
 
 initCommunityWorkspace();
@@ -4879,6 +5324,16 @@ function setProfileCenterMessage(selector, text = "") {
   if (target) target.textContent = text;
 }
 
+function renderProfileAvatarPreview() {
+  const name = currentUser?.nickname || "我的观鸟档案";
+  const avatar = profileAvatarDataUrl || currentUser?.avatarUrl;
+  document.querySelectorAll("[data-profile-avatar], [data-profile-avatar-preview]").forEach((node) => {
+    node.textContent = avatar ? "" : name.slice(0, 1).toUpperCase();
+    node.style.backgroundImage = avatar ? `url("${avatar}")` : "";
+    node.classList.toggle("has-image", Boolean(avatar));
+  });
+}
+
 function renderProfileCenter() {
   if (page !== "profile") return;
   const signedIn = Boolean(currentUser);
@@ -4888,14 +5343,9 @@ function renderProfileCenter() {
   if (settings) settings.hidden = !signedIn;
   const name = currentUser?.nickname || "我的观鸟档案";
   const email = currentUser?.email || "登录后可编辑个人资料。";
-  const avatar = currentUser?.avatarUrl || profileAvatarDataUrl;
   document.querySelectorAll("[data-profile-center-name]").forEach((node) => { node.textContent = name; });
   document.querySelectorAll("[data-profile-center-email]").forEach((node) => { node.textContent = email; });
-  document.querySelectorAll("[data-profile-avatar], [data-profile-avatar-preview]").forEach((node) => {
-    node.textContent = avatar ? "" : name.slice(0, 1).toUpperCase();
-    node.style.backgroundImage = avatar ? `url("${avatar}")` : "";
-    node.classList.toggle("has-image", Boolean(avatar));
-  });
+  renderProfileAvatarPreview();
   if (!signedIn) return;
   const nickname = document.querySelector("#profileNicknameInput");
   const bio = document.querySelector("#profileBioInput");
@@ -4909,6 +5359,7 @@ function renderProfileCenter() {
   if (age) age.value = currentUser.age || "";
   if (publicProfile) publicProfile.checked = currentUser.publicProfile !== false;
   if (emailNotifications) emailNotifications.checked = currentUser.emailNotifications !== false;
+  applyRuntimeCapabilityControls();
 }
 
 function readProfileAvatar(file) {
@@ -4924,23 +5375,29 @@ function readProfileAvatar(file) {
   });
 }
 
-function getProfilePayload() {
-  return {
+function getBasicProfilePayload() {
+  const ageValue = document.querySelector("#profileAgeInput")?.value || "";
+  const payload = {
     nickname: document.querySelector("#profileNicknameInput")?.value.trim() || "",
     bio: document.querySelector("#profileBioInput")?.value.trim() || "",
     gender: document.querySelector("#profileGenderInput")?.value || "",
-    age: document.querySelector("#profileAgeInput")?.value || "",
-    avatarUrl: profileAvatarDataUrl || currentUser?.avatarUrl || "",
+    age: ageValue ? Number(ageValue) : null,
+  };
+  if (profileAvatarDataUrl) payload.avatarUrl = profileAvatarDataUrl;
+  return payload;
+}
+
+function getProfilePreferencePayload() {
+  return {
     publicProfile: Boolean(document.querySelector("#profilePublicInput")?.checked),
-    emailNotifications: Boolean(document.querySelector("#profileEmailInput")?.checked),
   };
 }
 
-async function saveProfileCenter(messageSelector) {
+async function saveProfileCenter(messageSelector, payload, options = {}) {
   if (!currentUser) return;
-  const data = await authRequest("/api/auth/profile", { method: "PATCH", body: getProfilePayload() });
+  const data = await authRequest("/api/auth/profile", { method: "PATCH", body: payload });
   rememberAuthUser(data.user);
-  profileAvatarDataUrl = "";
+  if (options.clearAvatarSelection) profileAvatarDataUrl = "";
   renderProfileCenter();
   setProfileCenterMessage(messageSelector, "已保存。");
 }
@@ -4953,7 +5410,7 @@ function initProfileCenter() {
   avatarInput?.addEventListener("change", async () => {
     try {
       profileAvatarDataUrl = await readProfileAvatar(avatarInput.files?.[0]);
-      renderProfileCenter();
+      renderProfileAvatarPreview();
       setProfileCenterMessage("[data-profile-message]", "头像已选好，点击保存资料后生效。");
     } catch (error) {
       avatarInput.value = "";
@@ -4963,19 +5420,24 @@ function initProfileCenter() {
   document.querySelector("#profileSettingsForm")?.addEventListener("submit", async (event) => {
     event.preventDefault();
     try {
-      await saveProfileCenter("[data-profile-message]");
+      await saveProfileCenter("[data-profile-message]", getBasicProfilePayload(), { clearAvatarSelection: true });
     } catch (error) {
       setProfileCenterMessage("[data-profile-message]", translateAuthMessage(error.message, "资料保存失败，请稍后重试。"));
     }
   });
   document.querySelector("[data-profile-save-preferences]")?.addEventListener("click", async () => {
     try {
-      await saveProfileCenter("[data-profile-preference-message]");
+      await saveProfileCenter("[data-profile-preference-message]", getProfilePreferencePayload());
     } catch (error) {
       setProfileCenterMessage("[data-profile-preference-message]", translateAuthMessage(error.message, "设置保存失败，请稍后重试。"));
     }
   });
   document.querySelector("[data-profile-delete]")?.addEventListener("click", async () => {
+    if (!isCapabilityEnabled("accountDeletion")) {
+      setProfileCenterMessage("[data-profile-account-capability]", getCapabilityDisabledReason("accountDeletion"));
+      applyRuntimeCapabilityControls();
+      return;
+    }
     const password = document.querySelector("#profileDeletePassword")?.value || "";
     const confirmation = document.querySelector("#profileDeleteConfirmation")?.value || "";
     if (!password || confirmation !== "注销我的账号") {

@@ -38,12 +38,14 @@
       let response;
 
       try {
-        response = await fetch(`${baseUrl}/api/community/posts${path}${query}`, {
+        const apiPath = requestOptions.apiPath || `/api/community/posts${path}`;
+        response = await fetch(`${baseUrl}${apiPath}${query}`, {
           method: requestOptions.method || "GET",
           credentials: "include",
           headers: {
             Accept: "application/json",
             ...(requestOptions.body ? { "Content-Type": "application/json" } : {}),
+            ...(requestOptions.headers || {}),
           },
           body: requestOptions.body ? JSON.stringify(requestOptions.body) : undefined,
           signal: controller.signal,
@@ -148,6 +150,115 @@
           body: { reactionType },
         });
         return normalizePost(data.post);
+      },
+      async listFeed(type = "recommended", options = {}) {
+        const data = await request("", {
+          apiPath: "/api/v1/feed",
+          query: { type, ...(options || {}) },
+        });
+        return {
+          posts: Array.isArray(data?.data) ? data.data.map(normalizePost) : [],
+          pageInfo: data?.pageInfo || { limit: 0, hasMore: false, nextCursor: null },
+        };
+      },
+      async listMyPosts(options = {}) {
+        const data = await request("", { apiPath: "/api/v1/me/posts", query: options });
+        return {
+          posts: Array.isArray(data?.data) ? data.data.map(normalizePost) : [],
+          pageInfo: data?.pageInfo || { limit: 0, hasMore: false, nextCursor: null },
+        };
+      },
+      async getMyStats() {
+        const data = await request("", { apiPath: "/api/v1/me/stats" });
+        return data?.data || { posts: 0, observations: 0, followers: 0, following: 0 };
+      },
+      async setLike(id, liked) {
+        const data = await request("", {
+          apiPath: `/api/v1/posts/${encodeURIComponent(id)}/like`,
+          method: liked ? "PUT" : "DELETE",
+        });
+        return normalizePost(data?.data?.post);
+      },
+      async setFollow(userId, following) {
+        const data = await request("", {
+          apiPath: `/api/v1/users/${encodeURIComponent(userId)}/follow`,
+          method: following ? "PUT" : "DELETE",
+        });
+        return data?.data || null;
+      },
+      async getProfile(userId) {
+        const data = await request("", {
+          apiPath: `/api/v1/users/${encodeURIComponent(userId)}`,
+        });
+        return data?.data || null;
+      },
+      async listDrafts(options = {}) {
+        const data = await request("", { apiPath: "/api/v1/drafts", query: options });
+        return {
+          drafts: Array.isArray(data?.data) ? data.data : [],
+          pageInfo: data?.pageInfo || { limit: 0, hasMore: false, nextCursor: null },
+        };
+      },
+      async createDraft(fields) {
+        const data = await request("", { apiPath: "/api/v1/drafts", method: "POST", body: fields });
+        return data?.data || null;
+      },
+      async updateDraft(draftId, version, changes) {
+        const data = await request("", {
+          apiPath: `/api/v1/drafts/${encodeURIComponent(draftId)}`,
+          method: "PATCH",
+          body: { version, ...changes },
+        });
+        return data?.data || null;
+      },
+      async deleteDraft(draftId) {
+        await request("", {
+          apiPath: `/api/v1/drafts/${encodeURIComponent(draftId)}`,
+          method: "DELETE",
+        });
+      },
+      async publishDraft(draftId, version, idempotencyKey, media = {}) {
+        const data = await request("", {
+          apiPath: `/api/v1/drafts/${encodeURIComponent(draftId)}/publish`,
+          method: "POST",
+          headers: { "Idempotency-Key": idempotencyKey },
+          body: { version, ...(media || {}) },
+        });
+        return normalizePost(data?.data);
+      },
+      async listNotifications(options = {}) {
+        const data = await request("", { apiPath: "/api/v1/notifications", query: options });
+        return {
+          notifications: Array.isArray(data?.data) ? data.data : [],
+          pageInfo: data?.pageInfo || { limit: 0, hasMore: false, nextCursor: null },
+        };
+      },
+      async getUnreadNotificationCount() {
+        const data = await request("", { apiPath: "/api/v1/notifications/unread-count" });
+        return Number(data?.data?.count) || 0;
+      },
+      async markNotificationRead(notificationId) {
+        const data = await request("", {
+          apiPath: `/api/v1/notifications/${encodeURIComponent(notificationId)}/read`,
+          method: "POST",
+        });
+        return data?.data || null;
+      },
+      async markAllNotificationsRead() {
+        const data = await request("", { apiPath: "/api/v1/notifications/read-all", method: "POST" });
+        return Number(data?.data?.updated) || 0;
+      },
+      async getNotificationPreferences() {
+        const data = await request("", { apiPath: "/api/v1/notification-preferences" });
+        return data?.data || null;
+      },
+      async updateNotificationPreferences(changes) {
+        const data = await request("", {
+          apiPath: "/api/v1/notification-preferences",
+          method: "PATCH",
+          body: changes,
+        });
+        return data?.data || null;
       },
     };
   }

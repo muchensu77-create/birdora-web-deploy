@@ -5,13 +5,26 @@ const cors = require("cors");
 const cookieParser = require("cookie-parser");
 
 const authRoutes = require("./app/routes/auth.routes");
+const capabilitiesRoutes = require("./app/routes/capabilities.routes");
 const communityPostRoutes = require("./app/routes/community-post.routes");
+const draftRoutes = require("./app/routes/draft.routes");
 const observationRoutes = require("./app/routes/observation.routes");
+const notificationRoutes = require("./app/routes/notification.routes");
 const recognitionRoutes = require("./app/routes/recognition.routes");
+const socialRoutes = require("./app/routes/social.routes");
+const { closeDatabase, getDatabaseHealth, initializeDatabase } = require("./app/db/database");
+const {
+  activationWriteGate,
+  assertActivationStartupAllowed,
+  getActivationRuntimeState,
+} = require("./app/middleware/activation-write-gate");
+const { assertSharedDatabaseLifecycleLock } = require("./app/runtime/database-lifecycle-lock");
 const { createOriginGuard, resolveAllowedOrigins } = require("./app/middleware/origin-guard");
 const { requestIdMiddleware } = require("./app/middleware/request-id");
 
 const app = express();
+let shuttingDown = false;
+let shutdownStarted = false;
 const port = Number(process.env.PORT) || 4000;
 const isProduction = process.env.NODE_ENV === "production";
 const configuredSiteOrigin = process.env.ALLOWED_ORIGINS || process.env.APP_ORIGIN || process.env.CORS_ORIGIN || "";
@@ -23,6 +36,11 @@ const isProductionLike =
   usesHttpsOrigin ||
   usesProductionDataPath ||
   process.env.PORT === "3003";
+const host = process.env.HOST || (isProductionLike ? "127.0.0.1" : "0.0.0.0");
+const releaseIdentity = {
+  revision: process.env.BIRDORA_RELEASE_REVISION || null,
+  manifestSha256: process.env.BIRDORA_RELEASE_MANIFEST_SHA256 || null,
+};
 
 function parseTrustProxy(value) {
   if (!value || value === "false") return false;
@@ -77,23 +95,48 @@ app.use(
 
 app.use(createOriginGuard({ allowedOrigins }));
 
-// Community video is sent as a bounded data URL; keep the global parser above its 8MB file limit.
-app.use(express.json({ limit: "12mb" }));
-app.use(express.urlencoded({ extended: true, limit: "12mb" }));
 app.use(cookieParser());
+app.use(activationWriteGate);
 
-app.get("/api/health", (_req, res) => {
+// Community publishing has its own bounded parser inside the router. Mount it before
+// the ordinary parsers so an 8 MiB video data URL does not raise the global limit.
+app.use("/api/community/posts", communityPostRoutes);
+
+app.get("/api/health/live", (_req, res) => {
   res.json({
     ok: true,
     service: "birdora-auth-api",
+    release: releaseIdentity,
     timestamp: new Date().toISOString(),
   });
 });
 
+function readinessHandler(_req, res) {
+  const databaseHealth = getDatabaseHealth();
+  const activation = getActivationRuntimeState();
+  const activationReady = activation.activationPending || activation.markerVerified;
+  const ready = !shuttingDown && databaseHealth.ready && activationReady;
+  res.status(ready ? 200 : 503).json({
+    ok: ready,
+    service: "birdora-auth-api",
+    release: releaseIdentity,
+    activation,
+    schemaVersion: databaseHealth.schemaVersion,
+    timestamp: new Date().toISOString(),
+  });
+}
+
+app.get("/api/health/ready", readinessHandler);
+// Compatibility endpoint: historically deployment checks used /api/health.
+app.get("/api/health", readinessHandler);
+
+app.use("/api/v1/capabilities", capabilitiesRoutes);
+app.use("/api/v1", notificationRoutes);
+app.use("/api/v1", draftRoutes);
+app.use("/api/v1", socialRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/recognition", recognitionRoutes);
 app.use("/api/observations", observationRoutes);
-app.use("/api/community/posts", communityPostRoutes);
 
 function sanitizeLogMessage(message) {
   return String(message || "Internal server error")
@@ -152,6 +195,38 @@ app.use((err, req, res, _next) => {
   });
 });
 
-app.listen(port, () => {
-  console.log(`Birdora auth API listening on http://localhost:${port}`);
+// A stale deployment journal blocks ordinary process resurrection before the
+// database is opened. A matching controlled candidate starts read-only until
+// the verified marker is committed and the journal is removed.
+assertActivationStartupAllowed();
+if (isProductionLike) assertSharedDatabaseLifecycleLock();
+
+// Run all schema migrations before binding the port. A failed migration must
+// terminate startup instead of exposing a half-initialized API instance.
+initializeDatabase();
+
+const httpServer = app.listen(port, host, () => {
+  console.log(`Birdora auth API listening on http://${host}:${port}`);
+  if (typeof process.send === "function") process.send("ready");
 });
+
+function shutdown(signal) {
+  if (shutdownStarted) return;
+  shutdownStarted = true;
+  shuttingDown = true;
+  const forceTimer = setTimeout(() => {
+    closeDatabase();
+    process.exit(1);
+  }, 10_000);
+  forceTimer.unref();
+
+  httpServer.close(() => {
+    closeDatabase();
+    process.exit(0);
+  });
+
+  console.log(`Birdora auth API received ${signal}; waiting for active requests to finish.`);
+}
+
+process.once("SIGINT", () => shutdown("SIGINT"));
+process.once("SIGTERM", () => shutdown("SIGTERM"));

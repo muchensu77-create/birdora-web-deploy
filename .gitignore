@@ -9,3 +9,8 @@ app/data/*.sqlite-shm
 app/data/*.sqlite-wal
 app/data/*.json
 app/data/uploads/
+app/data/backups/
+app/data/rollback-bundles/
+app/data/migration-*.log
+/.active-public
+/.public-releases/

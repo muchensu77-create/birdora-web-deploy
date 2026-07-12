@@ -3,8 +3,10 @@ const rateLimit = require("express-rate-limit");
 
 const observationController = require("../controllers/observation.controller");
 const authJwt = require("../middleware/auth-jwt");
+const { requireJsonObject } = require("../middleware/require-json-object");
 
 const router = express.Router();
+const observationJson = express.json({ limit: "2mb" });
 const observationWriteLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: Number(process.env.OBSERVATION_WRITE_RATE_LIMIT || 240),
@@ -28,6 +30,8 @@ router.post(
   "/",
   asyncHandler(authJwt.requireAuth),
   observationWriteLimiter,
+  observationJson,
+  requireJsonObject,
   asyncHandler(observationController.create)
 );
 router.get("/", asyncHandler(authJwt.requireAuth), asyncHandler(observationController.listMine));
