@@ -7013,3 +7013,114 @@ body[data-page="explore"] .observation-section {
         transform: none;
     }
 }
+
+
+/* Local audit fixes: keep existing Birdora navigation and cards usable on phones. */
+
+.community-rail {
+    -ms-overflow-style: none;
+    overscroll-behavior-x: contain;
+    scroll-padding-inline: 7px;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+}
+
+.community-rail::-webkit-scrollbar {
+    display: none;
+}
+
+.community-rail-link {
+    scroll-snap-align: start;
+}
+
+@media (max-width: 720px) {
+    .glass-topbar {
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    .glass-topbar .nav {
+        display: flex;
+        flex: 1 0 100%;
+        gap: 4px;
+        order: 3;
+        width: 100%;
+        overflow-x: auto;
+        overscroll-behavior-x: contain;
+        scrollbar-width: none;
+    }
+
+    .glass-topbar .nav a {
+        flex: 0 0 auto;
+        padding-inline: 8px;
+        white-space: nowrap;
+    }
+
+    .glass-topbar .nav::-webkit-scrollbar {
+        display: none;
+    }
+
+    #identify .section-head.section-head-with-actions .section-head-actions,
+    #publish .section-head.section-head-with-actions .section-head-actions {
+        align-items: stretch;
+        flex-direction: column;
+        width: 100% !important;
+    }
+
+    #identify .section-head.section-head-with-actions .section-head-actions > a,
+    #publish .section-head.section-head-with-actions .section-head-actions > a {
+        flex: 0 0 auto;
+        min-height: 48px;
+        width: 100%;
+    }
+}
+
+@media (max-width: 520px) {
+    .community-note-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .community-person-card {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        gap: 4px 12px;
+        width: 100%;
+    }
+
+    .community-person-card > strong {
+        align-self: center;
+        grid-row: 1 / span 2;
+    }
+
+    .community-person-card > span {
+        min-width: 0;
+    }
+
+    .community-person-card .secondary-btn {
+        grid-column: 1 / -1;
+        margin: 12px 0 0;
+        width: 100%;
+    }
+}
+
+#identify .section-head > h1 {
+    margin: 0 0 20px;
+    color: #123b2f;
+    font-size: 52px;
+    font-weight: 800;
+    line-height: 1.08;
+    letter-spacing: 0;
+}
+
+@media (max-width: 920px) {
+    #identify .section-head > h1 {
+        font-size: clamp(40px, 7vw, 44px);
+    }
+}
+
+@media (max-width: 560px) {
+    #identify .section-head > h1 {
+        font-size: 34px;
+        line-height: 1.08;
+    }
+}

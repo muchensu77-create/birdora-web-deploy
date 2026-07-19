@@ -1284,3 +1284,226 @@ main > * {
     opacity: 0.07;
   }
 }
+
+/* Accessibility baseline for the compact controls used across route pages. */
+
+.glass-topbar .ghost-btn,
+.glass-topbar .link-btn,
+#atlas .bird-grid.is-marquee .atlas-card-actions,
+#atlas .bird-grid.is-marquee .source-link,
+#atlas .bird-grid.is-marquee .atlas-open {
+  min-height: 44px !important;
+}
+
+.community-note-meta button {
+  min-width: 44px;
+  min-height: 44px;
+  padding-inline: 8px;
+}
+
+.community-field select {
+  width: 100%;
+  min-height: 46px;
+  padding: 0 13px;
+  border: 1px solid #d5e1d7;
+  border-radius: 6px;
+  color: #18241c;
+  background: #fbfdfb;
+}
+
+.community-field select:focus {
+  outline: 3px solid rgba(36, 113, 60, 0.16);
+  border-color: #2b7a45;
+}
+
+/* Community uses the global Birdora tokens with explicit role-based hierarchy. */
+
+body[data-page="community"] {
+  --community-type-body: var(--type-text-size);
+  --community-type-support: calc(var(--type-text-size) - 2px);
+  --community-type-meta: calc(var(--type-text-size) - 3px);
+  --community-surface-radius: var(--unified-radius);
+}
+
+body[data-page="community"] .community-workspace {
+  margin-top: 44px;
+}
+
+body[data-page="community"] .community-rail {
+  margin-bottom: 28px;
+}
+
+body[data-page="community"] .community-rail-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  border-radius: var(--community-surface-radius);
+  font-size: var(--community-type-support) !important;
+  line-height: 1.25;
+}
+
+body[data-page="community"] .community-view-heading {
+  gap: 8px;
+  margin-bottom: 28px;
+}
+
+body[data-page="community"] .community-view-heading > p {
+  font-size: var(--community-type-support) !important;
+  line-height: 1.35;
+}
+
+body[data-page="community"] .community-view-heading > span {
+  font-size: var(--community-type-body) !important;
+  line-height: 1.7;
+}
+
+body[data-page="community"] :where(
+  .community-person-card,
+  .community-empty-state,
+  .community-media-picker,
+  .community-message-list,
+  .community-report-panel select,
+  .community-report-panel textarea
+) {
+  border-radius: var(--community-surface-radius) !important;
+}
+
+body[data-page="community"] .community-note-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+body[data-page="community"] .community-note-info h2 {
+  color: #17221b !important;
+  font-size: var(--community-type-body) !important;
+  font-weight: 800 !important;
+  line-height: 1.4 !important;
+}
+
+body[data-page="community"] .community-text-cover p {
+  color: #263b2d !important;
+  font-size: calc(var(--community-type-body) - 1px) !important;
+  font-weight: 600 !important;
+  line-height: 1.55 !important;
+}
+
+body[data-page="community"] .community-note-info > p {
+  font-size: calc(var(--community-type-body) - 1px) !important;
+  font-weight: 400;
+  line-height: 1.65;
+}
+
+body[data-page="community"] .community-text-cover > span,
+body[data-page="community"] .community-field > span,
+body[data-page="community"] .community-media-picker > strong {
+  font-size: var(--community-type-support) !important;
+  font-weight: 800;
+  line-height: 1.4;
+}
+
+body[data-page="community"] .community-note-meta,
+body[data-page="community"] .community-note-meta > span,
+body[data-page="community"] .community-note-meta > button,
+body[data-page="community"] .community-media-picker > small,
+body[data-page="community"] .community-message-type,
+body[data-page="community"] .community-message time,
+body[data-page="community"] .community-report-panel summary {
+  font-size: var(--community-type-meta) !important;
+  line-height: 1.4;
+}
+
+body[data-page="community"] .community-note-meta > button {
+  font-weight: 700;
+}
+
+body[data-page="community"] .community-publish-aside-head h2 {
+  color: var(--type-medium-color) !important;
+  font-size: calc(var(--community-type-body) + 3px) !important;
+  font-weight: 800 !important;
+  line-height: 1.35 !important;
+}
+
+body[data-page="community"] .community-mini-note-list .community-note-info h2 {
+  color: #17221b !important;
+  font-size: var(--community-type-support) !important;
+  font-weight: 800 !important;
+  line-height: 1.4 !important;
+}
+
+body[data-page="community"] .community-person-card > span:first-of-type {
+  color: #344b3c;
+  font-size: var(--community-type-support) !important;
+  font-weight: 800;
+  line-height: 1.4;
+}
+
+body[data-page="community"] .community-person-card > span:last-of-type {
+  font-size: var(--community-type-meta) !important;
+  line-height: 1.5;
+}
+
+body[data-page="community"] .community-person-card {
+  width: min(620px, 100%);
+}
+
+body[data-page="community"] .community-message-list {
+  overflow: hidden;
+  border: 1px solid #dce8df;
+  background: rgba(255, 255, 255, 0.76);
+}
+
+body[data-page="community"] .community-message {
+  border-radius: 0 !important;
+  padding-inline: 20px;
+}
+
+body[data-page="community"] .community-message:last-child {
+  border-bottom: 0;
+}
+
+@media (max-width: 1180px) {
+  body[data-page="community"] .community-note-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  body[data-page="community"] .community-workspace {
+    margin-top: 28px;
+  }
+
+  body[data-page="community"] .community-rail {
+    margin-bottom: 24px;
+  }
+
+  body[data-page="community"] .community-view-heading {
+    margin-bottom: 24px;
+  }
+
+  body[data-page="community"] .community-note-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  body[data-page="community"] .community-person-card {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 4px 12px;
+  }
+
+  body[data-page="community"] .community-person-card > strong {
+    align-self: center;
+    grid-row: 1 / span 2;
+  }
+
+  body[data-page="community"] .community-person-card .secondary-btn {
+    grid-column: 1 / -1;
+    margin: 12px 0 0;
+    width: 100%;
+  }
+}
+
+@media (max-width: 520px) {
+  body[data-page="community"] .community-note-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

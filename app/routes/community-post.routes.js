@@ -23,6 +23,7 @@ const communityWriteLimiter = rateLimit({
   },
   message: {
     message: "Too many community requests, please try again later.",
+    code: "RATE_LIMITED",
   },
 });
 

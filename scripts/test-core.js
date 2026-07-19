@@ -16,6 +16,8 @@ const testFiles = [
   "scripts/test-database-lifecycle-lock.js",
   "scripts/test-deployment-contracts.js",
   "scripts/test-frontend-contracts.js",
+  "scripts/test-security-contracts.js",
+  "scripts/test-recognition-work-queue.js",
   "scripts/test-phase0-backend.js",
   "scripts/test-outbox-worker.js",
   "scripts/test-api-integration.js",

@@ -16,6 +16,7 @@ const recognitionLimiter = rateLimit({
   },
   message: {
     message: "Too many recognition requests, please try again later.",
+    code: "RATE_LIMITED",
   },
 });
 

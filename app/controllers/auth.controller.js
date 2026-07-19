@@ -17,6 +17,14 @@ const PROFILE_BIO_MAX_LENGTH = 280;
 const PROFILE_NICKNAME_MAX_LENGTH = 40;
 const PROFILE_AVATAR_MAX_BYTES = 600 * 1024;
 const PROFILE_GENDERS = new Set(["", "female", "male", "nonbinary", "prefer_not_to_say"]);
+const DUMMY_PASSWORD_HASHES = Object.freeze({
+  10: "$2a$10$F.qCPNGEsHJadT2Hs1WQyu6RrROcbd2ly6CLcj.obI3OPCBPyaokS",
+  11: "$2a$11$QAfHuWVJy7njGAQQKAHokOhvtIPUEKSfxGiojvdYeVm4mc.rrnknm",
+  12: "$2a$12$DtFcKMcZh9st.VKOLubBuul8YT9jPAaJ2AVL5oYVpQdxMamkgaoCa",
+  13: "$2a$13$K1dHiwePI8UbQoEvDyn16e0cOSupF5jMZ/9Cb8Lxu8Tlpd1FWfdnm",
+  14: "$2a$14$QB24rBgZ/Yva8eA2ca3/we6kLDqe4X1zqS6pfsH93rfEgkkEouRly",
+});
+const DUMMY_PASSWORD_HASH = DUMMY_PASSWORD_HASHES[authConfig.passwordHashCost] || DUMMY_PASSWORD_HASHES[10];
 
 function isValidEmail(email) {
   return Buffer.byteLength(email, "utf8") <= EMAIL_MAX_BYTES
@@ -208,16 +216,10 @@ async function login(req, res) {
   const user = await measureTiming(timings, "auth_db_lookup", () =>
     userService.findByEmail(email)
   );
-  if (!user) {
-    setAuthTimingHeader(res, timings, totalStart);
-    res.status(401).json({ message: "email or password is incorrect" });
-    return;
-  }
-
   const passwordMatches = await measureTiming(timings, "password_compare", () =>
-    passwordService.verifyPassword(password, user.passwordHash)
+    passwordService.verifyPassword(password, user?.passwordHash || DUMMY_PASSWORD_HASH)
   );
-  if (!passwordMatches) {
+  if (!user || !passwordMatches) {
     setAuthTimingHeader(res, timings, totalStart);
     res.status(401).json({ message: "email or password is incorrect" });
     return;

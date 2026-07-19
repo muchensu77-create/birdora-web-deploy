@@ -17,6 +17,7 @@ const observationWriteLimiter = rateLimit({
   },
   message: {
     message: "Too many observation requests, please try again later.",
+    code: "RATE_LIMITED",
   },
 });
 

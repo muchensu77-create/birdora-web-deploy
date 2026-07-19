@@ -16,6 +16,7 @@ const authLimiter = rateLimit({
   legacyHeaders: false,
   message: {
     message: "Too many auth requests, please try again later.",
+    code: "RATE_LIMITED",
   },
 });
 

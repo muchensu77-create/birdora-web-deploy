@@ -144,11 +144,19 @@ app.use("/api/auth", authRoutes);
 app.use("/api/recognition", recognitionRoutes);
 app.use("/api/observations", observationRoutes);
 
+app.use("/api", (req, res) => {
+  res.status(404).json({
+    message: "API endpoint not found",
+    code: "NOT_FOUND",
+  });
+});
+
 function sanitizeLogMessage(message) {
   return String(message || "Internal server error")
-    .replace(/data:image\/[^;]+;base64,[A-Za-z0-9+/=]+/g, "[redacted-image-data]")
+    .replace(/data:(?:image|video)\/[^;]+;base64,[A-Za-z0-9+/=]+/g, "[redacted-media-data]")
     .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/g, "Bearer [redacted]")
-    .replace(/\b(password|token|authorization|cookie|imageDataUrl)=([^&\s]+)/gi, "$1=[redacted]")
+    .replace(/\b(password|token|authorization|cookie|imageDataUrl|videoDataUrl|avatarUrl|location)=([^&\s]+)/gi, "$1=[redacted]")
+    .replace(/(["'])(password|token|authorization|cookie|imageDataUrl|videoDataUrl|avatarUrl|location)\1\s*:\s*(["'])[^"']*\3/gi, "$1$2$1:$3[redacted]$3")
     .slice(0, 500);
 }
 
@@ -156,7 +164,7 @@ function sanitizeLogPath(value) {
   try {
     const url = new URL(value || "/", "http://birdora.local");
     for (const key of Array.from(url.searchParams.keys())) {
-      if (/password|token|authorization|cookie|imageDataUrl/i.test(key)) {
+      if (/password|token|authorization|cookie|imageDataUrl|videoDataUrl|avatarUrl|location/i.test(key)) {
         url.searchParams.set(key, "[redacted]");
       }
     }
@@ -181,7 +189,7 @@ app.use((err, req, res, _next) => {
       : err.message || "Internal server error";
   const code = parseError
     ? "INVALID_JSON_BODY"
-    : err.code || err.name || (statusCode >= 500 ? "INTERNAL_ERROR" : "REQUEST_ERROR");
+    : err.code || (statusCode >= 500 ? "INTERNAL_ERROR" : "REQUEST_ERROR");
 
   console.error(JSON.stringify({
     timestamp: new Date().toISOString(),

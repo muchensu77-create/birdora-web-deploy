@@ -1,4 +1,5 @@
 const recognitionService = require("../services/recognition.service");
+const { runRecognitionTask } = require("../services/recognition-work-queue");
 
 const RECOGNITION_IMAGE_MAX_BYTES = 1024 * 1024;
 const JPEG_SIGNATURE = [0xff, 0xd8, 0xff];
@@ -38,7 +39,7 @@ async function classify(req, res) {
   const imageBuffer = validateRecognitionImage(req, res);
   if (!imageBuffer) return;
 
-  const result = await recognitionService.classifyJpegBuffer(imageBuffer);
+  const result = await runRecognitionTask(() => recognitionService.classifyJpegBuffer(imageBuffer));
   res.json({ result });
 }
 

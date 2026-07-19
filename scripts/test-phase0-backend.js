@@ -198,6 +198,7 @@ async function testDefaultFlagsAndProfile() {
     COMMUNITY_POST_EDIT_ENABLED: "yes",
     COMMUNITY_LEGACY_LIKE_ENABLED: "yes",
     COMMUNITY_DEMO_ENABLED: "FALSE",
+    AUTH_TIMING_HEADERS: "1",
   });
 
   try {
@@ -207,6 +208,26 @@ async function testDefaultFlagsAndProfile() {
     assertStep("liveness endpoint is independent and available", live.status === 200 && live.body.ok === true);
     assertStep("readiness exposes the migrated schema", ready.status === 200 && ready.body.ok === true && ready.body.schemaVersion === "V009");
     assertStep("legacy health endpoint preserves readiness semantics", compatibilityHealth.status === 200 && compatibilityHealth.body.schemaVersion === "V009");
+
+    const missingAccountLogin = await request(server.baseUrl, "/api/auth/login", {
+      method: "POST",
+      json: { email: "missing-account@example.com", password: "not-the-password" },
+    });
+    assertStep(
+      "missing-account login still performs a password comparison",
+      missingAccountLogin.status === 401
+        && /(?:^|,\s*)password_compare;dur=/i.test(missingAccountLogin.headers.get("server-timing") || "")
+    );
+
+    const missingApiRoute = await request(server.baseUrl, "/api/does-not-exist", {
+      headers: { "X-Request-Id": "phase0-api-404-001" },
+    });
+    assertStep(
+      "unknown API routes return a stable JSON 404",
+      missingApiRoute.status === 404
+        && missingApiRoute.body.code === "NOT_FOUND"
+        && missingApiRoute.body.requestId === "phase0-api-404-001"
+    );
 
     const capabilities = await request(server.baseUrl, "/api/v1/capabilities", {
       headers: { "X-Request-Id": "phase0-capabilities-default-001" },

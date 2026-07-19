@@ -11,6 +11,12 @@ const postCardPath = path.join(rootDir, "community-post-card.js");
 const syncScriptPath = path.join(rootDir, "scripts", "sync-public.js");
 const capabilityConfigPath = path.join(rootDir, "app", "config", "capabilities.config.js");
 const communityRoutesPath = path.join(rootDir, "app", "routes", "community-post.routes.js");
+const rootLoginPath = path.join(rootDir, "login.html");
+const rootRegisterPath = path.join(rootDir, "register.html");
+const rootCommunityPath = path.join(rootDir, "community.html");
+const rootProfilePath = path.join(rootDir, "profile.html");
+const rootDevicePath = path.join(rootDir, "device.html");
+const designSystemPath = path.join(rootDir, "design-system.css");
 
 let passed = 0;
 
@@ -113,6 +119,53 @@ check("missing real post lookup returns null without a ReferenceError", () => {
     { timeout: 1000 }
   );
   assert.equal(result, null);
+});
+
+check("auth page switching preserves only a same-origin destination", () => {
+  const switchUrlSource = extractTopLevelFunction(rootScript, "getAuthSwitchUrl");
+  const evaluateSwitchUrl = (search, targetMode = "register") => vm.runInNewContext(
+    `${switchUrlSource}\ngetAuthSwitchUrl(${JSON.stringify(targetMode)});`,
+    {
+      URL,
+      URLSearchParams,
+      window: {
+        location: {
+          search,
+          href: `https://birdora.example/login.html${search}`,
+          origin: "https://birdora.example",
+        },
+      },
+    },
+    { timeout: 1000 }
+  );
+
+  assert.equal(
+    evaluateSwitchUrl("?next=%2Fcommunity.html%3Fview%3Dpublish"),
+    "./register.html?next=%2Fcommunity.html%3Fview%3Dpublish"
+  );
+  assert.equal(
+    evaluateSwitchUrl("?next=https%3A%2F%2Fevil.example%2Fsteal"),
+    "./register.html"
+  );
+  assert.match(rootScript, /authPageSwitchLink\.setAttribute\("href",\s*getAuthSwitchUrl\(targetMode\)\)/);
+  assert.match(readText(rootLoginPath), /class="auth-switch-btn"\s+href="\.\/register\.html"/);
+  assert.match(readText(rootRegisterPath), /class="auth-switch-btn"\s+href="\.\/login\.html"/);
+});
+
+check("non-recognition pages do not load the ONNX browser runtime", () => {
+  for (const filePath of [rootCommunityPath, rootProfilePath, rootDevicePath]) {
+    assert.doesNotMatch(readText(filePath), /assets\/vendor\/ort\.min\.js/);
+  }
+});
+
+check("community typography and component geometry use shared design tokens", () => {
+  const designSystem = readText(designSystemPath);
+  assert.match(designSystem, /--community-type-body:\s*var\(--type-text-size\)/);
+  assert.match(designSystem, /--community-type-support:\s*calc\(var\(--type-text-size\)\s*-\s*2px\)/);
+  assert.match(designSystem, /--community-surface-radius:\s*var\(--unified-radius\)/);
+  assert.match(designSystem, /body\[data-page="community"\]\s+\.community-note-grid\s*\{[^}]*repeat\(4,/s);
+  assert.match(designSystem, /\.community-mini-note-list\s+\.community-note-info h2\s*\{[^}]*font-weight:\s*800\s*!important/s);
+  assert.match(designSystem, /\.community-person-card,[\s\S]*\.community-empty-state,[\s\S]*border-radius:\s*var\(--community-surface-radius\)\s*!important/);
 });
 
 check("community drafts use a stable per-user storage key", () => {

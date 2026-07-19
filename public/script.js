@@ -287,6 +287,7 @@ const authModeTitle = document.querySelector("#authModeTitle");
 const authModeCopy = document.querySelector("#authModeCopy");
 const authSubmitBtn = document.querySelector("#authSubmitBtn");
 const authSwitchLead = document.querySelector("#authSwitchLead");
+const authPageSwitchLink = document.querySelector(".auth-switch-btn");
 const userNameBadges = document.querySelectorAll("[data-user-name]");
 const deviceConnectionTitle = document.querySelector("#deviceConnectionTitle");
 const deviceConnectBtn = document.querySelector("#deviceConnectBtn");
@@ -489,6 +490,21 @@ function getLoginUrl() {
 
 function getRegisterUrl() {
   return `./register.html?next=${encodeURIComponent(getCurrentPagePath())}`;
+}
+
+function getAuthSwitchUrl(targetMode) {
+  const targetUrl = targetMode === "register" ? "./register.html" : "./login.html";
+  const next = new URLSearchParams(window.location.search).get("next");
+  if (!next) return targetUrl;
+
+  try {
+    const url = new URL(next, window.location.href);
+    if (url.origin !== window.location.origin) return targetUrl;
+    const safeNext = `${url.pathname}${url.search}${url.hash}`;
+    return `${targetUrl}?next=${encodeURIComponent(safeNext)}`;
+  } catch {
+    return targetUrl;
+  }
 }
 
 function getPostLoginUrl() {
@@ -4480,6 +4496,11 @@ function initAuthForms() {
   const agreeField = form.querySelector('[name="agree"]');
   if (!message || !emailField || !passwordField || !nicknameField || !agreeField) return;
 
+  if (authPageSwitchLink) {
+    const targetMode = form.dataset.authMode === "register" ? "login" : "register";
+    authPageSwitchLink.setAttribute("href", getAuthSwitchUrl(targetMode));
+  }
+
   const modeConfig = {
     login: {
       eyebrow: "登录",
@@ -5066,14 +5087,23 @@ function renderCommunityWorkspace() {
   if (!panel) return;
   const view = getCommunityWorkspaceView();
   document.body.dataset.communityView = view;
+  let activeRailLink = null;
   document.querySelectorAll("[data-community-view-link]").forEach((link) => {
     const active = link.dataset.communityViewLink === view;
     link.classList.toggle("is-active", active);
     link.setAttribute("aria-current", active ? "page" : "false");
+    if (active) activeRailLink = link;
     if (link.dataset.communityViewLink === "moderation") {
       link.hidden = !canUseModerationWorkspace();
     }
   });
+  const rail = activeRailLink?.closest(".community-rail");
+  if (rail && activeRailLink) {
+    const linkStart = activeRailLink.offsetLeft;
+    const linkEnd = linkStart + activeRailLink.offsetWidth;
+    if (linkStart < rail.scrollLeft) rail.scrollLeft = linkStart;
+    else if (linkEnd > rail.scrollLeft + rail.clientWidth) rail.scrollLeft = linkEnd - rail.clientWidth;
+  }
   panel.innerHTML = view === "recommended" || view === "following"
     ? renderCommunityFeedView(view)
     : view === "publish" ? renderCommunityPublishView()

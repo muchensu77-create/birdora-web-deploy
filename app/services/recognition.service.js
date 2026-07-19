@@ -10,6 +10,7 @@ const OSEA_TOP_K = 5;
 const OSEA_CONFIDENCE_THRESHOLD = 0.05;
 const OSEA_EXPECTED_OUTPUT_COUNT = 11000;
 const INPUT_SIZE = 224;
+const MAX_SOURCE_RESOLUTION_MP = 24;
 const MEAN = [0.485, 0.456, 0.406];
 const STD = [0.229, 0.224, 0.225];
 
@@ -112,7 +113,11 @@ function sourcePixel(data, width, height, targetX, targetY) {
 function imageBufferToTensor(buffer) {
   let image;
   try {
-    image = jpeg.decode(buffer, { useTArray: true, maxMemoryUsageInMB: 256 });
+    image = jpeg.decode(buffer, {
+      useTArray: true,
+      maxMemoryUsageInMB: 256,
+      maxResolutionInMP: MAX_SOURCE_RESOLUTION_MP,
+    });
   } catch (error) {
     const wrapped = new Error("JPEG 图片解码失败，请换一张清晰的 JPG/PNG 截图后重试。");
     wrapped.cause = error;
