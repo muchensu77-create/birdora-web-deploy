@@ -55,8 +55,26 @@ function addCanonicalV16Compatibility(databaseFile) {
   const db = new DatabaseSync(databaseFile);
   let transactionStarted = false;
   try {
-    db.exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000; BEGIN IMMEDIATE;");
+    db.exec(`
+      PRAGMA foreign_keys = OFF;
+      PRAGMA legacy_alter_table = ON;
+      PRAGMA busy_timeout = 5000;
+      BEGIN IMMEDIATE;
+    `);
     transactionStarted = true;
+    const postCountBefore = Number(
+      db.prepare("SELECT COUNT(*) AS count FROM community_posts").get().count
+    );
+    const orphanedObservations = Number(db.prepare(`
+      SELECT COUNT(*) AS count
+      FROM community_posts AS post
+      LEFT JOIN observations AS observation ON observation.id = post.observation_id
+      WHERE post.observation_id IS NOT NULL AND observation.id IS NULL
+    `).get().count);
+    if (orphanedObservations) {
+      throw new Error(`Legacy probe found ${orphanedObservations} orphaned observation link(s)`);
+    }
+
     db.exec(`
       ALTER TABLE users ADD COLUMN bio TEXT NOT NULL DEFAULT '';
       ALTER TABLE users ADD COLUMN gender TEXT NOT NULL DEFAULT '';
@@ -64,6 +82,67 @@ function addCanonicalV16Compatibility(databaseFile) {
       ALTER TABLE users ADD COLUMN avatar_url TEXT NOT NULL DEFAULT '';
       ALTER TABLE users ADD COLUMN email_notifications INTEGER NOT NULL DEFAULT 1;
       ALTER TABLE users ADD COLUMN public_profile INTEGER NOT NULL DEFAULT 1;
+
+      CREATE TABLE community_posts_v17_compat (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        observation_id TEXT DEFAULT NULL,
+        title TEXT NOT NULL,
+        body TEXT NOT NULL,
+        bird TEXT NOT NULL DEFAULT '观鸟笔记',
+        analysis_summary TEXT NOT NULL DEFAULT '',
+        analysis_score INTEGER NOT NULL DEFAULT 0,
+        analysis_tags TEXT NOT NULL DEFAULT '[]',
+        analysis_suggestions TEXT NOT NULL DEFAULT '[]',
+        analysis_updated_at TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (observation_id) REFERENCES observations(id) ON DELETE RESTRICT
+      );
+
+      INSERT INTO community_posts_v17_compat (
+        id, user_id, observation_id, title, body, bird,
+        analysis_summary, analysis_score, analysis_tags,
+        analysis_suggestions, analysis_updated_at, created_at, updated_at
+      )
+      SELECT
+        id, user_id, observation_id, title, body, bird,
+        analysis_summary, analysis_score, analysis_tags,
+        analysis_suggestions, analysis_updated_at, created_at, updated_at
+      FROM community_posts;
+
+      DROP TABLE community_posts;
+      ALTER TABLE community_posts_v17_compat RENAME TO community_posts;
+
+      CREATE INDEX idx_community_posts_created_at
+        ON community_posts(created_at DESC);
+      CREATE INDEX idx_community_posts_user_id_created_at
+        ON community_posts(user_id, created_at DESC);
+      CREATE INDEX idx_community_posts_observation_id
+        ON community_posts(observation_id);
+
+      CREATE TRIGGER trg_community_posts_observation_insert
+      BEFORE INSERT ON community_posts
+      FOR EACH ROW
+      WHEN NEW.observation_id IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM observations WHERE id = NEW.observation_id
+        )
+      BEGIN
+        SELECT RAISE(ABORT, 'community_posts.observation_id references missing observation');
+      END;
+
+      CREATE TRIGGER trg_community_posts_observation_update
+      BEFORE UPDATE OF observation_id ON community_posts
+      FOR EACH ROW
+      WHEN NEW.observation_id IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM observations WHERE id = NEW.observation_id
+        )
+      BEGIN
+        SELECT RAISE(ABORT, 'community_posts.observation_id references missing observation');
+      END;
 
       CREATE TABLE community_post_videos (
         id TEXT PRIMARY KEY,
@@ -78,16 +157,25 @@ function addCanonicalV16Compatibility(databaseFile) {
       CREATE INDEX idx_community_post_videos_post_id
         ON community_post_videos(post_id);
     `);
+    const postCountAfter = Number(
+      db.prepare("SELECT COUNT(*) AS count FROM community_posts").get().count
+    );
+    if (postCountAfter !== postCountBefore) {
+      throw new Error(
+        `Legacy probe post count changed: before=${postCountBefore} after=${postCountAfter}`
+      );
+    }
     const integrity = db.prepare("PRAGMA integrity_check").all();
     if (integrity.some((row) => row.integrity_check !== "ok")) {
       throw new Error("Legacy probe integrity_check failed");
     }
+    db.exec("COMMIT");
+    transactionStarted = false;
+    db.exec("PRAGMA legacy_alter_table = OFF; PRAGMA foreign_keys = ON;");
     const foreignKeyErrors = db.prepare("PRAGMA foreign_key_check").all();
     if (foreignKeyErrors.length) {
       throw new Error(`Legacy probe foreign_key_check found ${foreignKeyErrors.length} violation(s)`);
     }
-    db.exec("COMMIT");
-    transactionStarted = false;
   } finally {
     if (transactionStarted) {
       try {
@@ -95,6 +183,11 @@ function addCanonicalV16Compatibility(databaseFile) {
       } catch {
         // Preserve the original error; this database is only an isolated probe.
       }
+    }
+    try {
+      db.exec("PRAGMA legacy_alter_table = OFF; PRAGMA foreign_keys = ON;");
+    } catch {
+      // The probe will be discarded after any primary failure.
     }
     db.close();
   }

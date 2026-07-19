@@ -30,6 +30,51 @@ function createV16Shape(databaseFile, { removeExtraTable = false } = {}) {
     db.exec("PRAGMA foreign_keys = ON;");
     baseline.up(db, { targetVersion: "V001" });
     db.exec(`
+      PRAGMA foreign_keys = OFF;
+      PRAGMA legacy_alter_table = ON;
+      DROP TABLE community_posts;
+      CREATE TABLE community_posts (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        body TEXT NOT NULL,
+        bird TEXT NOT NULL DEFAULT '观鸟笔记',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        analysis_summary TEXT NOT NULL DEFAULT '',
+        analysis_score INTEGER NOT NULL DEFAULT 0,
+        analysis_tags TEXT NOT NULL DEFAULT '[]',
+        analysis_suggestions TEXT NOT NULL DEFAULT '[]',
+        analysis_updated_at TEXT NOT NULL DEFAULT '',
+        observation_id TEXT DEFAULT NULL,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+      CREATE INDEX idx_community_posts_created_at
+        ON community_posts(created_at DESC);
+      CREATE INDEX idx_community_posts_user_id_created_at
+        ON community_posts(user_id, created_at DESC);
+      CREATE INDEX idx_community_posts_observation_id
+        ON community_posts(observation_id);
+      CREATE TRIGGER trg_community_posts_observation_insert
+      BEFORE INSERT ON community_posts
+      FOR EACH ROW
+      WHEN NEW.observation_id IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM observations WHERE id = NEW.observation_id)
+      BEGIN
+        SELECT RAISE(ABORT, 'community_posts.observation_id references missing observation');
+      END;
+      CREATE TRIGGER trg_community_posts_observation_update
+      BEFORE UPDATE OF observation_id ON community_posts
+      FOR EACH ROW
+      WHEN NEW.observation_id IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM observations WHERE id = NEW.observation_id)
+      BEGIN
+        SELECT RAISE(ABORT, 'community_posts.observation_id references missing observation');
+      END;
+      PRAGMA legacy_alter_table = OFF;
+      PRAGMA foreign_keys = ON;
+    `);
+    db.exec(`
       ALTER TABLE users DROP COLUMN bio;
       ALTER TABLE users DROP COLUMN gender;
       ALTER TABLE users DROP COLUMN age;
