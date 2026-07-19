@@ -5937,6 +5937,124 @@ body[data-page="community"] {
     font-size: 1rem;
 }
 
+.community-report-panel {
+  margin-top: 0.85rem;
+  border-top: 1px solid rgba(61, 82, 69, 0.12);
+  padding-top: 0.65rem;
+}
+
+.community-report-panel summary {
+  width: max-content;
+  cursor: pointer;
+  color: #7a3d35;
+  font-size: 0.86rem;
+}
+
+.community-report-panel form,
+.community-report-panel label,
+.moderation-reason {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.community-report-panel form {
+  margin-top: 0.7rem;
+  gap: 0.75rem;
+}
+
+.community-report-panel select,
+.community-report-panel textarea,
+.moderation-reason textarea {
+  width: 100%;
+  border: 1px solid rgba(61, 82, 69, 0.2);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.84);
+  padding: 0.7rem;
+  color: inherit;
+  font: inherit;
+}
+
+.community-report-panel textarea,
+.moderation-reason textarea {
+  min-height: 88px;
+  resize: vertical;
+}
+
+.community-report-panel p,
+.moderation-case-card > [data-moderation-message] {
+  min-height: 1.25rem;
+  margin: 0;
+  color: #7a3d35;
+  font-size: 0.86rem;
+}
+
+.moderation-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 1rem;
+}
+
+.moderation-case-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.moderation-case-card {
+  border: 1px solid rgba(61, 82, 69, 0.14);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 14px 36px rgba(42, 64, 50, 0.08);
+  padding: 1.15rem;
+}
+
+.moderation-case-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.moderation-case-head h2,
+.moderation-case-detail h3 {
+  margin: 0.2rem 0 0;
+}
+
+.moderation-case-head span,
+.moderation-case-head strong {
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.moderation-case-head strong {
+  border-radius: 999px;
+  background: rgba(70, 105, 78, 0.1);
+  padding: 0.35rem 0.6rem;
+}
+
+.moderation-case-detail {
+  margin: 1rem 0;
+  border-radius: 16px;
+  background: rgba(240, 244, 237, 0.78);
+  padding: 0.9rem;
+}
+
+.moderation-case-detail ul {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0.8rem 0 0;
+  padding-left: 1.2rem;
+}
+
+.moderation-case-detail li span {
+  display: block;
+  color: rgba(38, 55, 43, 0.72);
+}
+
+.moderation-reason {
+  margin-top: 1rem;
+}
+
 .community-note-grid {
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));

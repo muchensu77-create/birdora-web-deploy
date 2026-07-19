@@ -4782,7 +4782,7 @@ function initTopbarScrollHide() {
 initApp();
 
 /* Community workspace: the community page has its own compact sub-routes. */
-const COMMUNITY_VIEWS = new Set(["recommended", "following", "publish", "messages", "personal"]);
+const COMMUNITY_VIEWS = new Set(["recommended", "following", "publish", "messages", "personal", "moderation"]);
 const COMMUNITY_DRAFT_KEY_PREFIX = "birdora-community-composer-draft";
 let communityWorkspacePosts = [];
 let communityWorkspaceMediaUrl = "";
@@ -4794,6 +4794,16 @@ let communityWorkspacePublishKey = "";
 let communityWorkspaceNotifications = [];
 let communityWorkspaceNotificationState = "loading";
 let communityWorkspaceNotificationMessage = "";
+let communityWorkspaceRoles = [];
+let communityWorkspaceRolesLoaded = false;
+let communityWorkspaceModerationCases = [];
+let communityWorkspaceModerationDetails = new Map();
+let communityWorkspaceModerationState = "loading";
+let communityWorkspaceModerationMessage = "";
+
+function canUseModerationWorkspace() {
+  return communityWorkspaceRoles.some((role) => role === "moderator" || role === "admin");
+}
 
 function getCommunityWorkspaceView() {
   const view = new URLSearchParams(window.location.search).get("view") || "recommended";
@@ -4839,6 +4849,24 @@ function renderCommunityNoteCard(post) {
   const followAction = canFollow
     ? `<button type="button" class="community-follow-action ${post.viewerFollowsAuthor ? "is-following" : ""}" data-workspace-follow="${escapeCommunityText(post.authorId)}" aria-pressed="${String(Boolean(post.viewerFollowsAuthor))}">${post.viewerFollowsAuthor ? "已关注" : "关注"}</button>`
     : "";
+  const canReport = Boolean(
+    post.isPersisted
+    && !post.canManage
+    && isCapabilityEnabled("contentReporting")
+  );
+  const reportAction = canReport
+    ? `
+      <details class="community-report-panel">
+        <summary>举报</summary>
+        <form data-workspace-report="${escapeCommunityText(post.id)}">
+          <label><span>原因</span><select name="reason"><option value="spam">垃圾或广告</option><option value="harassment">骚扰或攻击</option><option value="misinformation">误导信息</option><option value="graphic_content">不适宜内容</option><option value="privacy">隐私或敏感地点</option><option value="copyright">版权问题</option><option value="other">其他</option></select></label>
+          <label><span>补充说明</span><textarea name="detail" maxlength="500" placeholder="可选，最多 500 字"></textarea></label>
+          <button class="secondary-btn" type="submit">提交举报</button>
+          <p data-workspace-report-message aria-live="polite"></p>
+        </form>
+      </details>
+    `
+    : "";
   return `
     <article class="community-note-card" data-workspace-post="${escapeCommunityText(post.id)}">
       ${renderCommunityMedia(post)}
@@ -4846,6 +4874,7 @@ function renderCommunityNoteCard(post) {
         <h2>${escapeCommunityText(post.title)}</h2>
         ${hasBody ? `<p>${escapeCommunityText(post.body)}</p>` : ""}
         <div class="community-note-meta"><span>${escapeCommunityText(post.author || "Birdora 用户")}</span>${followAction}<button type="button" data-workspace-like="${escapeCommunityText(post.id)}" class="${post.liked ? "is-liked" : ""}" aria-pressed="${String(Boolean(post.liked))}" aria-label="点赞 ${escapeCommunityText(post.title)}" ${canLike ? "" : `disabled title="${escapeCommunityText(likeDisabledReason)}"`}>赞 ${Number(post.likes) || 0}</button></div>
+        ${reportAction}
       </div>
     </article>
   `;
@@ -4916,9 +4945,6 @@ function renderCommunityPublishView() {
 
 function renderCommunityMessagesView() {
   if (!currentUser) {
-    const createdAt = notification.createdAt
-      ? new Date(notification.createdAt).toLocaleString("zh-CN", { hour12: false })
-      : "";
     return `
       <header class="community-view-heading"><p>消息</p><h1>最近互动</h1><span>与观鸟伙伴保持联系。</span></header>
       <div class="community-empty-state"><h2>登录后查看消息</h2><p>点赞、评论和新关注都会集中显示在这里。</p><a class="primary-btn link-btn" href="${escapeCommunityText(getLoginUrl())}">登录</a></div>
@@ -4947,6 +4973,9 @@ function renderCommunityMessagesView() {
   const cards = communityWorkspaceNotifications.map((notification) => {
     const actor = notification.actor?.nickname || "Birdora";
     const title = notification.payload?.postTitle || "";
+    const createdAt = notification.createdAt
+      ? new Date(notification.createdAt).toLocaleString("zh-CN", { hour12: false })
+      : "";
     return `
       <article class="community-note-card ${notification.readAt ? "is-read" : "is-unread"}">
         <div class="community-note-info">
@@ -4962,6 +4991,61 @@ function renderCommunityMessagesView() {
     ${communityWorkspaceNotifications.some((item) => !item.readAt) ? `<div class="community-composer-actions"><button class="secondary-btn" type="button" data-community-notifications-read-all>全部标为已读</button></div>` : ""}
     <div class="community-note-grid">${cards || `<div class="community-empty-state"><h2>暂无新消息</h2><p>新的点赞、评论和关注会显示在这里。</p></div>`}</div>
   `;
+}
+
+function renderModerationCaseDetail(moderationCase) {
+  const detail = communityWorkspaceModerationDetails.get(moderationCase.id);
+  if (!detail) {
+    return `<button class="secondary-btn" type="button" data-moderation-detail="${escapeCommunityText(moderationCase.id)}">查看内容与举报</button>`;
+  }
+  const reports = (detail.reports || []).map((report) => `
+    <li><strong>${escapeCommunityText(report.reason)}</strong><span>${escapeCommunityText(report.detail || "未补充说明")}</span></li>
+  `).join("");
+  return `
+    <section class="moderation-case-detail">
+      <h3>${escapeCommunityText(detail.post?.title || moderationCase.post.title)}</h3>
+      <p>${escapeCommunityText(detail.post?.body || "")}</p>
+      <ul>${reports || "<li>没有举报明细</li>"}</ul>
+    </section>
+  `;
+}
+
+function renderCommunityModerationView() {
+  const heading = `<header class="community-view-heading"><p>运营</p><h1>审核工作台</h1><span>处理用户举报并保留完整操作审计。</span></header>`;
+  if (!currentUser) {
+    return `${heading}<div class="community-empty-state"><h2>请先登录</h2><p>审核工作台仅对受控审核员开放。</p><a class="primary-btn link-btn" href="${escapeCommunityText(getLoginUrl())}">登录</a></div>`;
+  }
+  if (!communityWorkspaceRolesLoaded) {
+    return `${heading}<div class="community-empty-state" role="status"><h2>正在核验权限</h2></div>`;
+  }
+  if (!canUseModerationWorkspace()) {
+    return `${heading}<div class="community-empty-state"><h2>没有审核权限</h2><p>审核员角色只能通过受控运维命令授予，网页不能自助提权。</p></div>`;
+  }
+  if (communityWorkspaceModerationState === "loading") {
+    return `${heading}<div class="community-empty-state" role="status"><h2>正在加载举报队列</h2></div>`;
+  }
+  if (communityWorkspaceModerationState === "error") {
+    return `${heading}<div class="community-empty-state"><h2>审核队列暂时不可用</h2><p>${escapeCommunityText(communityWorkspaceModerationMessage)}</p><button class="secondary-btn" type="button" data-moderation-refresh>重试</button></div>`;
+  }
+  const cases = communityWorkspaceModerationCases.map((moderationCase) => {
+    const moderationStatus = moderationCase.post?.moderationStatus || "unknown";
+    const canRestore = ["hidden", "rejected", "under_review"].includes(moderationStatus);
+    return `
+      <article class="moderation-case-card" data-moderation-case="${escapeCommunityText(moderationCase.id)}">
+        <div class="moderation-case-head"><div><span>${escapeCommunityText(moderationCase.source)}</span><h2>${escapeCommunityText(moderationCase.post?.title || "待审核内容")}</h2></div><strong>${escapeCommunityText(moderationStatus)}</strong></div>
+        <p>举报 ${Number(moderationCase.reportCount) || 0} 条 · 未处理 ${Number(moderationCase.openReportCount) || 0} 条</p>
+        ${renderModerationCaseDetail(moderationCase)}
+        <label class="moderation-reason"><span>决定理由（必填）</span><textarea maxlength="500" data-moderation-reason="${escapeCommunityText(moderationCase.id)}" placeholder="记录事实依据，至少 3 个字符"></textarea></label>
+        <div class="community-composer-actions">
+          ${canRestore
+            ? `<button class="primary-btn" type="button" data-moderation-decision="restore" data-case-id="${escapeCommunityText(moderationCase.id)}">恢复</button>`
+            : `<button class="secondary-btn" type="button" data-moderation-decision="approve" data-case-id="${escapeCommunityText(moderationCase.id)}">通过/驳回举报</button><button class="secondary-btn" type="button" data-moderation-decision="reject" data-case-id="${escapeCommunityText(moderationCase.id)}">拒绝内容</button><button class="primary-btn" type="button" data-moderation-decision="hide" data-case-id="${escapeCommunityText(moderationCase.id)}">隐藏内容</button>`}
+        </div>
+        <p data-moderation-message="${escapeCommunityText(moderationCase.id)}" aria-live="polite"></p>
+      </article>
+    `;
+  }).join("");
+  return `${heading}<div class="moderation-toolbar"><button class="secondary-btn" type="button" data-moderation-refresh>刷新队列</button></div><div class="moderation-case-list">${cases || `<div class="community-empty-state"><h2>没有待处理举报</h2><p>当前审核队列为空。</p></div>`}</div>`;
 }
 
 function renderCommunityPersonalView() {
@@ -4986,11 +5070,15 @@ function renderCommunityWorkspace() {
     const active = link.dataset.communityViewLink === view;
     link.classList.toggle("is-active", active);
     link.setAttribute("aria-current", active ? "page" : "false");
+    if (link.dataset.communityViewLink === "moderation") {
+      link.hidden = !canUseModerationWorkspace();
+    }
   });
   panel.innerHTML = view === "recommended" || view === "following"
     ? renderCommunityFeedView(view)
     : view === "publish" ? renderCommunityPublishView()
     : view === "personal" ? renderCommunityPersonalView()
+    : view === "moderation" ? renderCommunityModerationView()
     : renderCommunityMessagesView();
   bindCommunityWorkspaceView();
   applyRuntimeCapabilityControls();
@@ -5175,10 +5263,97 @@ function bindCommunityWorkspaceView() {
   document.querySelectorAll("[data-workspace-follow]").forEach((button) => {
     button.addEventListener("click", () => toggleCommunityWorkspaceFollow(button.dataset.workspaceFollow, button));
   });
+  document.querySelectorAll("[data-workspace-report]").forEach((form) => {
+    form.addEventListener("submit", (event) => submitCommunityReport(event.currentTarget, event));
+  });
   document.querySelectorAll("[data-community-notification-read]").forEach((button) => {
     button.addEventListener("click", () => markCommunityNotificationRead(button.dataset.communityNotificationRead, button));
   });
   document.querySelector("[data-community-notifications-read-all]")?.addEventListener("click", markAllCommunityNotificationsRead);
+  document.querySelectorAll("[data-moderation-detail]").forEach((button) => {
+    button.addEventListener("click", () => loadModerationCaseDetail(button.dataset.moderationDetail, button));
+  });
+  document.querySelectorAll("[data-moderation-decision]").forEach((button) => {
+    button.addEventListener("click", () => submitModerationDecision(button.dataset.caseId, button.dataset.moderationDecision, button));
+  });
+  document.querySelectorAll("[data-moderation-refresh]").forEach((button) => {
+    button.addEventListener("click", () => loadModerationQueue(button));
+  });
+}
+
+async function submitCommunityReport(form, event) {
+  event?.preventDefault();
+  if (!form || !isCapabilityEnabled("contentReporting") || !requireLoginForAction()) return;
+  const postId = form.dataset.workspaceReport;
+  const reason = form.elements.reason?.value || "other";
+  const detail = form.elements.detail?.value.trim() || "";
+  const submit = form.querySelector('[type="submit"]');
+  const message = form.querySelector("[data-workspace-report-message]");
+  if (submit) submit.disabled = true;
+  if (message) message.textContent = "正在提交举报...";
+  try {
+    await communityApi.reportPost(postId, reason, detail);
+    form.querySelectorAll("select, textarea, button").forEach((control) => { control.disabled = true; });
+    if (message) message.textContent = "举报已提交，审核员将根据事实处理。";
+  } catch (error) {
+    if (submit) submit.disabled = false;
+    if (message) message.textContent = getCommunityMutationMessage(error, "举报提交失败，请稍后重试。");
+  }
+}
+
+async function loadModerationCaseDetail(caseId, button) {
+  if (!caseId || button?.disabled) return;
+  if (button) button.disabled = true;
+  try {
+    const detail = await communityApi.getModerationCase(caseId);
+    communityWorkspaceModerationDetails.set(caseId, detail);
+    renderCommunityWorkspace();
+  } catch (error) {
+    if (button) button.disabled = false;
+    window.alert(getCommunityMutationMessage(error, "审核详情加载失败，请稍后重试。"));
+  }
+}
+
+async function submitModerationDecision(caseId, decision, button) {
+  if (!caseId || !decision || button?.disabled) return;
+  const reasonInput = document.querySelector(`[data-moderation-reason="${CSS.escape(caseId)}"]`);
+  const message = document.querySelector(`[data-moderation-message="${CSS.escape(caseId)}"]`);
+  const reason = reasonInput?.value.trim() || "";
+  if (reason.length < 3) {
+    if (message) message.textContent = "请填写至少 3 个字符的事实依据。";
+    reasonInput?.focus();
+    return;
+  }
+  button.disabled = true;
+  if (message) message.textContent = "正在提交审核决定...";
+  try {
+    const updated = await communityApi.decideModerationCase(caseId, decision, reason);
+    communityWorkspaceModerationCases = communityWorkspaceModerationCases.map((item) => (
+      item.id === caseId ? updated : item
+    ));
+    communityWorkspaceModerationDetails.set(caseId, updated);
+    renderCommunityWorkspace();
+  } catch (error) {
+    button.disabled = false;
+    if (message) message.textContent = getCommunityMutationMessage(error, "审核决定提交失败，请稍后重试。");
+  }
+}
+
+async function loadModerationQueue(button) {
+  if (button) button.disabled = true;
+  communityWorkspaceModerationState = "loading";
+  renderCommunityWorkspace();
+  try {
+    const result = await communityApi.listModerationCases({ queue: "reported", status: "active", limit: 50 });
+    communityWorkspaceModerationCases = result.cases || [];
+    communityWorkspaceModerationDetails = new Map();
+    communityWorkspaceModerationState = "ready";
+    communityWorkspaceModerationMessage = "";
+  } catch (error) {
+    communityWorkspaceModerationState = "error";
+    communityWorkspaceModerationMessage = withRequestId(error?.message || "审核队列加载失败。", error);
+  }
+  renderCommunityWorkspace();
 }
 
 async function markCommunityNotificationRead(notificationId, button) {
@@ -5260,6 +5435,22 @@ async function toggleCommunityWorkspaceFollow(authorId, button) {
 async function loadCommunityWorkspaceData() {
   if (page !== "community" || !document.querySelector("[data-community-workspace]")) return;
   const view = getCommunityWorkspaceView();
+  if (currentUser && !communityWorkspaceRolesLoaded && isCapabilityEnabled("moderationAdmin")) {
+    try {
+      communityWorkspaceRoles = await communityApi.getMyRoles();
+    } catch {
+      communityWorkspaceRoles = [];
+    }
+    communityWorkspaceRolesLoaded = true;
+  } else if (!currentUser || !isCapabilityEnabled("moderationAdmin")) {
+    communityWorkspaceRoles = [];
+    communityWorkspaceRolesLoaded = true;
+  }
+  if (view === "moderation") {
+    renderCommunityWorkspace();
+    if (canUseModerationWorkspace()) await loadModerationQueue();
+    return;
+  }
   communityWorkspaceLoadState = "loading";
   if (view === "messages") communityWorkspaceNotificationState = "loading";
   renderCommunityWorkspace();

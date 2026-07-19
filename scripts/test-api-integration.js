@@ -12,6 +12,7 @@ const testFiles = [
   "scripts/test-observations.js",
   "scripts/test-social.js",
   "scripts/test-drafts-notifications.js",
+  "scripts/test-moderation.js",
 ];
 
 function getFreePort() {
@@ -75,6 +76,10 @@ async function main() {
     COMMUNITY_POST_EDIT_ENABLED: "true",
     COMMUNITY_LEGACY_LIKE_ENABLED: "true",
     ACCOUNT_DELETION_ENABLED: "true",
+    CONTENT_REPORT_RATE_LIMIT: "1000",
+    MODERATION_DECISION_RATE_LIMIT: "1000",
+    OUTBOX_WORKER_ENABLED: "true",
+    OUTBOX_POLL_INTERVAL_MS: "100",
   };
   let output = "";
   const server = spawn(process.execPath, ["server.js"], {

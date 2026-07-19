@@ -15,6 +15,8 @@ const featureFlags = Object.freeze({
   canonicalLike: true,
   cloudDrafts: true,
   notifications: true,
+  contentReporting: true,
+  moderationAdmin: true,
   sse: false,
 });
 

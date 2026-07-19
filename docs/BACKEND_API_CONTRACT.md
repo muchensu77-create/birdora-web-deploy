@@ -1,7 +1,7 @@
 # Birdora Web 后端接口与维护契约
 
 > 适用分支：`feature/v1.7.0-front-plus`
-> 更新日期：2026-07-12
+> 更新日期：2026-07-19
 > 运行形态：静态网站 + Express API + 单进程 SQLite；不是微信小程序
 
 ## 1. 接口约定
@@ -64,7 +64,20 @@ PATCH 必须提交当前 `version`，过期版本返回 `DRAFT_VERSION_CONFLICT`
 - `POST /api/v1/notifications/read-all`
 - `GET/PATCH /api/v1/notification-preferences`
 
-当前通知源为 follow、like、comment；同一业务动作使用唯一 dedupe key。通知写入与业务写入同事务，适用于当前单进程 SQLite。Outbox worker/SSE 尚未实现。
+当前通知源为 follow、like、comment 和人工审核；同一业务动作使用唯一 dedupe key。社交通知仍与业务写入同事务，审核事件同时进入 Outbox 并由同进程 worker 幂等核对。SSE 尚未实现。
+
+### 举报与审核
+
+- `POST /api/v1/posts/:postId/reports`：登录用户举报自己有权查看的非本人帖子；原因使用固定枚举，详情最多 500 字，同一用户/帖子/原因去重。
+- `GET /api/v1/me/roles`：仅返回当前登录用户自己的 moderator/admin 角色，用于网页隐藏或显示审核入口，不能授予角色。
+- `GET /api/v1/admin/moderation/cases`、`GET /api/v1/admin/moderation/cases/:caseId`
+- `PUT /api/v1/admin/moderation/cases/:caseId/decision`：approve/reject/hide/restore，理由必填。
+
+单次举报只创建或复用案件，不按举报数量自动隐藏。审核详情读取写结构化访问审计日志但保持 GET 对业务数据库只读；决定在一个 SQLite 事务内更新帖子状态、案件、举报、审核 action、作者通知和 Outbox。首个审核员只能在 API 已停止/维护模式下使用 `pnpm admin:role -- grant-moderator ...` 的受控本机命令授予，网页没有自提权接口；production-like 运行还必须继承并验证数据库生命周期排他 FLOCK，只有布尔环境声明不能绕过锁验证。
+
+### Outbox
+
+同进程 worker 已实现短事务领取、租约过期重领、at-least-once 幂等消费、指数退避、最大尝试、死信、敏感错误脱敏与 backlog/年龄/字节容量门禁。worker 在 activation journal 存在时暂停领取，避免绕过热更新写屏障；生产环境默认仍为 `OUTBOX_WORKER_ENABLED=false`，需预发布和目标 Ubuntu 证据通过后显式开启。当前已接通 `post.moderation_changed`，媒体删除/注销 consumer 仍未闭环。
 
 ### 能力发现
 
@@ -103,8 +116,7 @@ git diff --check
 
 ## 5. 尚未闭环的上线项
 
-- V008 举报/审核/管理员 API 与运营界面。
-- Outbox consumer、重试/dead-letter、通知轮询/SSE 和容量告警。
+- 媒体删除/注销 Outbox consumer、通知轮询/SSE；审核 Outbox consumer、重试/dead-letter 和容量门禁已在本地完成。
 - `media_assets` 全量接管头像、帖子、观测与注销清理。
 - 设备配对/同步、图鉴 CMS、密码找回和邮件投递不在当前后端闭环范围。
 - 可访问预发布域名的真实浏览器主流程、真实 Nginx 代理上传边界，以及目标 Ubuntu legacy adoption/PM2/锁/journal/恢复证据。

@@ -203,6 +203,21 @@ check("cloud draft publish and notifications use authenticated v1 APIs", () => {
   assert.match(messagesView, /isCapabilityEnabled\(["']notifications["']\)/);
 });
 
+check("reporting and moderation workspace use authenticated v1 APIs", () => {
+  const apiSource = readText(rootCommunityApiPath);
+  for (const route of [
+    "/api/v1/posts/${encodeURIComponent(postId)}/reports",
+    "/api/v1/admin/moderation/cases",
+    "/api/v1/me/roles",
+  ]) {
+    assert.ok(apiSource.includes(route), `missing frontend API route ${route}`);
+  }
+  assert.match(rootScript, /data-workspace-report/);
+  assert.match(rootScript, /function\s+renderCommunityModerationView\s*\(/);
+  assert.match(rootScript, /isCapabilityEnabled\(["']contentReporting["']\)/);
+  assert.match(rootScript, /canUseModerationWorkspace\s*\(/);
+});
+
 check("legacy like capability is explicitly enabled and route-guarded on the server", () => {
   const capabilityConfig = readText(capabilityConfigPath);
   const communityRoutes = readText(communityRoutesPath);

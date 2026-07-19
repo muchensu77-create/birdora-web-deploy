@@ -24,6 +24,7 @@
     "db:preflight": "node scripts/database-preflight.js",
     "db:backup": "node scripts/backup-database.js",
     "db:migrate": "node scripts/migrate-database.js",
+    "admin:role": "node scripts/admin-role.js",
     "release:build": "bash scripts/build-release-artifact.sh",
     "release:manifest": "node scripts/create-release-manifest.js",
     "release:evidence": "node scripts/create-release-evidence.js",
@@ -43,6 +44,7 @@
     "test:frontend-contracts": "node scripts/test-frontend-contracts.js",
     "test:phase0": "node scripts/test-phase0-backend.js",
     "test:integration": "node scripts/test-api-integration.js",
+    "test:outbox": "node scripts/test-outbox-worker.js",
     "test:auth": "node scripts/test-auth.js",
     "test:browser": "node scripts/test-browser-e2e.js",
     "test:browser:50-pages": "node scripts/run-browser-50-page-flow.js",
@@ -69,5 +71,10 @@
     "jpeg-js": "^0.4.4",
     "jsonwebtoken": "^9.0.2",
     "onnxruntime-node": "^1.27.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "adm-zip": "0.6.0"
+    }
   }
 }

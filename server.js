@@ -8,11 +8,13 @@ const authRoutes = require("./app/routes/auth.routes");
 const capabilitiesRoutes = require("./app/routes/capabilities.routes");
 const communityPostRoutes = require("./app/routes/community-post.routes");
 const draftRoutes = require("./app/routes/draft.routes");
+const moderationRoutes = require("./app/routes/moderation.routes");
 const observationRoutes = require("./app/routes/observation.routes");
 const notificationRoutes = require("./app/routes/notification.routes");
 const recognitionRoutes = require("./app/routes/recognition.routes");
 const socialRoutes = require("./app/routes/social.routes");
 const { closeDatabase, getDatabaseHealth, initializeDatabase } = require("./app/db/database");
+const { isExplicitlyEnabled } = require("./app/config/capabilities.config");
 const {
   activationWriteGate,
   assertActivationStartupAllowed,
@@ -21,6 +23,7 @@ const {
 const { assertSharedDatabaseLifecycleLock } = require("./app/runtime/database-lifecycle-lock");
 const { createOriginGuard, resolveAllowedOrigins } = require("./app/middleware/origin-guard");
 const { requestIdMiddleware } = require("./app/middleware/request-id");
+const { getOutboxHealth, OutboxWorker } = require("./app/services/outbox.service");
 
 const app = express();
 let shuttingDown = false;
@@ -113,14 +116,16 @@ app.get("/api/health/live", (_req, res) => {
 
 function readinessHandler(_req, res) {
   const databaseHealth = getDatabaseHealth();
+  const outbox = getOutboxHealth();
   const activation = getActivationRuntimeState();
   const activationReady = activation.activationPending || activation.markerVerified;
-  const ready = !shuttingDown && databaseHealth.ready && activationReady;
+  const ready = !shuttingDown && databaseHealth.ready && activationReady && outbox.healthy;
   res.status(ready ? 200 : 503).json({
     ok: ready,
     service: "birdora-auth-api",
     release: releaseIdentity,
     activation,
+    outbox,
     schemaVersion: databaseHealth.schemaVersion,
     timestamp: new Date().toISOString(),
   });
@@ -133,6 +138,7 @@ app.get("/api/health", readinessHandler);
 app.use("/api/v1/capabilities", capabilitiesRoutes);
 app.use("/api/v1", notificationRoutes);
 app.use("/api/v1", draftRoutes);
+app.use("/api/v1", moderationRoutes);
 app.use("/api/v1", socialRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/recognition", recognitionRoutes);
@@ -205,6 +211,12 @@ if (isProductionLike) assertSharedDatabaseLifecycleLock();
 // terminate startup instead of exposing a half-initialized API instance.
 initializeDatabase();
 
+const outboxWorker = new OutboxWorker({
+  enabled: isExplicitlyEnabled(process.env.OUTBOX_WORKER_ENABLED),
+  canWrite: () => getActivationRuntimeState().writesEnabled,
+});
+outboxWorker.start();
+
 const httpServer = app.listen(port, host, () => {
   console.log(`Birdora auth API listening on http://${host}:${port}`);
   if (typeof process.send === "function") process.send("ready");
@@ -220,7 +232,9 @@ function shutdown(signal) {
   }, 10_000);
   forceTimer.unref();
 
-  httpServer.close(() => {
+  const workerStopped = outboxWorker.stop();
+  httpServer.close(async () => {
+    await workerStopped;
     closeDatabase();
     process.exit(0);
   });

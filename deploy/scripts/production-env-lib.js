@@ -14,6 +14,7 @@ const ALLOWED_KEYS = new Set([
   "COMMUNITY_PUBLISH_ENABLED",
   "COMMUNITY_UPLOAD_DIR",
   "COMMUNITY_WRITE_RATE_LIMIT",
+  "CONTENT_REPORT_RATE_LIMIT",
   "COOKIE_SECURE",
   "CORS_ORIGIN",
   "DATABASE_AUTO_MIGRATE",
@@ -32,6 +33,13 @@ const ALLOWED_KEYS = new Set([
   "NODE_INTERPRETER",
   "OBSERVATION_UPLOAD_DIR",
   "OBSERVATION_WRITE_RATE_LIMIT",
+  "MODERATION_DECISION_RATE_LIMIT",
+  "OUTBOX_MAX_ATTEMPTS",
+  "OUTBOX_MAX_BACKLOG_EVENTS",
+  "OUTBOX_MAX_BACKLOG_PAYLOAD_BYTES",
+  "OUTBOX_MAX_OLDEST_AGE_SECONDS",
+  "OUTBOX_POLL_INTERVAL_MS",
+  "OUTBOX_WORKER_ENABLED",
   "PORT",
   "RECOGNITION_RATE_LIMIT",
   "TRUST_PROXY",
@@ -123,7 +131,11 @@ function requirePositiveInteger(values, key) {
   if (!(key in values)) return;
   if (!/^[1-9][0-9]*$/u.test(values[key])) throw new Error(`${key} must be a positive integer`);
   const numericValue = Number(values[key]);
-  const maximum = key === "DATABASE_BACKUP_RETENTION" ? 1000 : 1_000_000;
+  const maximum = key === "DATABASE_BACKUP_RETENTION"
+    ? 1000
+    : key === "OUTBOX_MAX_BACKLOG_PAYLOAD_BYTES"
+      ? 1024 * 1024 * 1024
+      : 1_000_000;
   if (!Number.isSafeInteger(numericValue) || numericValue > maximum) throw new Error(`${key} exceeds the safe maximum ${maximum}`);
 }
 
@@ -158,6 +170,9 @@ function validateProductionEnv(values) {
       throw new Error(`${controlFlag} must be true or false`);
     }
   }
+  if (!new Set(["true", "false"]).has(values.OUTBOX_WORKER_ENABLED || "false")) {
+    throw new Error("OUTBOX_WORKER_ENABLED must be true or false");
+  }
   if (Buffer.byteLength(values.JWT_SECRET, "utf8") < 32 || values.JWT_SECRET.startsWith("replace-with-")) {
     throw new Error("JWT_SECRET is missing, too short, or still a placeholder");
   }
@@ -182,7 +197,14 @@ function validateProductionEnv(values) {
   for (const key of [
     "AUTH_RATE_LIMIT",
     "COMMUNITY_WRITE_RATE_LIMIT",
+    "CONTENT_REPORT_RATE_LIMIT",
+    "MODERATION_DECISION_RATE_LIMIT",
     "OBSERVATION_WRITE_RATE_LIMIT",
+    "OUTBOX_MAX_ATTEMPTS",
+    "OUTBOX_MAX_BACKLOG_EVENTS",
+    "OUTBOX_MAX_BACKLOG_PAYLOAD_BYTES",
+    "OUTBOX_MAX_OLDEST_AGE_SECONDS",
+    "OUTBOX_POLL_INTERVAL_MS",
     "RECOGNITION_RATE_LIMIT",
     "DATABASE_BACKUP_RETENTION",
   ]) requirePositiveInteger(values, key);

@@ -16,6 +16,7 @@ const testFiles = [
   "scripts/test-deployment-contracts.js",
   "scripts/test-frontend-contracts.js",
   "scripts/test-phase0-backend.js",
+  "scripts/test-outbox-worker.js",
   "scripts/test-api-integration.js",
 ];
 

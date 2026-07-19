@@ -16,11 +16,11 @@
 - **阶段 0 代码基线已完成：** 资料与偏好改为稀疏更新，显式保留 `false/null/empty`；高风险发布、编辑、旧 reactions 点赞和账号注销均由 runtime capabilities + 服务端开关双重 fail-closed；following/messages/demo 不再用全量、随机或硬编码数据冒充真实功能；浏览器草稿按登录用户隔离；社区图片 1 MiB、视频 8 MiB、路由 parser 14 MiB 与 Nginx 16 MiB 已对齐；有请求体的写接口只接收 JSON 对象。旧发布/编辑/点赞仍只是显式开启后的兼容路径，不代表可靠发布、权威点赞或生产注销已经完成。
 - **迁移基线已推进到 V009：** V001-V009、`schema_migrations` checksum、一次性 legacy JSON 导入标记、并发迁移回归、严格只读 `pnpm db:preflight`、显式 `pnpm db:migrate`、验证 SQLite 快照，以及 `/api/health/live`、`/api/health/ready` 已实现。V003-V009 均为只增不删迁移，覆盖运行基础、关注、帖子策略、权威点赞、草稿发布、审核基础表与通知；旧业务行原地保留，旧 helpful reaction 可回填到 canonical like。生产普通 server 不自动迁移，只有显式 migration command 可 apply。
 - **阶段 2 已完成本地实现与接口测试：** 公开资料隐私裁剪、关注/取消关注、粉丝/关注游标列表、确定性 recommended/following feed、个人统计/帖子和 `PUT/DELETE like` 已接到网页前端。详情、评论/提问列表以及图片/视频直链统一执行 public/followers/private 可见性，私密媒体使用 `private, no-store`。
-- **阶段 3 已完成云草稿和发布事务，审核闭环仍未完成：** 云草稿 CRUD、乐观版本、`Idempotency-Key`、草稿消费与帖子/媒体原子发布已实现；网页发布页已支持公开/仅关注者/仅自己。V008 目前只提供审核/举报/角色/审计的 schema foundation，尚无举报端点、管理端、内容安全 consumer 和运营流程，所以正式生产发布开关仍不得仅因草稿测试通过而打开。
-- **阶段 4a 的通知 REST 已完成：** 关注、点赞和评论在同一数据库事务内生成去重通知；列表、未读数、单条/全部已读和通知偏好已经接到网页消息中心。Outbox worker、失败重试、容量告警、周期轮询和 SSE 尚未完成；当前通知仅适用于单进程 SQLite 同步写入形态。
+- **阶段 3 的举报/人工审核本地闭环已完成：** 云草稿与发布事务之外，现已实现举报去重、审核队列/详情、访问与决定审计、hide/restore 状态机、受控 moderator CLI、作者通知及网页举报/审核工作台。举报不会按数量自动隐藏。基础文本/媒体 safety、revision 编辑和预发布运营演练仍未完成，所以正式生产发布开关继续关闭。
+- **阶段 4a 的通知 REST 与 Outbox 基础已完成本地实现：** 关注、点赞和评论通知及消息中心已落地；同进程 worker 具备领取租约、过期重领、指数退避、死信、脱敏错误、容量门禁和 activation journal 暂停，`post.moderation_changed` 已接通。媒体删除/注销 consumer、周期轮询和 SSE 尚未完成。
 - **A/B 发布控制代码已编写，但还不是获准执行的生产流程：** signed immutable runtime/public release、外置严格配置、专用 PM2、全局部署锁、数据库 shared/exclusive 生命周期锁、14 相位 activation journal、verified marker 和 forward-fix 失败策略已经接通。失败保持 maintenance 并停止候选；migration 可能开始后不自动切回 runtime 或启动旧代码，只有 public pointer 可依据落盘事实安全恢复。
 - **生产发布仍有两个相互独立的硬阻断：** 第一，当前线上仍可能是共享可变目录与旧 PM2_HOME，日常 updater 会要求已经存在一致的 immutable runtime/public pointers、受管 marker 和旧签名证据，因此需要单独审核的 legacy adoption 流程；该流程尚未完成。第二，截至 2026-07-12，真实构件和 shell 尚未在目标 Ubuntu 通过 Bash/Nginx/PM2/`ss`、`/proc` 锁语义、文件系统持久化和逐相位故障注入。journal 固定在 `/var/lib/birdora-control/activation-pending.json`，任一残留只能 fail-closed 并人工 reconciliation。
-- **下一业务阶段是审核闭环与 Outbox 可靠消费：** 先实现举报/审核 API、管理员授权与审计，再把通知和媒体清理接入可重试 Outbox worker；随后补通知轮询/SSE 和预发布浏览器验收。设备配对、眼镜同步、图鉴 CMS 和密码找回仍是独立后续范围。
+- **下一业务阶段是内容安全、媒体生命周期与预发布验收：** 举报/人工审核和 Outbox 基础已完成本地实现；下一步把媒体清理/注销接入 worker，补基础文本/媒体 safety、revision 编辑、通知轮询/SSE，再做可访问预发布浏览器和 Ubuntu 故障演练。设备配对、眼镜同步、图鉴 CMS 和密码找回仍是独立后续范围。
 
 阶段 0 的“真实 Nginx 代理下 8 MiB 边界”、生产配置和浏览器主流程仍须在部署候选环境做 smoke/验收；自动化通过不能替代该部署验收。
 
@@ -76,7 +76,7 @@ Nginx 静态站点 public/
                   └─ 本机 ONNX Runtime 识别
 ```
 
-现有 auth、观测记录、识别、社区帖子、评论、提问、图片/视频、关注、真实 feed、云草稿、权威点赞、通知和帖子可见性已经落地；举报/审核 API、可靠 Outbox worker、完整媒体生命周期和生产环境证据仍不存在。v1.7.0 引入的数据覆盖、隐私开关反转和上传限额错配已经在当前工作树修复，但尚未发布到生产。
+现有 auth、观测记录、识别、社区帖子、评论、提问、图片/视频、关注、真实 feed、云草稿、权威点赞、通知、帖子可见性、举报/人工审核和可靠 Outbox 基础已经落地；完整内容安全、媒体生命周期和生产环境证据仍不存在。v1.7.0 引入的数据覆盖、隐私开关反转和上传限额错配已经在当前工作树修复，但尚未发布到生产。
 
 本路线固定按以下顺序推进：
 

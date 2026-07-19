@@ -260,6 +260,42 @@
         });
         return data?.data || null;
       },
+      async getMyRoles() {
+        const data = await request("", { apiPath: "/api/v1/me/roles" });
+        return Array.isArray(data?.data?.roles) ? data.data.roles : [];
+      },
+      async reportPost(postId, reason, detail = "") {
+        const data = await request("", {
+          apiPath: `/api/v1/posts/${encodeURIComponent(postId)}/reports`,
+          method: "POST",
+          body: { reason, detail },
+        });
+        return data?.data || null;
+      },
+      async listModerationCases(options = {}) {
+        const data = await request("", {
+          apiPath: "/api/v1/admin/moderation/cases",
+          query: options,
+        });
+        return {
+          cases: Array.isArray(data?.data) ? data.data : [],
+          pageInfo: data?.pageInfo || { limit: 0, hasMore: false, nextCursor: null },
+        };
+      },
+      async getModerationCase(caseId) {
+        const data = await request("", {
+          apiPath: `/api/v1/admin/moderation/cases/${encodeURIComponent(caseId)}`,
+        });
+        return data?.data || null;
+      },
+      async decideModerationCase(caseId, decision, reason) {
+        const data = await request("", {
+          apiPath: `/api/v1/admin/moderation/cases/${encodeURIComponent(caseId)}/decision`,
+          method: "PUT",
+          body: { decision, reason },
+        });
+        return data?.data || null;
+      },
     };
   }
 
