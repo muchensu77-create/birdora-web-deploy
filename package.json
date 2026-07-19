@@ -23,6 +23,7 @@
     "dev": "node --watch server.js",
     "db:preflight": "node scripts/database-preflight.js",
     "db:prepare-legacy-v1-6-probe": "node scripts/prepare-legacy-v1-6-probe.js",
+    "db:apply-legacy-v1-6-adoption": "node scripts/apply-legacy-v1-6-adoption.js",
     "db:backup": "node scripts/backup-database.js",
     "db:migrate": "node scripts/migrate-database.js",
     "admin:role": "node scripts/admin-role.js",

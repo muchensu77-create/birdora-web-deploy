@@ -266,11 +266,20 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  process.stderr.write(`${JSON.stringify({
-    ok: false,
-    code: "LEGACY_V1_6_PROBE_FAILED",
-    message: error.message,
-  })}\n`);
-  process.exitCode = 1;
-});
+if (require.main === module) {
+  main().catch((error) => {
+    process.stderr.write(`${JSON.stringify({
+      ok: false,
+      code: "LEGACY_V1_6_PROBE_FAILED",
+      message: error.message,
+    })}\n`);
+    process.exitCode = 1;
+  });
+}
+
+module.exports = {
+  EXPECTED_GAP,
+  addCanonicalV16Compatibility,
+  assertExpectedGap,
+  assertRegularSingleLink,
+};
