@@ -4821,6 +4821,12 @@ let communityWorkspaceModerationCases = [];
 let communityWorkspaceModerationDetails = new Map();
 let communityWorkspaceModerationState = "loading";
 let communityWorkspaceModerationMessage = "";
+let communityNoteResizeObserver = null;
+let communityNoteLayoutFrame = 0;
+let communityNoteResizeBound = false;
+
+const COMMUNITY_MEDIA_MIN_RATIO = 4 / 5;
+const COMMUNITY_MEDIA_MAX_RATIO = 16 / 9;
 
 function canUseModerationWorkspace() {
   return communityWorkspaceRoles.some((role) => role === "moderator" || role === "admin");
@@ -4843,6 +4849,73 @@ function getCommunityWorkspacePosts(view) {
     isPersisted: Boolean(post.id && post.createdAt),
     kind: post.videoUrl ? "video" : post.imageUrl ? "image" : "text",
   }));
+}
+
+function getCommunityMediaRatio(media) {
+  const width = media instanceof HTMLVideoElement ? media.videoWidth : media.naturalWidth;
+  const height = media instanceof HTMLVideoElement ? media.videoHeight : media.naturalHeight;
+  if (!width || !height) return null;
+  return Math.min(COMMUNITY_MEDIA_MAX_RATIO, Math.max(COMMUNITY_MEDIA_MIN_RATIO, width / height));
+}
+
+function applyCommunityMediaRatio(media) {
+  const ratio = getCommunityMediaRatio(media);
+  if (!ratio) return false;
+  media.style.setProperty("--community-media-ratio", ratio.toFixed(4));
+  media.dataset.communityMediaShape = ratio < 1 ? "portrait" : ratio > 1.35 ? "landscape" : "balanced";
+  return true;
+}
+
+function resizeCommunityNoteCard(card) {
+  const grid = card.closest(".community-note-grid.is-masonry");
+  if (!grid) return;
+  const gridStyles = window.getComputedStyle(grid);
+  const rowHeight = Number.parseFloat(gridStyles.gridAutoRows);
+  if (!Number.isFinite(rowHeight) || rowHeight <= 0) return;
+  const cardStyles = window.getComputedStyle(card);
+  const cardGap = Number.parseFloat(cardStyles.marginBottom) || 0;
+  const rowSpan = Math.max(1, Math.ceil((card.getBoundingClientRect().height + cardGap) / rowHeight));
+  card.style.setProperty("--community-note-row-span", String(rowSpan));
+}
+
+function layoutCommunityNoteCards() {
+  communityNoteLayoutFrame = 0;
+  document.querySelectorAll(".community-note-grid.is-masonry > .community-note-card")
+    .forEach(resizeCommunityNoteCard);
+}
+
+function scheduleCommunityNoteLayout() {
+  if (communityNoteLayoutFrame) window.cancelAnimationFrame(communityNoteLayoutFrame);
+  communityNoteLayoutFrame = window.requestAnimationFrame(layoutCommunityNoteCards);
+}
+
+function initCommunityNoteLayouts() {
+  communityNoteResizeObserver?.disconnect();
+  communityNoteResizeObserver = typeof ResizeObserver === "function"
+    ? new ResizeObserver(scheduleCommunityNoteLayout)
+    : null;
+
+  document.querySelectorAll(".community-note-grid").forEach((grid) => {
+    const cards = [...grid.querySelectorAll(":scope > .community-note-card")];
+    grid.classList.toggle("is-masonry", cards.length > 0);
+    cards.forEach((card) => communityNoteResizeObserver?.observe(card));
+  });
+
+  document.querySelectorAll(".community-note-media").forEach((media) => {
+    const ready = media instanceof HTMLVideoElement ? media.readyState >= 1 : media.complete;
+    if (ready) applyCommunityMediaRatio(media);
+    const eventName = media instanceof HTMLVideoElement ? "loadedmetadata" : "load";
+    media.addEventListener(eventName, () => {
+      applyCommunityMediaRatio(media);
+      scheduleCommunityNoteLayout();
+    }, { once: true });
+  });
+
+  if (!communityNoteResizeBound) {
+    window.addEventListener("resize", scheduleCommunityNoteLayout, { passive: true });
+    communityNoteResizeBound = true;
+  }
+  scheduleCommunityNoteLayout();
 }
 
 function renderCommunityMedia(post) {
@@ -5111,6 +5184,7 @@ function renderCommunityWorkspace() {
     : view === "moderation" ? renderCommunityModerationView()
     : renderCommunityMessagesView();
   bindCommunityWorkspaceView();
+  initCommunityNoteLayouts();
   applyRuntimeCapabilityControls();
 }
 

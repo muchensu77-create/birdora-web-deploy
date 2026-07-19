@@ -168,6 +168,26 @@ check("community typography and component geometry use shared design tokens", ()
   assert.match(designSystem, /\.community-person-card,[\s\S]*\.community-empty-state,[\s\S]*border-radius:\s*var\(--community-surface-radius\)\s*!important/);
 });
 
+check("community note cards adapt to text and intrinsic media proportions", () => {
+  const designSystem = readText(designSystemPath);
+  assert.match(designSystem, /\.community-note-grid\.is-masonry\s*\{[^}]*grid-auto-rows:\s*8px/s);
+  assert.match(designSystem, /grid-row-end:\s*span\s+var\(--community-note-row-span,/);
+  assert.match(designSystem, /aspect-ratio:\s*var\(--community-media-ratio,\s*4\s*\/\s*5\)/);
+  assert.match(designSystem, /\.community-note-info\s*>\s*p\s*\{[^}]*-webkit-line-clamp:\s*7/s);
+
+  const ratioFunction = extractTopLevelFunction(rootScript, "getCommunityMediaRatio");
+  assert.match(ratioFunction, /naturalWidth/);
+  assert.match(ratioFunction, /videoWidth/);
+  assert.match(ratioFunction, /COMMUNITY_MEDIA_MIN_RATIO/);
+  assert.match(ratioFunction, /COMMUNITY_MEDIA_MAX_RATIO/);
+
+  const layoutFunction = extractTopLevelFunction(rootScript, "initCommunityNoteLayouts");
+  assert.match(layoutFunction, /ResizeObserver/);
+  assert.match(layoutFunction, /community-note-grid/);
+  assert.match(layoutFunction, /community-note-media/);
+  assert.match(rootScript, /bindCommunityWorkspaceView\(\);\s*initCommunityNoteLayouts\(\);/);
+});
+
 check("community drafts use a stable per-user storage key", () => {
   assert.doesNotMatch(
     rootScript,

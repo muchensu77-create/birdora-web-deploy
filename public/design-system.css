@@ -1507,3 +1507,68 @@ body[data-page="community"] .community-message:last-child {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Community notes grow with their content while keeping uploaded media proportionate. */
+body[data-page="community"] .community-note-grid.is-masonry {
+  --community-note-card-gap: 18px;
+  grid-auto-rows: 8px;
+  column-gap: var(--community-note-card-gap);
+  row-gap: 0;
+  align-items: start;
+}
+
+body[data-page="community"] .community-note-grid.is-masonry > .community-note-card {
+  grid-row-end: span var(--community-note-row-span, 1);
+  margin-bottom: var(--community-note-card-gap);
+}
+
+body[data-page="community"] .community-note-media {
+  height: auto;
+  aspect-ratio: var(--community-media-ratio, 4 / 5);
+  object-fit: cover;
+  object-position: center;
+}
+
+body[data-page="community"] .community-note-media[data-community-media-shape="landscape"] {
+  background: #e4efe6;
+}
+
+body[data-page="community"] .community-text-cover {
+  min-height: 168px;
+  aspect-ratio: auto;
+  justify-content: flex-start;
+  gap: 18px;
+}
+
+body[data-page="community"] .community-text-cover p {
+  display: -webkit-box;
+  margin-top: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 10;
+}
+
+body[data-page="community"] .community-note-info h2 {
+  -webkit-line-clamp: 3;
+}
+
+body[data-page="community"] .community-note-info > p {
+  -webkit-line-clamp: 7;
+}
+
+body[data-community-view="publish"] .community-mini-note-list .community-note-media,
+body[data-community-view="publish"] .community-mini-note-list .community-text-cover {
+  height: 118px;
+  aspect-ratio: 1;
+}
+
+@media (max-width: 720px) {
+  body[data-page="community"] .community-note-grid.is-masonry {
+    --community-note-card-gap: 12px;
+  }
+
+  body[data-page="community"] .community-text-cover {
+    min-height: 150px;
+    padding: 18px;
+  }
+}
