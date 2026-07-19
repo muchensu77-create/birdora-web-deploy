@@ -51,13 +51,20 @@ function assertExpectedGap(databaseFile, backupDirectory) {
   throw new Error("Legacy probe refused: the source no longer has the expected v1.6 schema gap");
 }
 
-function addCanonicalVideoTable(databaseFile) {
+function addCanonicalV16Compatibility(databaseFile) {
   const db = new DatabaseSync(databaseFile);
   let transactionStarted = false;
   try {
     db.exec("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000; BEGIN IMMEDIATE;");
     transactionStarted = true;
     db.exec(`
+      ALTER TABLE users ADD COLUMN bio TEXT NOT NULL DEFAULT '';
+      ALTER TABLE users ADD COLUMN gender TEXT NOT NULL DEFAULT '';
+      ALTER TABLE users ADD COLUMN age INTEGER DEFAULT NULL;
+      ALTER TABLE users ADD COLUMN avatar_url TEXT NOT NULL DEFAULT '';
+      ALTER TABLE users ADD COLUMN email_notifications INTEGER NOT NULL DEFAULT 1;
+      ALTER TABLE users ADD COLUMN public_profile INTEGER NOT NULL DEFAULT 1;
+
       CREATE TABLE community_post_videos (
         id TEXT PRIMARY KEY,
         post_id TEXT NOT NULL UNIQUE,
@@ -128,7 +135,7 @@ async function main() {
 
     // Re-check the consistent SQLite snapshot before changing only the probe.
     assertExpectedGap(probePath, backupDirectory);
-    addCanonicalVideoTable(probePath);
+    addCanonicalV16Compatibility(probePath);
 
     const status = preflightDatabase({
       databaseFile: probePath,
@@ -174,4 +181,3 @@ main().catch((error) => {
   })}\n`);
   process.exitCode = 1;
 });
-

@@ -30,6 +30,12 @@ function createV16Shape(databaseFile, { removeExtraTable = false } = {}) {
     db.exec("PRAGMA foreign_keys = ON;");
     baseline.up(db, { targetVersion: "V001" });
     db.exec(`
+      ALTER TABLE users DROP COLUMN bio;
+      ALTER TABLE users DROP COLUMN gender;
+      ALTER TABLE users DROP COLUMN age;
+      ALTER TABLE users DROP COLUMN avatar_url;
+      ALTER TABLE users DROP COLUMN email_notifications;
+      ALTER TABLE users DROP COLUMN public_profile;
       DROP TABLE community_post_videos;
       DROP TABLE schema_migrations;
     `);
@@ -79,11 +85,16 @@ try {
 
   const source = new DatabaseSync(sourcePath, { readOnly: true });
   assert.equal(tableExists(source, "community_post_videos"), false);
+  assert.deepEqual(
+    source.prepare("PRAGMA table_info(users)").all().map((column) => column.name),
+    ["id", "email", "nickname", "password_hash", "created_at", "updated_at"]
+  );
   source.close();
 
   const probe = new DatabaseSync(probePath, { readOnly: true });
   assert.equal(tableExists(probe, "community_post_videos"), true);
   assert.equal(tableExists(probe, "schema_migrations"), false);
+  assert.equal(probe.prepare("PRAGMA table_info(users)").all().length, 12);
   probe.close();
 
   initializeDatabase({
