@@ -6,6 +6,7 @@ const testFiles = [
   "scripts/test-database-migrations.js",
   "scripts/test-database-safety.js",
   "scripts/test-database-concurrency.js",
+  "scripts/test-legacy-v1-6-probe.js",
   "scripts/test-legacy-adoption-evidence.js",
   "scripts/test-release-artifacts.js",
   "scripts/test-activation-write-gate.js",
