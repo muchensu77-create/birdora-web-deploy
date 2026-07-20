@@ -19,6 +19,32 @@ function Get-FreePort {
   return $port
 }
 
+function Invoke-DirectHttpGet {
+  param(
+    [string]$Url,
+    [int]$TimeoutMs = 3000
+  )
+
+  $handler = [System.Net.Http.HttpClientHandler]::new()
+  $handler.UseProxy = $false
+  $client = [System.Net.Http.HttpClient]::new($handler)
+  $client.Timeout = [TimeSpan]::FromMilliseconds($TimeoutMs)
+  $response = $null
+  try {
+    $response = $client.GetAsync($Url).GetAwaiter().GetResult()
+    return [pscustomobject]@{
+      StatusCode = [int]$response.StatusCode
+      Content = $response.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+    }
+  } finally {
+    if ($response) {
+      $response.Dispose()
+    }
+    $client.Dispose()
+    $handler.Dispose()
+  }
+}
+
 function Wait-Url {
   param(
     [string]$Url,
@@ -29,8 +55,9 @@ function Wait-Url {
   $lastError = $null
   while ([DateTime]::UtcNow -lt $deadline) {
     try {
-      $response = Invoke-WebRequest -Uri $Url -UseBasicParsing -TimeoutSec 3
-      if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 500) {
+      $response = Invoke-DirectHttpGet -Url $Url -TimeoutMs 3000
+      $statusCode = $response.StatusCode
+      if ($statusCode -ge 200 -and $statusCode -lt 500) {
         return
       }
     } catch {
@@ -195,7 +222,7 @@ function Stop-Harness {
   $checks = @()
   foreach ($url in @($state.webBaseUrl + "/index.html", $state.apiBaseUrl + "/api/health")) {
     try {
-      Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 2 | Out-Null
+      Invoke-DirectHttpGet -Url $url -TimeoutMs 2000 | Out-Null
       $checks += "$url still listening"
     } catch {
       $checks += "$url stopped"
@@ -222,7 +249,8 @@ function Show-Status {
 
   $health = "unknown"
   try {
-    $health = (Invoke-WebRequest -Uri ($state.apiBaseUrl + "/api/health") -UseBasicParsing -TimeoutSec 3).Content
+    $response = Invoke-DirectHttpGet -Url ($state.apiBaseUrl + "/api/health") -TimeoutMs 3000
+    $health = $response.Content
   } catch {
     $health = "not reachable: $($_.Exception.Message)"
   }

@@ -1,6 +1,6 @@
 {
   "name": "birdora-web",
-  "version": "1.7.1",
+  "version": "1.7.2",
   "private": true,
   "packageManager": "pnpm@10.32.1",
   "birdoraDeployment": {
@@ -46,6 +46,7 @@
     "test:linux:legacy-inventory": "bash scripts/test-legacy-inventory-linux-semantics.sh",
     "test:frontend-contracts": "node scripts/test-frontend-contracts.js",
     "test:security-contracts": "node scripts/test-security-contracts.js",
+    "test:load-contracts": "node scripts/test-load-harness-contracts.js",
     "test:phase0": "node scripts/test-phase0-backend.js",
     "test:integration": "node scripts/test-api-integration.js",
     "test:outbox": "node scripts/test-outbox-worker.js",

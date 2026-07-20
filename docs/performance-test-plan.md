@@ -1,16 +1,12 @@
-# Birdora Thread D1 Performance Test Plan
+# Birdora 50-User Capacity And Browser Journey Test Plan
 
 ## Scope
 
-This plan covers the first Node-based 50-concurrency load test pass. It does not introduce k6, autocannon, wrk, Lighthouse, Playwright, or any business-code changes.
+This plan separates server capacity from client-device capacity:
 
-Allowed files for this round:
-
-- `scripts/test-peak.js`
-- `scripts/cleanup-load-test-data.js`
-- `docs/performance-test-plan.md`
-- `docs/performance-report.md`
-- `docs/performance-report.json`
+- the API suite applies a true 50-session peak to registration, authentication, observations, community writes/reads, comments, and static/model downloads;
+- the browser suite runs 50 distinct real Chrome journeys with controlled browser concurrency, because OSEA inference runs on each client device rather than on the server;
+- browser diagnostics are a release gate: console errors, warnings, runtime exceptions, API network failures, and crashes must all be zero.
 
 Do not run write load tests against production. Production checks must stay read-only.
 
@@ -155,16 +151,16 @@ The script also checks:
 
 ### Scenario E: Community Write Loop
 
-50 users create posts, some linked to their own observation. They also react, comment, ask questions, edit their own posts, delete their own comments, and delete their own posts.
+50 users create canonical drafts and publish them, some linked to their own observation. They also like, comment, ask questions, delete their own comments, and delete their own posts. The legacy publish/edit flags remain disabled, matching production.
 
 Requests:
 
-- `POST /api/community/posts`
+- `POST /api/v1/drafts`
+- `POST /api/v1/drafts/:id/publish`
+- `PUT /api/v1/posts/:id/like`
 - `POST /api/community/posts/:id/comments`
 - `DELETE /api/community/posts/:postId/comments/:commentId`
-- `POST /api/community/posts/:id/reactions`
 - `POST /api/community/posts/:id/questions`
-- `PATCH /api/community/posts/:id`
 - `DELETE /api/community/posts/:id`
 
 Bad-Origin comment delete must return 403.
@@ -177,7 +173,26 @@ Bad-Origin comment delete must return 403.
 - `/assets/vendor/ort-wasm-simd-threaded.wasm`
 - `/assets/osea/bird_info.json`
 
-This is not a 50-browser inference test. Real browser inference should be tested later at 1, 5, and 10 concurrency.
+This download scenario is complemented by the browser journey suite below, which performs real OSEA inference for all 50 user journeys.
+
+### Browser Journey Suite
+
+Each of 50 independent Chrome profiles performs:
+
+1. register through `register.html`;
+2. log out from the profile UI and log back in;
+3. upload the kingfisher sample on `explore.html` and run real browser-side OSEA inference;
+4. save the recognized observation and verify it again after navigating to the observation list;
+5. create a canonical draft and publish it with an idempotency key;
+6. open the post detail UI, submit a comment through the visible controls, and verify it renders.
+
+Use `BIRDORA_BROWSER_MAX_CONCURRENCY` to keep client-side Chrome pressure within the load generator's hardware capacity. This does not reduce the API suite's 50-session peak. A release report must state the selected browser concurrency explicitly.
+
+Required browser gate:
+
+- 50/50 user journeys pass every phase;
+- recognition succeeds 50/50;
+- console errors, warnings, runtime exceptions, API network failures, and crashes are all zero.
 
 ### Scenario G: Image Boundary Checks
 
@@ -201,6 +216,11 @@ No large image file is added to the repository.
 The Markdown report includes environment, isolation checks, scenario summaries, endpoint summaries, validation status, 4xx/5xx classification, request id samples, bottleneck judgment, and cleanup commands.
 
 The JSON report includes raw request records for later comparison.
+
+The browser suite writes:
+
+- `docs/browser-50-agent-flow-report.md`
+- `docs/browser-50-agent-flow-report.json`
 
 ## Cleanup
 

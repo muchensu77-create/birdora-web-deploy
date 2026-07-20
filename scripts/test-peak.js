@@ -445,20 +445,15 @@ function makePostTitle(index) {
   return `[${RUN_ID.slice(0, runIdBudget)}] ${suffix}`.slice(0, 80);
 }
 
-function makePostPayload(index, observationId = "", withImage = false, overrides = {}) {
+function makeDraftFields(index, observationId = "", overrides = {}) {
   return {
     title: makePostTitle(index),
     body:
       `[${RUN_ID}] Load test post ${index}. A bird was observed near a wetland trail in clear weather, ` +
       "with location, behavior, and context included for copy analysis.",
     bird: "Kingfisher",
+    visibility: "public",
     ...(observationId ? { observationId } : {}),
-    ...(withImage
-      ? {
-          imageDataUrl: tinyPngDataUrl,
-          imageName: `${RUN_ID}-community-${index}.png`,
-        }
-      : {}),
     ...overrides,
   };
 }
@@ -471,6 +466,46 @@ function makeOversizedPngDataUrl() {
 
 async function runVisitors(count, worker) {
   await Promise.all(range(count).map((index) => worker(index)));
+}
+
+async function publishDraftPost(recorder, options) {
+  const {
+    scenario,
+    index,
+    user,
+    observationId = "",
+    media = null,
+    publishExpectedStatuses = [201],
+    publishBusinessCategory = "",
+  } = options;
+  const created = await recorder.request({
+    scenario,
+    endpoint: "POST /api/v1/drafts",
+    method: "POST",
+    pathname: "/api/v1/drafts",
+    cookieJar: user.cookieJar,
+    json: makeDraftFields(index, observationId),
+    expectedStatuses: [201],
+  });
+  const draft = created.body?.data;
+  if (!draft?.id || !Number.isSafeInteger(draft.version)) return null;
+
+  const published = await recorder.request({
+    scenario,
+    endpoint: "POST /api/v1/drafts/:id/publish",
+    method: "POST",
+    pathname: `/api/v1/drafts/${encodeURIComponent(draft.id)}/publish`,
+    cookieJar: user.cookieJar,
+    headers: {
+      "Idempotency-Key": `${RUN_ID}:publish:${index}`
+        .replace(/[^A-Za-z0-9._:-]/g, "-")
+        .slice(0, 128),
+    },
+    json: { version: draft.version, ...(media || {}) },
+    expectedStatuses: publishExpectedStatuses,
+    businessCategory: publishBusinessCategory,
+  });
+  return published.body?.data || null;
 }
 
 async function runScenario(name, recorder, validations, worker) {
@@ -693,17 +728,19 @@ async function scenarioECommunityWrite(recorder, state, validations) {
   await runVisitors(USER_COUNT, async (index) => {
     const user = state.users[index];
     const observation = state.observations[index];
-    const post = await recorder.request({
+    const post = await publishDraftPost(recorder, {
       scenario: "E community write",
-      endpoint: "POST /api/community/posts",
-      method: "POST",
-      pathname: "/api/community/posts",
-      cookieJar: user.cookieJar,
-      json: makePostPayload(index, index % 2 === 0 ? observation?.id || "" : "", index % 10 === 0),
-      expectedStatuses: [201],
+      index,
+      user,
+      observationId: index % 2 === 0 ? observation?.id || "" : "",
+      media: index % 10 === 0
+        ? {
+            imageDataUrl: tinyPngDataUrl,
+            imageName: `${RUN_ID}-community-${index}.png`,
+          }
+        : null,
     });
-
-    state.posts[index] = post.body?.post || null;
+    state.posts[index] = post;
   });
 
   const targetPost = state.posts.find(Boolean);
@@ -716,11 +753,10 @@ async function scenarioECommunityWrite(recorder, state, validations) {
     const user = state.users[index];
     await recorder.request({
       scenario: "E community write",
-      endpoint: "POST /api/community/posts/:id/reactions",
-      method: "POST",
-      pathname: `/api/community/posts/${encodeURIComponent(targetPost.id)}/reactions`,
+      endpoint: "PUT /api/v1/posts/:id/like",
+      method: "PUT",
+      pathname: `/api/v1/posts/${encodeURIComponent(targetPost.id)}/like`,
       cookieJar: user.cookieJar,
-      json: { reactionType: "helpful" },
       expectedStatuses: [200],
     });
 
@@ -756,28 +792,8 @@ async function scenarioECommunityWrite(recorder, state, validations) {
   const commentsByBody = new Map(comments.map((comment) => [comment.body, comment.id]));
   state.commentIds = range(USER_COUNT).map((index) => commentsByBody.get(`[${RUN_ID}] comment ${index}`) || "");
 
-  await runVisitors(USER_COUNT, async (index) => {
-    const user = state.users[index];
-    const post = state.posts[index];
-    if (!post?.id) return;
-    await recorder.request({
-      scenario: "E community write",
-      endpoint: "PATCH /api/community/posts/:id",
-      method: "PATCH",
-      pathname: `/api/community/posts/${encodeURIComponent(post.id)}`,
-      cookieJar: user.cookieJar,
-      json: {
-        title: makePostTitle(`edited-${index}`),
-        body:
-          `[${RUN_ID}] Edited load test post ${index}. The observer added weather, distance, behavior, ` +
-          "and habitat details to keep the copy analysis stable.",
-      },
-      expectedStatuses: [200],
-    });
-  });
-
   const createdCount = state.posts.filter(Boolean).length;
-  addValidation(validations, "Scenario E created one post per user", createdCount === USER_COUNT, `${createdCount}/${USER_COUNT}`);
+  addValidation(validations, "Scenario E canonically published one post per user", createdCount === USER_COUNT, `${createdCount}/${USER_COUNT}`);
   addValidation(validations, "Scenario E mapped comments for deletion", state.commentIds.filter(Boolean).length === USER_COUNT);
 }
 
@@ -917,21 +933,21 @@ async function scenarioGImageBoundaries(recorder, state, validations) {
   const user = state.users[0];
   const oversizedPng = makeOversizedPngDataUrl();
 
-  const legalPost = await recorder.request({
+  const legalPost = await publishDraftPost(recorder, {
     scenario: "G image boundaries",
-    endpoint: "POST /api/community/posts legal image",
-    method: "POST",
-    pathname: "/api/community/posts",
-    cookieJar: user.cookieJar,
-    json: makePostPayload("image-boundary", "", true),
-    expectedStatuses: [201],
+    index: "image-boundary",
+    user,
+    media: {
+      imageDataUrl: tinyPngDataUrl,
+      imageName: `${RUN_ID}-image-boundary.png`,
+    },
   });
 
-  if (legalPost.body?.post?.imageUrl) {
+  if (legalPost?.imageUrl) {
     await recorder.request({
       scenario: "G image boundaries",
       endpoint: "GET /api/community/posts/:id/image legal",
-      pathname: legalPost.body.post.imageUrl,
+      pathname: legalPost.imageUrl,
       responseType: "buffer",
       expectedStatuses: [200],
     });
@@ -965,18 +981,16 @@ async function scenarioGImageBoundaries(recorder, state, validations) {
   ];
 
   for (const [label, imageDataUrl] of invalidPayloads) {
-    await recorder.request({
+    await publishDraftPost(recorder, {
       scenario: "G image boundaries",
-      endpoint: `POST /api/community/posts ${label}`,
-      method: "POST",
-      pathname: "/api/community/posts",
-      cookieJar: user.cookieJar,
-      json: makePostPayload(`invalid-${label}`, "", false, {
+      index: `invalid-${label}`,
+      user,
+      media: {
         imageDataUrl,
         imageName: `${RUN_ID}-${label}.png`,
-      }),
-      expectedStatuses: [400],
-      businessCategory: "expected_400_invalid_image",
+      },
+      publishExpectedStatuses: [400],
+      publishBusinessCategory: "expected_400_invalid_image",
     });
 
     await recorder.request({
@@ -1084,7 +1098,7 @@ function getBottleneckJudgment(results, sqliteInfo) {
   const slowest = [...endpoints].sort((a, b) => b.p95 - a.p95).slice(0, 5);
   const busyErrors = results.filter((result) => /SQLITE_BUSY|database is locked/i.test(result.error || result.bodySample || ""));
   const imageWrite = endpoints.find((item) => item.key.includes("POST /api/observations")) ||
-    endpoints.find((item) => item.key.includes("POST /api/community/posts"));
+    endpoints.find((item) => item.key.includes("POST /api/v1/drafts/:id/publish"));
   const staticModel = endpoints.find((item) => item.key.includes("bird_model.onnx"));
   const authTimings = getAuthTimingBreakdown(results);
   const passwordTiming = authTimings.find((item) => /password_(hash|compare)$/.test(item.key));

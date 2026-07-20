@@ -8,6 +8,7 @@ const STATE_PATH =
   process.env.BIRDORA_BROWSER_STATE_PATH ||
   path.join(os.tmpdir(), "birdora-browser50-current.json");
 const EXPECTED_COUNT = Number(process.env.BIRDORA_BROWSER_EXPECTED_COUNT || "50");
+const MAX_CONCURRENCY = Number(process.env.BIRDORA_BROWSER_MAX_CONCURRENCY || String(EXPECTED_COUNT));
 const START_DELAY_MS = Number(process.env.BIRDORA_BROWSER_START_DELAY_MS || "20000");
 const PER_WORKER_TIMEOUT_MS = Number(process.env.BIRDORA_BROWSER_WORKER_TIMEOUT_MS || "240000");
 
@@ -123,6 +124,9 @@ async function main() {
   if (!Number.isInteger(EXPECTED_COUNT) || EXPECTED_COUNT < 1 || EXPECTED_COUNT > 100) {
     throw new Error("BIRDORA_BROWSER_EXPECTED_COUNT must be between 1 and 100.");
   }
+  if (!Number.isInteger(MAX_CONCURRENCY) || MAX_CONCURRENCY < 1 || MAX_CONCURRENCY > EXPECTED_COUNT) {
+    throw new Error("BIRDORA_BROWSER_MAX_CONCURRENCY must be between 1 and BIRDORA_BROWSER_EXPECTED_COUNT.");
+  }
 
   const state = readState();
   const logsDir = path.join(state.resultDir, "logs");
@@ -131,19 +135,26 @@ async function main() {
   const launchStartedAtMs = Date.now();
   const startAtMs = launchStartedAtMs + START_DELAY_MS;
   const runnerPath = path.join(state.resultDir, "runner-50-pages.json");
-  const workers = [];
-
-  for (let index = 1; index <= EXPECTED_COUNT; index += 1) {
-    workers.push(spawnWorker({ state, userIndex: index, startAtMs, logsDir }));
-  }
+  let nextUserIndex = 1;
+  const runWorkerQueue = async () => {
+    const queueResults = [];
+    while (nextUserIndex <= EXPECTED_COUNT) {
+      const userIndex = nextUserIndex;
+      nextUserIndex += 1;
+      queueResults.push(await spawnWorker({ state, userIndex, startAtMs, logsDir }));
+    }
+    return queueResults;
+  };
+  const workers = Array.from({ length: MAX_CONCURRENCY }, () => runWorkerQueue());
 
   const launchCompletedAtMs = Date.now();
   console.log(
-    `Spawned ${EXPECTED_COUNT} browser workers in ${launchCompletedAtMs - launchStartedAtMs}ms. ` +
-      `Shared start gate: ${new Date(startAtMs).toISOString()}`
+    `Scheduled ${EXPECTED_COUNT} browser workers at max concurrency ${MAX_CONCURRENCY} in ` +
+      `${launchCompletedAtMs - launchStartedAtMs}ms. Shared first-wave start gate: ` +
+      `${new Date(startAtMs).toISOString()}`
   );
 
-  const results = await Promise.all(workers);
+  const results = (await Promise.all(workers)).flat().sort((left, right) => left.userIndex - right.userIndex);
   const exitSummary = summarizeExit(results);
   const summaryResult = await runSummary(state);
   const runner = {
@@ -152,6 +163,8 @@ async function main() {
     apiBaseUrl: state.apiBaseUrl,
     resultDir: state.resultDir,
     expectedCount: EXPECTED_COUNT,
+    maxConcurrency: MAX_CONCURRENCY,
+    strictSimultaneous: MAX_CONCURRENCY === EXPECTED_COUNT,
     launchStartedAt: new Date(launchStartedAtMs).toISOString(),
     launchCompletedAt: new Date(launchCompletedAtMs).toISOString(),
     launchWindowMs: launchCompletedAtMs - launchStartedAtMs,

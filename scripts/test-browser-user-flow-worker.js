@@ -382,7 +382,7 @@ async function capturePageSnapshot(cdp) {
 }
 
 async function registerAccount(cdp) {
-  await navigate(cdp, `${WEB_BASE_URL}/login.html?agent=${encodeURIComponent(userLabel)}`);
+  await navigate(cdp, `${WEB_BASE_URL}/register.html?agent=${encodeURIComponent(userLabel)}`);
   await waitFor(
     cdp,
     `Boolean(document.querySelector('[data-auth-form="account"]')) && window.__birdoraAuthFormsReady === true`,
@@ -392,8 +392,10 @@ async function registerAccount(cdp) {
   await evaluate(
     cdp,
     pageScript((nextAccount) => {
-      document.querySelector('[data-auth-switch="register"]')?.click();
       const form = document.querySelector('[data-auth-form="account"]');
+      if (!form || form.dataset.authMode !== "register") {
+        throw new Error("registration form is unavailable");
+      }
       form.elements.nickname.value = nextAccount.nickname;
       form.elements.email.value = nextAccount.email;
       form.elements.password.value = nextAccount.password;
@@ -410,18 +412,21 @@ async function registerAccount(cdp) {
 
   await waitFor(
     cdp,
-    pageScript((email, nickname) => {
-      const stored = localStorage.getItem("birdora-auth-user") || "";
+    pageScript((nickname) => {
       const bodyText = document.body?.innerText || "";
-      return location.pathname.endsWith("/index.html") && stored.includes(email) && bodyText.includes(nickname);
-    }, account.email, account.nickname),
+      return (
+        location.pathname.endsWith("/index.html") &&
+        bodyText.includes(nickname) &&
+        document.querySelector("[data-user-name]")?.hidden === false
+      );
+    }, account.nickname),
     `${userLabel} registered`,
     FLOW_TIMEOUT_MS
   );
 }
 
 async function logout(cdp) {
-  await navigate(cdp, `${WEB_BASE_URL}/index.html?agent=${encodeURIComponent(userLabel)}`);
+  await navigate(cdp, `${WEB_BASE_URL}/profile.html?agent=${encodeURIComponent(userLabel)}`);
   await waitFor(
     cdp,
     `Boolean(document.querySelector("[data-logout]")) && window.__birdoraLogoutReady === true`,
@@ -503,122 +508,104 @@ async function loginAccount(cdp) {
 
   await waitFor(
     cdp,
-    pageScript((email, nickname) => {
-      const stored = localStorage.getItem("birdora-auth-user") || "";
+    pageScript((nickname) => {
       const bodyText = document.body?.innerText || "";
-      return location.pathname.endsWith("/index.html") && stored.includes(email) && bodyText.includes(nickname);
-    }, account.email, account.nickname),
+      return (
+        location.pathname.endsWith("/index.html") &&
+        bodyText.includes(nickname) &&
+        document.querySelector("[data-user-name]")?.hidden === false
+      );
+    }, account.nickname),
     `${userLabel} logged in`,
     FLOW_TIMEOUT_MS
   );
 }
 
-async function publishPost(cdp) {
+async function publishPost(cdp, observationId = "") {
   await navigate(cdp, `${WEB_BASE_URL}/index.html?agent=${encodeURIComponent(userLabel)}`);
   await waitFor(
     cdp,
-    `Boolean(document.querySelector("#postForm")) && window.__birdoraPublishingReady === true`,
-    "post form ready",
+    `window.__birdoraPublishingReady === true && Boolean(window.BIRDORA_API_BASE_URL)`,
+    "canonical publishing client ready",
     FLOW_TIMEOUT_MS
   );
-  await evaluate(
-    cdp,
-    pageScript((title, body) => {
-      document.querySelector("#postTitle").value = title;
-      document.querySelector("#postBody").value = body;
-      document.querySelector("#postTitle").dispatchEvent(new Event("input", { bubbles: true }));
-      document.querySelector("#postBody").dispatchEvent(new Event("input", { bubbles: true }));
-      const form = document.querySelector("#postForm");
-      const button = form.querySelector('[type="submit"]');
-      if (typeof SubmitEvent === "function") {
-        form.dispatchEvent(new SubmitEvent("submit", { bubbles: true, cancelable: true, submitter: button }));
-      } else {
-        form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
-      }
-      return true;
-    }, postTitle, postBody),
-    `${userLabel} publish post`
-  );
 
-  const submitObserved = await waitFor(
+  const post = await evaluate(
     cdp,
-    pageScript((title) => {
-      const message = document.querySelector("#postMessage")?.textContent || "";
-      const bodyText = document.body?.innerText || "";
-      return message.includes("正在发布") || message.includes("发布成功") || bodyText.includes(title);
-    }, postTitle),
-    `${userLabel} post submit observed`,
-    30000
-  ).catch(() => false);
-
-  if (!submitObserved) {
-    await evaluate(
-      cdp,
-      pageScript(async (title, body, timeoutMs) => {
+    pageScript(async (title, body, linkedObservationId, label, timeoutMs) => {
+      const request = async (pathname, options = {}) => {
         const controller = new AbortController();
         const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
-        const response = await fetch(`${window.BIRDORA_API_BASE_URL || ""}/api/community/posts`, {
-          method: "POST",
-          credentials: "include",
-          headers: {
-            Accept: "application/json",
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            title,
-            body,
-            bird: typeof lastRecognitionStatus !== "undefined" && lastRecognitionStatus === "success"
-              ? detectedBird.name
-              : "观鸟笔记",
-          }),
-          signal: controller.signal,
-        }).finally(() => {
+        try {
+          const response = await fetch(`${window.BIRDORA_API_BASE_URL || ""}${pathname}`, {
+            method: options.method || "GET",
+            credentials: "include",
+            headers: {
+              Accept: "application/json",
+              ...(options.body ? { "Content-Type": "application/json" } : {}),
+              ...(options.headers || {}),
+            },
+            ...(options.body ? { body: JSON.stringify(options.body) } : {}),
+            signal: controller.signal,
+          });
+          const data = await response.json().catch(() => null);
+          if (!response.ok) {
+            const requestId = data?.requestId ? ` [requestId: ${data.requestId}]` : "";
+            throw new Error(`${data?.message || `HTTP ${response.status}`}${requestId}`);
+          }
+          return data;
+        } finally {
           window.clearTimeout(timeoutId);
-        });
-
-        const data = await response.json().catch(() => null);
-        if (!response.ok) {
-          throw new Error(data?.message || `fallback publish failed: ${response.status}`);
         }
+      };
 
-        const newPost = data?.post || {
+      const draftResponse = await request("/api/v1/drafts", {
+        method: "POST",
+        body: {
           title,
           body,
-          bird: typeof lastRecognitionStatus !== "undefined" && lastRecognitionStatus === "success"
-            ? detectedBird.name
-            : "观鸟笔记",
-        };
+          bird: "普通翠鸟",
+          visibility: "public",
+          ...(linkedObservationId ? { observationId: linkedObservationId } : {}),
+        },
+      });
+      const draft = draftResponse?.data;
+      if (!draft?.id || !Number.isSafeInteger(draft.version)) {
+        throw new Error("canonical draft response was incomplete");
+      }
 
-        if (typeof syncCommunityPostState === "function") {
-          syncCommunityPostState(newPost);
-        }
-        document.querySelector("#postForm")?.reset();
-        document.querySelector("#postTitle")?.setAttribute("aria-invalid", "false");
-        document.querySelector("#postBody")?.setAttribute("aria-invalid", "false");
-        const message = document.querySelector("#postMessage");
-        if (message) {
-          message.textContent = "发布成功，所有社区用户现在都能看到这条笔记。";
-        }
-        if (typeof renderCurrentFeed === "function") {
-          renderCurrentFeed();
-        }
-        return true;
-      }, postTitle, postBody, FLOW_TIMEOUT_MS),
-      `${userLabel} publish post fallback`,
-      FLOW_TIMEOUT_MS
-    );
-  }
-
-  await waitFor(
-    cdp,
-    pageScript((title) => {
-      const message = document.querySelector("#postMessage")?.textContent || "";
-      const bodyText = document.body?.innerText || "";
-      return message.includes("发布成功") || (bodyText.includes(title) && !message.includes("失败"));
-    }, postTitle),
-    `${userLabel} post visible`,
+      const publishResponse = await request(`/api/v1/drafts/${encodeURIComponent(draft.id)}/publish`, {
+        method: "POST",
+        headers: { "Idempotency-Key": `browser50:${label}:${draft.id}` },
+        body: { version: draft.version },
+      });
+      const publishedPost = publishResponse?.data;
+      if (!publishedPost?.id) throw new Error("canonical publish response was incomplete");
+      if (typeof syncCommunityPostState === "function") syncCommunityPostState(publishedPost);
+      if (typeof renderCurrentFeed === "function") renderCurrentFeed();
+      return publishedPost;
+    }, postTitle, postBody, observationId, userLabel, FLOW_TIMEOUT_MS),
+    `${userLabel} canonical publish`,
     FLOW_TIMEOUT_MS
   );
+
+  if (!post?.id) throw new Error("canonical post was not returned to the browser worker");
+  return post;
+}
+
+async function navigateUntilReady(cdp, url, expression, label, options = {}) {
+  const attempts = Number(options.attempts || 3);
+  const readyTimeoutMs = Number(options.readyTimeoutMs || 45000);
+  let lastError = null;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    await navigate(cdp, url);
+    try {
+      return await waitFor(cdp, expression, `${label} attempt ${attempt}`, readyTimeoutMs);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw new Error(`${label} failed after ${attempts} navigation attempts: ${lastError?.message || "not ready"}`);
 }
 
 function installRecognitionProbe() {
@@ -900,12 +887,12 @@ function runRecognitionInPage(sampleImageUrl, label, timeoutMs) {
 }
 
 async function runRecognition(cdp) {
-  await navigate(cdp, `${WEB_BASE_URL}/index.html?agent=${encodeURIComponent(userLabel)}`);
-  await waitFor(
+  await navigateUntilReady(
     cdp,
+    `${WEB_BASE_URL}/explore.html?agent=${encodeURIComponent(userLabel)}#identify`,
     `Boolean(document.querySelector("#birdUpload")) && typeof window.classifyImageElement === "function" && window.__birdoraRecognitionReady === true`,
     `${userLabel} recognition UI ready`,
-    FLOW_TIMEOUT_MS
+    { attempts: 3, readyTimeoutMs: Math.min(FLOW_TIMEOUT_MS, 45000) }
   );
   await evaluate(cdp, pageScript(installRecognitionProbe), `${userLabel} install recognition probe`);
   const result = await evaluate(
@@ -920,6 +907,120 @@ async function runRecognition(cdp) {
   }
 
   return result;
+}
+
+async function saveObservationAndRefresh(cdp) {
+  await waitFor(
+    cdp,
+    `Boolean(document.querySelector("#saveObservation")) && document.querySelector("#saveObservation").disabled === false`,
+    `${userLabel} observation save enabled`,
+    FLOW_TIMEOUT_MS
+  );
+  await evaluate(
+    cdp,
+    pageScript(() => {
+      const button = document.querySelector("#saveObservation");
+      if (!button || button.disabled) throw new Error("observation save button is unavailable");
+      button.click();
+      return true;
+    }),
+    `${userLabel} observation save click`
+  );
+
+  const observationId = await waitFor(
+    cdp,
+    pageScript(() => {
+      const message = document.querySelector("#observationMessage")?.textContent || "";
+      if (!message.includes("已保存")) return "";
+      return typeof savedObservation !== "undefined" ? savedObservation?.id || "" : "";
+    }),
+    `${userLabel} observation saved`,
+    FLOW_TIMEOUT_MS
+  );
+
+  await navigate(
+    cdp,
+    `${WEB_BASE_URL}/upload.html?agent=${encodeURIComponent(userLabel)}#observations`
+  );
+  await waitFor(
+    cdp,
+    pageScript((expectedId) => {
+      const listText = document.querySelector("#observationList")?.textContent || "";
+      if (/加载失败|暂不可用|重新加载/.test(listText)) return false;
+      return Boolean(document.querySelector(`[data-observation-id="${CSS.escape(expectedId)}"]`));
+    }, observationId),
+    `${userLabel} observation refreshed`,
+    FLOW_TIMEOUT_MS
+  );
+  const refreshResult = await evaluate(
+    cdp,
+    pageScript((expectedId) => {
+      const card = document.querySelector(`[data-observation-id="${CSS.escape(expectedId)}"]`);
+      return { id: expectedId, cardText: (card?.textContent || "").trim().slice(0, 500) };
+    }, observationId),
+    `${userLabel} observation refresh result`
+  );
+
+  if (refreshResult?.id !== observationId) {
+    throw new Error("observation refresh did not preserve the saved record");
+  }
+  return refreshResult;
+}
+
+async function commentThroughUi(cdp, postId) {
+  const commentText = `B50 UI comment ${String(USER_INDEX).padStart(2, "0")} ${RUN_ID}`.slice(0, 240);
+  await navigate(cdp, `${WEB_BASE_URL}/index.html?agent=${encodeURIComponent(userLabel)}&post=${encodeURIComponent(postId)}`);
+  await waitFor(
+    cdp,
+    `window.__birdoraPublishingReady === true && typeof window.openPostDetail === "function"`,
+    `${userLabel} community UI ready`,
+    FLOW_TIMEOUT_MS
+  );
+  await evaluate(
+    cdp,
+    pageScript(async (targetPostId) => {
+      await openPostDetail(targetPostId);
+      return true;
+    }, postId),
+    `${userLabel} open post detail`,
+    FLOW_TIMEOUT_MS
+  );
+  await waitFor(
+    cdp,
+    pageScript((targetPostId) => {
+      return Boolean(
+        document.querySelector(".post-detail-dialog") &&
+          document.querySelector(`[data-detail-comment-input="${CSS.escape(targetPostId)}"]`) &&
+          document.querySelector(`[data-detail-comment-submit="${CSS.escape(targetPostId)}"]`)
+      );
+    }, postId),
+    `${userLabel} comment UI ready`,
+    FLOW_TIMEOUT_MS
+  );
+  await evaluate(
+    cdp,
+    pageScript((targetPostId, text) => {
+      const field = document.querySelector(`[data-detail-comment-input="${CSS.escape(targetPostId)}"]`);
+      const button = document.querySelector(`[data-detail-comment-submit="${CSS.escape(targetPostId)}"]`);
+      if (!field || !button) throw new Error("comment controls are unavailable");
+      field.value = text;
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+      button.click();
+      return true;
+    }, postId, commentText),
+    `${userLabel} submit comment`
+  );
+  await waitFor(
+    cdp,
+    pageScript((text) => {
+      const dialog = document.querySelector(".post-detail-dialog");
+      return Boolean(dialog && (dialog.textContent || "").includes(text));
+    }, commentText),
+    `${userLabel} comment rendered`,
+    FLOW_TIMEOUT_MS
+  );
+
+  return { postId, body: commentText };
 }
 
 async function runPhase(name, fn, phases) {
@@ -979,6 +1080,9 @@ async function main() {
     startGateReleasedAt: null,
     phases,
     recognition: null,
+    observation: null,
+    postId: null,
+    comment: null,
     diagnostics: null,
     failureSnapshot: null,
     error: null,
@@ -1008,6 +1112,8 @@ async function main() {
       "--disable-gpu",
       "--disable-background-timer-throttling",
       "--disable-renderer-backgrounding",
+      "--no-proxy-server",
+      "--proxy-bypass-list=*",
       "--no-first-run",
       "--no-default-browser-check",
       "about:blank",
@@ -1059,8 +1165,19 @@ async function main() {
     await runPhase("register", () => registerAccount(cdp), phases);
     await runPhase("logout", () => logout(cdp), phases);
     await runPhase("login", () => loginAccount(cdp), phases);
-    await runPhase("publishPost", () => publishPost(cdp), phases);
     result.recognition = await runPhase("recognition", () => runRecognition(cdp), phases);
+    result.observation = await runPhase(
+      "observationSaveRefresh",
+      () => saveObservationAndRefresh(cdp),
+      phases
+    );
+    const publishedPost = await runPhase(
+      "publishPost",
+      () => publishPost(cdp, result.observation.id),
+      phases
+    );
+    result.postId = publishedPost.id;
+    result.comment = await runPhase("commentUi", () => commentThroughUi(cdp, result.postId), phases);
 
     result.ok = true;
   } catch (error) {

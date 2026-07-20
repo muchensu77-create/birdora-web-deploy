@@ -224,12 +224,14 @@ function pageScript(fn, ...args) {
 }
 
 async function registerAccount(cdp, account) {
-  await navigate(cdp, `${WEB_BASE_URL}/login.html`);
+  await navigate(cdp, `${WEB_BASE_URL}/register.html`);
   await evaluate(
     cdp,
     pageScript((nextAccount) => {
-      document.querySelector('[data-auth-switch="register"]')?.click();
       const form = document.querySelector('[data-auth-form="account"]');
+      if (!form || form.dataset.authMode !== "register") {
+        throw new Error("registration form is unavailable");
+      }
       form.elements.nickname.value = nextAccount.nickname;
       form.elements.email.value = nextAccount.email;
       form.elements.password.value = nextAccount.password;

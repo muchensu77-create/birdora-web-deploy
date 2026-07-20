@@ -3,6 +3,7 @@ const path = require("path");
 
 const PROJECT_ROOT = path.resolve(__dirname, "..");
 const EXPECTED_COUNT = Number(process.env.BIRDORA_BROWSER_EXPECTED_COUNT || "50");
+const MAX_CONCURRENCY = Number(process.env.BIRDORA_BROWSER_MAX_CONCURRENCY || String(EXPECTED_COUNT));
 const RESULT_DIR =
   process.env.BIRDORA_BROWSER_RESULT_DIR ||
   path.join(PROJECT_ROOT, "docs", "browser-50-agent-results", process.env.BIRDORA_BROWSER_RUN_ID || "");
@@ -110,6 +111,9 @@ function buildSummary(results) {
       acc.consoleWarnings += (next.consoleWarnings || []).length;
       acc.exceptions += (next.exceptions || []).length;
       acc.networkFailures += (next.networkFailures || []).length;
+      acc.apiNetworkFailures += (next.networkFailures || []).filter((failure) =>
+        String(failure.url || "").includes("/api/")
+      ).length;
       acc.crashes += next.crashed ? 1 : 0;
       return acc;
     },
@@ -118,25 +122,39 @@ function buildSummary(results) {
       consoleWarnings: 0,
       exceptions: 0,
       networkFailures: 0,
+      apiNetworkFailures: 0,
       crashes: 0,
     }
   );
+  const diagnosticsClean =
+    diagnostics.consoleErrors === 0 &&
+    diagnostics.consoleWarnings === 0 &&
+    diagnostics.exceptions === 0 &&
+    diagnostics.apiNetworkFailures === 0 &&
+    diagnostics.crashes === 0;
 
   return {
     generatedAt: new Date().toISOString(),
     resultDir: RESULT_DIR,
     expectedCount: EXPECTED_COUNT,
+    maxConcurrency: MAX_CONCURRENCY,
     observedCount: results.length,
     missing,
     passed: passed.length,
     failed: failed.length,
-    allPassed: missing.length === 0 && passed.length === EXPECTED_COUNT && failed.length === 0,
+    allPassed:
+      missing.length === 0 &&
+      passed.length === EXPECTED_COUNT &&
+      failed.length === 0 &&
+      diagnosticsClean,
     phases: {
       register: summarizePhase(results, "register"),
       logout: summarizePhase(results, "logout"),
       login: summarizePhase(results, "login"),
-      publishPost: summarizePhase(results, "publishPost"),
       recognition: summarizePhase(results, "recognition"),
+      observationSaveRefresh: summarizePhase(results, "observationSaveRefresh"),
+      publishPost: summarizePhase(results, "publishPost"),
+      commentUi: summarizePhase(results, "commentUi"),
     },
     recognition: {
       statusCounts: recognitionResults.reduce((acc, recognition) => {
@@ -150,6 +168,7 @@ function buildSummary(results) {
       resources: summarizeResources(results),
     },
     diagnostics,
+    diagnosticsClean,
     failures: failed.map((result) => ({
       label: result.label,
       fileName: result.fileName,
@@ -175,10 +194,11 @@ function phaseRow(name, phase) {
 
 function writeMarkdown(summary) {
   const lines = [
-    "# Birdora 50 Sub-Agent Browser Flow Report",
+    "# Birdora 50-User Browser Journey Report",
     "",
     `- Generated at: ${summary.generatedAt}`,
-    `- Expected sub-agents: ${summary.expectedCount}`,
+    `- Expected user journeys: ${summary.expectedCount}`,
+    `- Maximum concurrent browsers: ${summary.maxConcurrency}`,
     `- Observed result files: ${summary.observedCount}`,
     `- Passed: ${summary.passed}`,
     `- Failed: ${summary.failed}`,
@@ -193,8 +213,10 @@ function writeMarkdown(summary) {
     phaseRow("register", summary.phases.register),
     phaseRow("logout", summary.phases.logout),
     phaseRow("login", summary.phases.login),
-    phaseRow("publishPost", summary.phases.publishPost),
     phaseRow("recognition", summary.phases.recognition),
+    phaseRow("observationSaveRefresh", summary.phases.observationSaveRefresh),
+    phaseRow("publishPost", summary.phases.publishPost),
+    phaseRow("commentUi", summary.phases.commentUi),
     "",
     "## Recognition",
     "",
@@ -215,7 +237,9 @@ function writeMarkdown(summary) {
     `- Console warnings: ${summary.diagnostics.consoleWarnings}`,
     `- Exceptions: ${summary.diagnostics.exceptions}`,
     `- Network failures: ${summary.diagnostics.networkFailures}`,
+    `- API network failures: ${summary.diagnostics.apiNetworkFailures}`,
     `- Crashes: ${summary.diagnostics.crashes}`,
+    `- Diagnostics gate: ${summary.diagnosticsClean ? "PASS" : "FAIL"}`,
   ];
 
   if (summary.missing.length) {
